@@ -1,0 +1,45 @@
+﻿export const PRODUCT = {
+  name: '神经光感修护精华液',
+  brand: 'DeepGlow Lab',
+  price: 299,
+  originalPrice: 899,
+  discount: '6.7折',
+  stock: 43,
+  salesCount: 2847,
+};
+
+export const UTTERANCES = [
+  { id: 1, text: '这款精华液经过28天临床测试，83%的受试者表示肌肤水分提升超过20%。', type: 'fact', score: 0.91 },
+  { id: 2, text: '主要成分包括玻尿酸钠、烟酰胺和视黄醇，浓度均标注在外包装上，可溯源。', type: 'fact', score: 0.94 },
+  { id: 3, text: '宝宝们！今天只有最后43瓶！错过这个价格要等到明年！', type: 'hype', score: 0.38 },
+  { id: 4, text: '跟某大牌同款工厂生产，效果一模一样，价格只有它的三分之一！', type: 'trap', score: 0.12 },
+  { id: 5, text: '买两瓶赠一瓶面膜，价值199元，相当于免费！', type: 'hype', score: 0.45 },
+  { id: 6, text: '所有产品均通过SGS国际检测认证，报告可在官网查询下载。', type: 'fact', score: 0.89 },
+  { id: 7, text: '这是我自己每天都在用的产品，用了三年，皮肤好就是因为它！', type: 'hype', score: 0.41 },
+  { id: 8, text: '能治疗所有皮肤问题，包括痘痘、斑点、毛孔，七天还你婴儿肌！', type: 'trap', score: 0.08 },
+  { id: 9, text: '下单后24小时内发货，支持7天无理由退换货。', type: 'fact', score: 0.96 },
+  { id: 10, text: '全场最低价！这是成本价在卖，厂商已经在催我涨价了！', type: 'trap', score: 0.11 },
+  { id: 11, text: '产品净含量30ml，建议每天早晚各使用2-3滴，可使用约90天。', type: 'fact', score: 0.93 },
+  { id: 12, text: '现在下单立减50元，活动只剩最后8分钟！', type: 'hype', score: 0.35 },
+  { id: 13, text: '该产品已在天猫旗舰店同步销售，价格完全公开透明。', type: 'fact', score: 0.88 },
+  { id: 14, text: '全网独家！只有我们直播间才有这个价格，其他地方买不到！', type: 'trap', score: 0.09 },
+  { id: 15, text: '产品有完整的质检报告，成分表清晰列明，无添加香精和酒精。', type: 'fact', score: 0.92 },
+];
+
+export const CHAT_MESSAGES = [
+  { user: '陈**', text: '好用吗真的？' },
+  { user: 'L***g', text: '冲了！！！' },
+  { user: '王*玲', text: '已经买了三次了' },
+  { user: '匿名', text: '价格有点贵' },
+  { user: 'S****n', text: '主播说的是真的吗' },
+  { user: '赵**', text: '正在犹豫中…' },
+  { user: '用户7752', text: '链接发一下' },
+  { user: 'M***i', text: '这个有没有过敏风险' },
+  { user: '江*宇', text: '已拍求发货！' },
+  { user: '匿名用户', text: '比旗舰店便宜好多' },
+  { user: '周**', text: '三分钟前刚买的' },
+  { user: 'H***n', text: '主播这个真的能祛斑？' },
+  { user: '李*', text: '没有医学证明吧' },
+  { user: '用户3301', text: '哇赠品好多' },
+  { user: '小红书来的', text: '博主推荐过这个' },
+];
