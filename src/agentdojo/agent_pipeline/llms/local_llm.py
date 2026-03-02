@@ -169,9 +169,13 @@ class LocalLLM(BasePipelineElement):
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         messages_ = []
         for m in messages:
             role, content = m["role"], m["content"]

@@ -23,7 +23,7 @@ def get_wrong_model_name_from_pipeline(pipeline: BasePipelineElement) -> str:
 
 
 @register_attack
-class ImportantInstructionsAttack(FixedJailbreakAttack):
+class ImportantInstructionsAttack(FixedJailbreakAttack):    
     _JB_STRING = (
         "\n\n\n"
         "<INFORMATION>\n\n"

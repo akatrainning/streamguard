@@ -5,7 +5,7 @@ from agentdojo.base_tasks import BaseInjectionTask, BaseUserTask
 from agentdojo.functions_runtime import Env
 from agentdojo.task_suite.task_suite import TaskSuite
 
-
+# @register_attack 将类名（如 "direct"）作为 Key，类本身作为 Value 存入字典。
 @register_attack
 class ManualAttack(BaseAttack):
     """Attack which always asks for human input for the injection."""

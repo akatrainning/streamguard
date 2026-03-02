@@ -88,5 +88,16 @@ ChatMessage = ChatUserMessage | ChatAssistantMessage | ChatToolResultMessage | C
 
 
 def get_text_content_as_str(content_blocks: list[MessageContentBlock]) -> str:
-    non_empty_content = [c["content"] for c in content_blocks if c["content"] is not None]
-    return "\n".join(non_empty_content)
+    # Handle both string and dict content formats
+    result = []
+    for c in content_blocks:
+        if isinstance(c, str):
+            # If it's a string, use it directly
+            if c is not None:
+                result.append(c)
+        elif isinstance(c, dict):
+            # If it's a dict, extract the "content" field
+            content = c.get("content") if isinstance(c, dict) else c
+            if content is not None:
+                result.append(str(content))
+    return "\n".join(result)

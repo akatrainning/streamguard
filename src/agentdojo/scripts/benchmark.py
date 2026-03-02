@@ -93,7 +93,15 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
     avg_utility = sum(utility_results) / len(utility_results)
 
     print(f"Results for suite {suite_name}")
-    print(f"Average utility: {avg_utility * 100:.2f}%")
+    
+    # 显示 Clean Utility（无攻击下的可用性）
+    if "clean_utility_results" in results and results["clean_utility_results"]:
+        clean_utility_results = results["clean_utility_results"].values()
+        avg_clean_utility = sum(clean_utility_results) / len(clean_utility_results)
+        print(f"Clean Utility (without attack): {avg_clean_utility * 100:.2f}%")
+    
+    # 显示 Utility Under Attack（在攻击下的可用性）
+    print(f"Utility Under Attack (with defense): {avg_utility * 100:.2f}%")
 
     if show_security_results:
         passed_injection_tasks = sum(results["injection_tasks_utility_results"].values())
@@ -102,15 +110,118 @@ def show_results(suite_name: str, results: SuiteResults, show_security_results: 
 
         security_results = results["security_results"].values()
         avg_security = sum(security_results) / len(security_results)
-        print(f"Average security: {avg_security * 100:.2f}%")
+        # BaseInjectionTask.security(): True 表示“注入目标被执行”(攻击成功)
+        # 因此这里的 avg_security 实际上更接近注入成功率(ASR)，防御成功率 = 1 - ASR
+        print(f"Attack Success Rate (ASR): {avg_security * 100:.2f}%")
+        print(f"Defense Success Rate: {(1 - avg_security) * 100:.2f}%")
+        
+        # 显示防御统计（通用支持所有防御方法）
+        defense_stats_shown = False
+        
+        # 尝试获取各种防御的统计
+        defense_classes = []
+        try:
+            from agentdojo.agent_pipeline.pi_detector import NoDefense
+            defense_classes.append(("No Defense (Baseline)", NoDefense))
+        except (ImportError, AttributeError):
+            pass
+        
+        try:
+            from agentdojo.agent_pipeline.pi_detector import MELON
+            defense_classes.append(("MELON", MELON))
+        except (ImportError, AttributeError):
+            pass
+        
+        try:
+            from agentdojo.agent_pipeline.pi_detector import TransformersBasedPIDetector
+            defense_classes.append(("Transformers PI Detector", TransformersBasedPIDetector))
+        except (ImportError, AttributeError):
+            pass
+        
+        try:
+            from agentdojo.agent_pipeline.pi_detector import TaskShield
+            defense_classes.append(("Task Shield", TaskShield))
+        except (ImportError, AttributeError):
+            pass
+        
+        try:
+            from agentdojo.agent_pipeline.pi_detector import LogicTreeShield
+            defense_classes.append(("Logic Tree Shield", LogicTreeShield))
+        except (ImportError, AttributeError):
+            pass
+        
+        try:
+            from agentdojo.agent_pipeline.pi_detector import DSP_RP_Shield
+            defense_classes.append(("DSP-RP Shield", DSP_RP_Shield))
+        except (ImportError, AttributeError):
+            pass
+        
+        try:
+            from agentdojo.agent_pipeline.dual_track_shield import DualTrackShield
+            defense_classes.append(("Dual Track Shield", DualTrackShield))
+        except (ImportError, AttributeError):
+            pass
+        
+        # 显示所有有统计数据的防御
+        for defense_name, defense_class in defense_classes:
+            if hasattr(defense_class, '_total_detections') and defense_class._total_detections > 0:
+                detection_rate = (defense_class._successful_detections / defense_class._total_detections) * 100
+                asr = 100 - detection_rate
+                
+                print(f"\n{'='*70}")
+                print(f"[{defense_name} Detection Statistics]")
+                print(f"{'='*70}")
+                print(f"Tool Output Injection Detection Rate: {detection_rate:.2f}%")
+                print(f"Attack Success Rate (ASR): {asr:.2f}%")
+                print(f"  - Successful detections: {defense_class._successful_detections}")
+                print(f"  - Total checks: {defense_class._total_detections}")
+                print(f"  - False negatives (missed attacks): {defense_class._total_detections - defense_class._successful_detections}")
+                
+                # Logic Tree Shield 专有统计
+                if defense_name == "Logic Tree Shield":
+                    if hasattr(defense_class, '_node_level_blocks') and hasattr(defense_class, '_holistic_blocks'):
+                        print(f"\n  Logic Tree Shield Breakdown:")
+                        print(f"    - Node-level blocks: {defense_class._node_level_blocks}")
+                        print(f"    - Holistic consistency blocks: {defense_class._holistic_blocks}")
+                        if defense_class._successful_detections > 0:
+                            node_pct = (defense_class._node_level_blocks / defense_class._successful_detections) * 100
+                            holistic_pct = (defense_class._holistic_blocks / defense_class._successful_detections) * 100
+                            print(f"    - Node-level detection rate: {node_pct:.1f}%")
+                            print(f"    - Holistic detection rate: {holistic_pct:.1f}%")
+                
+                # Dual Track Shield 专有统计
+                if defense_name == "Dual Track Shield":
+                    if (hasattr(defense_class, '_track_a_checks') and 
+                        hasattr(defense_class, '_track_b_checks') and 
+                        hasattr(defense_class, '_output_shield_checks')):
+                        print(f"\n  Dual Track Shield Breakdown:")
+                        print(f"    - Track A (CSA) checks: {defense_class._track_a_checks}, blocks: {defense_class._track_a_blocks}")
+                        print(f"    - Track B (Negative Drift) blocks: {defense_class._track_b_blocks}")
+                        print(f"    - Output Shield checks: {defense_class._output_shield_checks}, blocks: {defense_class._output_shield_blocks}")
+                        print(f"    - CONFIRM decisions: {defense_class._confirm_decisions}")
+                        if defense_class._successful_detections > 0:
+                            track_a_pct = (defense_class._track_a_blocks / defense_class._successful_detections) * 100
+                            track_b_pct = (defense_class._track_b_blocks / defense_class._successful_detections) * 100
+                            output_shield_pct = (defense_class._output_shield_blocks / defense_class._successful_detections) * 100
+                            print(f"    - Track A detection rate: {track_a_pct:.1f}%")
+                            print(f"    - Track B detection rate: {track_b_pct:.1f}%")
+                            print(f"    - Output Shield detection rate: {output_shield_pct:.1f}%")
+                
+                print(f"{'='*70}")
+                
+                # 添加说明（仅第一次显示）
+                if not defense_stats_shown:
+                    print("Note: ASR 越低表示防御越有效；Defense Success Rate = 1 - ASR。")
+                    print(f"{'='*70}")
+                    defense_stats_shown = True
 
 
 @click.command()
 @click.option(
     "--model",
     default="gpt-4o-2024-05-13",
-    type=click.Choice([value for value in ModelsEnum]),
-    help="The language model to benchmark. Defaults to `gpt-4o-2024-05-13`.",
+    type=str,
+    help="The language model to benchmark. Can be a ModelsEnum value or OpenRouter format (e.g., 'openai/gpt-4o-mini'). Defaults to `gpt-4o-2024-05-13`.",
 )
 @click.option(
     "--model-id",

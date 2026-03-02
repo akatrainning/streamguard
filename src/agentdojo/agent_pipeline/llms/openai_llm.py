@@ -71,7 +71,13 @@ def _content_blocks_to_openai_content_blocks(
 ) -> list[ChatCompletionContentPartTextParam] | None:
     if message["content"] is None:
         return None
-    return [ChatCompletionContentPartTextParam(type="text", text=el["content"] or "") for el in message["content"]]
+    
+    # Handle both string and list content formats
+    content = message["content"]
+    if isinstance(content, str):
+        return [ChatCompletionContentPartTextParam(type="text", text=content)]
+    
+    return [ChatCompletionContentPartTextParam(type="text", text=el["content"] or "") for el in content]
 
 
 def _message_to_openai(message: ChatMessage, model_name: str) -> ChatCompletionMessageParam:
@@ -109,10 +115,74 @@ def _message_to_openai(message: ChatMessage, model_name: str) -> ChatCompletionM
             raise ValueError(f"Invalid message type: {message}")
 
 
+def _repair_json(json_str: str) -> str:
+    """修复不完整的JSON字符串（针对Llama等模型）
+    
+    问题：Llama模型有时返回不完整的JSON，如：
+    {"recipient": "Alice", "body": "Send the data
+    
+    解决：
+    1. 处理空字符串或仅含空格的情况 → 返回 {}
+    2. 通过添加缺失的引号和括号来修复
+    """
+    json_str = json_str.strip()
+    
+    # 情况1：空字符串 → 返回空对象
+    if not json_str:
+        return '{}'
+    
+    # 情况2：仅包含部分开括号但没有任何内容
+    if json_str in ('{', '['):
+        return '{}' if json_str == '{' else '[]'
+    
+    # 计算缺失的引号和括号
+    open_braces = json_str.count('{')
+    close_braces = json_str.count('}')
+    open_brackets = json_str.count('[')
+    close_brackets = json_str.count(']')
+    open_quotes = json_str.count('"')
+    
+    # 补全缺失的字符
+    missing_close_brace = '}'  * (open_braces - close_braces)
+    missing_close_bracket = ']' * (open_brackets - close_brackets)
+    
+    # 如果有未闭合的字符串，尝试添加引号
+    if open_quotes % 2 == 1:
+        json_str += '"'
+    
+    json_str += missing_close_bracket + missing_close_brace
+    
+    return json_str
+
+
 def _openai_to_tool_call(tool_call: ChatCompletionMessageToolCall) -> FunctionCall:
+    # 处理 arguments 为 None 的情况（无参数函数）
+    if tool_call.function.arguments is None:
+        args = {}
+    else:
+        try:
+            # 首先尝试直接解析
+            args = json.loads(tool_call.function.arguments)
+        except (json.JSONDecodeError, TypeError):
+            # 如果失败，尝试修复后再解析
+            try:
+                repaired = _repair_json(tool_call.function.arguments)
+                args = json.loads(repaired)
+            except (json.JSONDecodeError, TypeError) as e:
+                # 如果仍然失败，记录并返回空字典避免崩溃
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"Failed to parse JSON for tool {tool_call.function.name}. "
+                    f"Raw: {repr(tool_call.function.arguments)}, "
+                    f"Repaired: {repr(_repair_json(tool_call.function.arguments))}, "
+                    f"Error: {e}"
+                )
+                args = {}
+    
     return FunctionCall(
         function=tool_call.function.name,
-        args=json.loads(tool_call.function.arguments),
+        args=args,
         id=tool_call.id,
     )
 
@@ -161,6 +231,7 @@ def chat_completion_request(
         tool_choice="auto" if tools else NOT_GIVEN,
         temperature=temperature or NOT_GIVEN,
         reasoning_effort=reasoning_effort or NOT_GIVEN,
+        stream=False,
     )
 
 
@@ -190,14 +261,26 @@ class OpenAILLM(BasePipelineElement):
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         openai_messages = [_message_to_openai(message, self.model) for message in messages]
         openai_tools = [_function_to_openai(tool) for tool in runtime.functions.values()]
         completion = chat_completion_request(
             self.client, self.model, openai_messages, openai_tools, self.reasoning_effort, self.temperature
         )
+        # 检查completion是否有有效的choices
+        if completion is None or not completion.choices or completion.choices[0] is None:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Invalid API response: completion={completion}")
+            # 返回空消息避免崩溃
+            return query, runtime, env, messages, extra_args
+        
         output = _openai_to_assistant_message(completion.choices[0].message)
         messages = [*messages, output]
         return query, runtime, env, messages, extra_args
@@ -215,9 +298,13 @@ class OpenAILLMToolFilter(BasePipelineElement):
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         messages = [*messages, ChatUserMessage(role="user", content=[text_content_block_from_string(self.prompt)])]
         openai_messages = [_message_to_openai(message, self.model) for message in messages]
         openai_tools = [_function_to_openai(tool) for tool in runtime.functions.values()]
@@ -227,7 +314,17 @@ class OpenAILLMToolFilter(BasePipelineElement):
             tools=openai_tools or NOT_GIVEN,
             tool_choice="none",
             temperature=self.temperature,
+            stream=False,
         )
+        # 检查completion是否有有效的choices
+        if completion is None or not completion.choices or completion.choices[0] is None:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Invalid API response from tool_filter: completion={completion}")
+            # 返回所有工具避免崩溃
+            runtime.update_functions(runtime.functions)
+            return query, runtime, env, messages, extra_args
+        
         output = _openai_to_assistant_message(completion.choices[0].message)
 
         new_tools = {}

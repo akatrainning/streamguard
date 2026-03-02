@@ -23,7 +23,8 @@ from agentdojo.agent_pipeline.llms.google_llm import GoogleLLM
 from agentdojo.agent_pipeline.llms.local_llm import LocalLLM
 from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM, OpenAILLMToolFilter
 from agentdojo.agent_pipeline.llms.prompting_llm import PromptingLLM
-from agentdojo.agent_pipeline.pi_detector import TransformersBasedPIDetector
+from agentdojo.agent_pipeline.dual_track_shield import DualTrackShield
+from agentdojo.agent_pipeline.pi_detector import MELON, TaskShield, TransformersBasedPIDetector, DSP_RP_Shield, LogicTreeShield
 from agentdojo.agent_pipeline.tool_execution import (
     ToolsExecutionLoop,
     ToolsExecutor,
@@ -41,10 +42,16 @@ TOOL_FILTER_PROMPT = (
 )
 
 DEFENSES = [
+    "no_defense",
     "tool_filter",
     "transformers_pi_detector",
     "spotlighting_with_delimiting",
     "repeat_user_prompt",
+    "melon",
+    "task_shield",
+    "dual_track_shield",
+    "logic_tree_shield",
+    "dsp_rp_shield",
 ]
 """Available defenses."""
 
@@ -120,6 +127,13 @@ def get_llm(provider: str, model: str, model_id: str | None, tool_delimiter: str
             base_url=f"http://localhost:{port}/v1",
         )
         llm = OpenAILLM(client, _get_local_model_id(port))
+    elif provider == "openrouter":
+        client = openai.OpenAI(
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+        )
+        # OpenRouter requires the full model identifier with provider prefix (e.g., "openai/gpt-4o-mini")
+        llm = OpenAILLM(client, model)
     else:
         raise ValueError("Invalid provider")
     return llm
@@ -170,9 +184,13 @@ class AgentPipeline(BasePipelineElement):
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         logger = Logger().get()
         for element in self.elements:
             query, runtime, env, messages, extra_args = element.query(query, runtime, env, messages, extra_args)
@@ -183,12 +201,30 @@ class AgentPipeline(BasePipelineElement):
     def from_config(cls, config: PipelineConfig) -> Self:
         """Creates a pipeline for a given model and defense."""
         # TODO: make this more elegant
-        llm = (
-            get_llm(MODEL_PROVIDERS[ModelsEnum(config.llm)], config.llm, config.model_id, config.tool_delimiter)
-            if isinstance(config.llm, str)
-            else config.llm
-        )
+        
+        # Determine provider based on model name
+        if isinstance(config.llm, str):
+            # Check if it's an OpenRouter model (format: provider/model-name)
+            if config.llm.startswith("openai/") or config.llm.startswith("anthropic/") or "/" in config.llm:
+                # It's an OpenRouter model
+                provider = "openrouter"
+                model_name = config.llm
+            else:
+                # Try to find it in ModelsEnum
+                try:
+                    provider = MODEL_PROVIDERS[ModelsEnum(config.llm)]
+                    model_name = config.llm
+                except (ValueError, KeyError):
+                    raise ValueError(f"Unknown model: {config.llm}")
+            llm = get_llm(provider, model_name, config.model_id, config.tool_delimiter)
+        else:
+            llm = config.llm
+        
         llm_name = config.llm if isinstance(config.llm, str) else llm.name
+        
+        # Clean up model name for filesystem paths (remove invalid characters like colons)
+        # This is needed for models like "meta-llama/llama-3.3-70b-instruct:free" from OpenRouter
+        safe_llm_name = llm_name.replace(":", "_").replace("/", "_") if llm_name else ""
 
         assert config.system_message is not None
         system_message_component = SystemMessage(config.system_message)
@@ -199,10 +235,10 @@ class AgentPipeline(BasePipelineElement):
         else:
             tool_output_formatter = tool_result_to_str
 
-        if config.defense is None:
+        if config.defense is None or config.defense == "no_defense":
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
-            pipeline.name = llm_name
+            pipeline.name = safe_llm_name if config.defense is None else f"{safe_llm_name}-no_defense"
             return pipeline
         if config.defense == "tool_filter":
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter), llm])
@@ -219,7 +255,7 @@ class AgentPipeline(BasePipelineElement):
                     tools_loop,
                 ]
             )
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{safe_llm_name}-{config.defense}"
             return pipeline
         if config.defense == "transformers_pi_detector":
             tools_loop = ToolsExecutionLoop(
@@ -243,12 +279,12 @@ class AgentPipeline(BasePipelineElement):
                     tools_loop,
                 ]
             )
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{safe_llm_name}-{config.defense}"
             return pipeline
         if config.defense == "repeat_user_prompt":
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter), InitQuery(), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
-            pipeline.name = f"{llm_name}-{config.defense}"
+            pipeline.name = f"{safe_llm_name}-{config.defense}"
             return pipeline
         if config.defense == "spotlighting_with_delimiting":
             # Defense from https://arxiv.org/abs/2403.14720
@@ -260,6 +296,154 @@ class AgentPipeline(BasePipelineElement):
             delimited_tool_output_formatter = lambda result: f"<<{tool_output_formatter(result)}>>"
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter=delimited_tool_output_formatter), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{safe_llm_name}-{config.defense}"
+            return pipeline
+        if config.defense == "melon":
+
+            tools_loop = ToolsExecutionLoop(
+                [
+                    ToolsExecutor(),
+                    MELON(
+                        llm,
+                        threshold=0.88,  # 提高阈值减少误报：read vs send (0.787) 不应触发
+                        embedding_provider=provider if isinstance(config.llm, str) and provider != "local" else "openai",
+                        embedding_model="text-embedding-3-large" if provider == "openai" else "openai/text-embedding-3-large",
+                    ),
+                ]
+            )
+            
+            pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{safe_llm_name}-{config.defense}"
+            return pipeline
+        if config.defense == "task_shield":
+            # 初始化 Task Shield，使用当前的 LLM 作为 Defender (也可以配置独立的)
+            shield = TaskShield(
+                llm=llm,
+                threshold=0.0, # 论文中阈值设为 0
+                raise_on_injection=False
+            )
+
+            # 构造工具循环：
+            # 1. shield (Action Shield): 检查 Assistant 发出的 Tool Calls
+            # 2. ToolsExecutor: 执行工具
+            # 3. shield (Input Shield): 检查 Tool 返回的 Output
+            tools_loop = ToolsExecutionLoop(
+                [
+                    shield,          # Check Action
+                    ToolsExecutor(tool_output_formatter),
+                    shield,          # Check Output
+                    llm,             # LLM to process output or feedback
+                ]
+            )
+            
+            # 将 shield 也放在最前面，确保能第一时间提取用户意图 (User Intent)
+            pipeline = cls([
+                system_message_component, 
+                init_query_component, 
+                shield,              # Extract User Intent
+                llm, 
+                tools_loop
+            ])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+        if config.defense == "dual_track_shield":
+            # Dual Track Shield: CSA 正向对齐 + 全量参数/输出负向漂移检测
+            shield = DualTrackShield(
+                llm=llm,
+                core_alignment_threshold=0.34,
+                raise_on_injection=False,
+            )
+
+            # 与 Task Shield 类似的双阶段防护：
+            # 1) Action Shield: 审计 Assistant Tool Calls
+            # 2) ToolsExecutor: 执行工具
+            # 3) Output Shield: 审计 Tool Outputs
+            # 4) LLM: 继续推理
+            tools_loop = ToolsExecutionLoop(
+                [
+                    shield,
+                    ToolsExecutor(tool_output_formatter),
+                    shield,
+                    llm,
+                ]
+            )
+
+            pipeline = cls([
+                system_message_component,
+                init_query_component,
+                shield,  # 提前提取用户意图
+                llm,
+                tools_loop,
+            ])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+        if config.defense == "logic_tree_shield":
+            # 初始化 Logic Tree Shield（基于 Task Shield 改进的逻辑树分解防御）
+            shield = LogicTreeShield(
+                llm=llm,
+                node_threshold=0.05,  # 节点贡献度阈值（从0.1降至0.05，减少对间接步骤的误判）
+                holistic_check=True,  # 启用整体一致性检查（防止组合攻击）
+                raise_on_injection=False,
+                unified_mode=True     # 性能优化：合并分解+评估为单一 LLM 调用（减少延迟 33%）
+            )
+
+            # 构造工具循环（与 Task Shield 相同）：
+            # 1. shield (Action Shield): 对 Tool Calls 进行逻辑树分解和逐节点检查
+            # 2. ToolsExecutor: 执行工具
+            # 3. shield (Input Shield): 检查 Tool 返回的 Output
+            tools_loop = ToolsExecutionLoop(
+                [
+                    shield,          # Logic Tree Decomposition + Node-Level Check
+                    ToolsExecutor(tool_output_formatter),
+                    shield,          # Check Tool Output for Injections
+                    llm,             # LLM to process output or feedback
+                ]
+            )
+            
+            # 将 shield 也放在最前面，提取用户意图
+            pipeline = cls([
+                system_message_component, 
+                init_query_component, 
+                shield,              # Extract User Intent
+                llm, 
+                tools_loop
+            ])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+        if config.defense == "dsp_rp_shield":
+            # 初始化 DSP-RP Shield v3.4 (Parameter-Level Defense)
+            # 使用与 MELON 相同的 embedding provider 逻辑
+            embedding_provider = provider if isinstance(config.llm, str) and provider != "local" else "openai"
+            
+            shield = DSP_RP_Shield(
+                llm=llm,
+                irr_threshold=5.5,                                    # v3.5: IRR 阈值 (提高降低误报)
+                iar_threshold=0.42,                                   # v3.5: 参数残差阈值 (提高降低误报)
+                cmd_energy_threshold=0.28,                            # v3.5: 命令能量阈值 (提高降低误报)
+                embedding_provider=embedding_provider,
+                embedding_model="text-embedding-3-large" if provider == "openai" else "openai/text-embedding-3-large",
+                raise_on_injection=False
+            )
+            
+            # DSP-RP 需要作为 Action Shield 放在工具循环中
+            # 同时推荐放在最外层以第一时间捕获 User Intent
+            
+            tools_loop = ToolsExecutionLoop(
+                [
+                    shield,          # L1/L2 Check Action
+                    ToolsExecutor(tool_output_formatter),
+                    llm,             # Process Output
+                ]
+            )
+            
+            pipeline = cls([
+                system_message_component, 
+                init_query_component, 
+                shield,              # Capture User Intent (L1 Update)
+                llm, 
+                tools_loop
+            ])
             pipeline.name = f"{llm_name}-{config.defense}"
             return pipeline
         raise ValueError("Invalid defense name")
+    

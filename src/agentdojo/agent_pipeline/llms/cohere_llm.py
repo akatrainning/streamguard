@@ -251,9 +251,13 @@ class CohereLLM(BasePipelineElement):
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         message, tool_results, chat_history = _conversation_to_cohere(messages)
         cohere_tools = [_convert_to_cohere_tool(tool) for tool in runtime.functions.values()]
         completion = chat_completion_request(

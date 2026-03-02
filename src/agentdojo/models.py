@@ -1,7 +1,23 @@
 from agentdojo.strenum import StrEnum
+# import os
+# from dotenv import load_dotenv
+# import openai
+# from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM
+
+# # 加载环境变量
+# load_dotenv()
+
+# # 创建 OpenRouter 客户端
+# client = openai.OpenAI(
+#     api_key=os.getenv("OPENROUTER_API_KEY"),
+#     base_url="https://openrouter.ai/api/v1",
+# )
+
+# # 使用 GPT-4o-mini
+# llm = OpenAILLM(client, "openai/gpt-4o-mini")
 
 
-class ModelsEnum(StrEnum):
+class ModelsEnum(StrEnum): 
     """Currently supported models."""
 
     GPT_4O_2024_05_13 = "gpt-4o-2024-05-13"
@@ -56,6 +72,12 @@ class ModelsEnum(StrEnum):
     """Local model"""
     VLLM_PARSED = "vllm_parsed"
     """VLLM parsed model"""
+    OPENROUTER_GPT_4O_MINI = "openai/gpt-4o-mini"
+    """GPT-4o Mini via OpenRouter"""
+    OPENROUTER_GPT_4O = "openai/gpt-4o"
+    """GPT-4o via OpenRouter"""
+    OPENROUTER_LLAMA_3_3_70B = "meta-llama/llama-3.3-70b-instruct:free"
+    """Meta Llama 3.3 70B Instruct (Free) via OpenRouter"""
 
 
 MODEL_PROVIDERS = {
@@ -85,10 +107,13 @@ MODEL_PROVIDERS = {
     ModelsEnum.GEMINI_2_5_PRO_PREVIEW_05_06: "google",
     ModelsEnum.LOCAL: "local",
     ModelsEnum.VLLM_PARSED: "vllm_parsed",
+    ModelsEnum.OPENROUTER_GPT_4O_MINI: "openrouter",
+    ModelsEnum.OPENROUTER_GPT_4O: "openrouter",
+    ModelsEnum.OPENROUTER_LLAMA_3_3_70B: "openrouter",
 }
 
 
-MODEL_NAMES = {
+MODEL_NAMES = { 
     "gpt-4o-2024-05-13": "GPT-4",
     "gpt-4o-mini-2024-07-18": "GPT-4",
     "gpt-3.5-turbo-0125": "GPT-3.5",
@@ -115,4 +140,7 @@ MODEL_NAMES = {
     "gemini-2.5-pro-preview-05-06": "AI model developed by Google",
     "local": "Local model",
     "vllm_parsed": "Local model",
+    "openai/gpt-4o-mini": "GPT-4o Mini",
+    "openai/gpt-4o": "GPT-4o",
+    "meta-llama/llama-3.3-70b-instruct:free": "Llama 3.3 70B",
 }

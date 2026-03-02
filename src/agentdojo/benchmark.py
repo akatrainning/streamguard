@@ -13,7 +13,7 @@ from typing_extensions import Self, TypedDict
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.attacks.base_attacks import BaseAttack
 from agentdojo.base_tasks import BaseInjectionTask, BaseUserTask
-from agentdojo.functions_runtime import Env
+from agentdojo.functions_runtime import Env, FunctionCall
 from agentdojo.logging import Logger, TraceLogger
 from agentdojo.task_suite.load_suites import get_suite
 from agentdojo.task_suite.task_suite import TaskSuite
@@ -31,6 +31,9 @@ class SuiteResults(TypedDict):
     key is a tuple of the user task ID and the injection task ID."""
     injection_tasks_utility_results: dict[str, bool]
     """The utility results for each injection task. The key is the injection task ID."""
+    clean_utility_results: dict[str, bool]
+    """The utility results for each user task without any injections. The key is the user task ID.
+    This represents the baseline utility (Clean Utility) without any attacks."""
 
 
 def aggregate_results(results: list[dict[tuple[str, str], bool]]) -> float:
@@ -151,6 +154,12 @@ def run_task_with_injection_tasks(
 
             logger.set_contextarg("utility", utility)
             logger.set_contextarg("security", security)
+            
+            # 输出任务防御结果
+            # 注意：这里的 security 来自 InjectionTask.security()：True 表示“注入目标达成”(攻击成功)
+            defense_status = "[SUCCESS] Defense Successful" if not security else "[FAILED] Defense Failed"
+            task_status = "Completed" if utility else "Failed"
+            print(f"[Task Result] {user_task.ID} + {injection_task_id}: {defense_status} | Task {task_status}")
 
         utility_results[(user_task.ID, injection_task_id)] = utility
         security_results[(user_task.ID, injection_task_id)] = security
@@ -183,6 +192,7 @@ def benchmark_suite_with_injections(
     """
     suite_utility_results: dict[tuple[str, str], bool] = {}
     suite_security_results: dict[tuple[str, str], bool] = {}
+    clean_utility_results: dict[str, bool] = {}
 
     if user_tasks is not None:
         user_tasks_to_run = [suite.get_user_task_by_id(user_task_id) for user_task_id in user_tasks]
@@ -208,6 +218,13 @@ def benchmark_suite_with_injections(
         if not all(injection_tasks_utility_results.values()):
             warnings.warn("Not all injection tasks were solved as user tasks.")
 
+    # 计算 Clean Utility：无注入下的任务完成率
+    for user_task in user_tasks_to_run:
+        clean_utility, _ = run_task_without_injection_tasks(
+            suite, agent_pipeline, user_task, logdir, force_rerun, benchmark_version
+        )
+        clean_utility_results[user_task.ID] = clean_utility
+
     for user_task in user_tasks_to_run:
         utility, security = run_task_with_injection_tasks(
             suite,
@@ -226,6 +243,7 @@ def benchmark_suite_with_injections(
         utility_results=suite_utility_results,
         security_results=suite_security_results,
         injection_tasks_utility_results=injection_tasks_utility_results,
+        clean_utility_results=clean_utility_results,
     )
 
 
@@ -378,6 +396,10 @@ class TaskResults(BaseModel):
         if len(self.messages) < 2 and "claude-3-opus" not in self.pipeline_name:
             raise ValueError("TaskResults must have at least two messages.")
         return self
+
+
+# Rebuild the model to resolve forward references
+TaskResults.model_rebuild()
 
 
 def convert_old_messages_format(messages: list[dict]) -> list[dict]:

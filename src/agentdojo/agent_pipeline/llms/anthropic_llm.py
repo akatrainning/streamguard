@@ -291,9 +291,13 @@ parameters. DO NOT ask for more information on optional parameters if it is not 
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         system_prompt, anthropic_messages = _conversation_to_anthropic(messages)
         if "claude-3-sonnet" in self.model or "claude-3-haiku" in self.model:
             system_prompt = f"{self._COT_PROMPT}\n\n{system_prompt}"

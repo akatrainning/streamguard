@@ -468,6 +468,7 @@ class TaskSuite(Generic[Env]):
                 environment=post_environment,
             )
             injection_tasks_results[injection_task.ID] = security
+            #这里的ground_truth是为了确保 injection task 的 ground truth 中正确地包含了 placeholder_args 信息。
             for tool_call in injection_task.ground_truth(environment.copy(deep=True)):
                 if tool_call.placeholder_args is None:
                     warnings.warn(f"Missing placeholder_args in {injection_task.ID}'s ground truth")

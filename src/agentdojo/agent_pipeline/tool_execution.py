@@ -5,6 +5,7 @@ import yaml
 from pydantic import BaseModel
 
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
+from agentdojo.agent_pipeline.errors import AbortAgentError
 from agentdojo.agent_pipeline.llms.google_llm import EMPTY_FUNCTION_NAME
 from agentdojo.functions_runtime import EmptyEnv, Env, FunctionReturnType, FunctionsRuntime
 from agentdojo.logging import Logger
@@ -60,15 +61,32 @@ class ToolsExecutor(BasePipelineElement):
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         if len(messages) == 0:
             return query, runtime, env, messages, extra_args
         if messages[-1]["role"] != "assistant":
             return query, runtime, env, messages, extra_args
         if messages[-1]["tool_calls"] is None or len(messages[-1]["tool_calls"]) == 0:
             return query, runtime, env, messages, extra_args
+
+        # Loop detection logic
+        if "tool_execution_history" not in extra_args:
+            extra_args["tool_execution_history"] = []
+        
+        # Create a hash of the current tool calls to detect repetition
+        current_tool_calls_str = str([(tc.function, tc.args) for tc in messages[-1]["tool_calls"]])
+        current_hash = hash(current_tool_calls_str)
+        extra_args["tool_execution_history"].append(current_hash)
+        
+        # Check if the last 3 executions were identical
+        if len(extra_args["tool_execution_history"]) >= 3 and extra_args["tool_execution_history"][-1] == extra_args["tool_execution_history"][-2] == extra_args["tool_execution_history"][-3]:
+            raise AbortAgentError("Infinite loop detected: identical tool calls repeated 3 times.", messages, env)
 
         tool_call_results = []
         for tool_call in messages[-1]["tool_calls"]:
@@ -136,17 +154,21 @@ class ToolsExecutionLoop(BasePipelineElement):
         query: str,
         runtime: FunctionsRuntime,
         env: Env = EmptyEnv(),
-        messages: Sequence[ChatMessage] = [],
-        extra_args: dict = {},
+        messages: Sequence[ChatMessage] | None = None,
+        extra_args: dict | None = None,
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        if messages is None:
+            messages = []
+        if extra_args is None:
+            extra_args = {}
         if len(messages) == 0:
             raise ValueError("Messages should not be empty when calling ToolsExecutionLoop")
 
         logger = Logger().get()
-        for _ in range(self.max_iters):
-            last_message = messages[-1]
+        for _ in range(self.max_iters): 
+            last_message = messages[-1] 
             if not last_message["role"] == "assistant":
-                break
+                break   
             if last_message["tool_calls"] is None:
                 break
             if len(last_message["tool_calls"]) == 0:
