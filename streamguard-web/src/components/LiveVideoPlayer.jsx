@@ -138,7 +138,7 @@ export default function LiveVideoPlayer({
   utterances = [],
   isConnected = false,
   dataSource = "mock",
-  apiBase = "http://localhost:8011",   // 新增：用于构造代理 URL
+  apiBase = "http://localhost:8010",   // 新增：用于构造代理 URL
 }) {
   const [playError, setPlayError] = useState(null);
   const [showVideo, setShowVideo] = useState(true);

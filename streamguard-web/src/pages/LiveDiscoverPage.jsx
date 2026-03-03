@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
  *  4. 勾选 2+ 个直播间 → "对比分析" → P1/P2 跨直播间商品对比
  */
 export default function LiveDiscoverPage({
-  apiBase = "http://localhost:8011",
+  apiBase = "http://localhost:8010",
   onConnectRoom,          // (roomId: string) => void
   utterances = [],
   chatMessages = [],
