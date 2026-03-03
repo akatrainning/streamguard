@@ -18,11 +18,13 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import RulesPage from "./pages/RulesPage";
 import ConsumerAdvisorPage from "./pages/ConsumerAdvisorPage";
 import LiveDiscoverPage from "./pages/LiveDiscoverPage";
+import WelcomePage from "./pages/WelcomePage";
 
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState({});
   const [page, setPage] = useState("dashboard");
+  const [entryStep, setEntryStep] = useState("welcome");
   const [showSourceSelector, setShowSourceSelector] = useState(false);
   const feedRef = useRef(null);
 
@@ -81,6 +83,10 @@ export default function App() {
     }));
     setPage("dashboard");
   }, []);
+
+  if (entryStep === "welcome") {
+    return <WelcomePage onEnter={() => setEntryStep("app")} />;
+  }
 
   // Source selection screen
   if (!dataSource) {
