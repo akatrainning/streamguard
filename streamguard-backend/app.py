@@ -60,6 +60,17 @@ LLM_BASE_URL = os.getenv(
 # Cost-effective default model (can be overridden by env LLM_MODEL)
 LLM_MODEL = os.getenv("LLM_MODEL", "deepseek/deepseek-chat")
 
+
+def _is_placeholder_key(key: str) -> bool:
+    """检测是否为占位符/模板 API Key，避免用假 key 请求官方 API。"""
+    if not key:
+        return True
+    low = key.lower()
+    placeholders = ("your_", "sk-your", "your-api", "placeholder", "xxx", "yyy", "zzz",
+                    "<", ">", "enter", "replace", "example", "here", "test")
+    return any(low.startswith(p) or p in low for p in placeholders)
+
+
 if OPENAI_AVAILABLE and LLM_API_KEY:
     try:
         kwargs = {"api_key": LLM_API_KEY}
@@ -74,10 +85,16 @@ else:
     client_sync = None
     client_async = None
 
-# ASR client: prefer OpenAI official endpoint/key for Whisper compatibility
-ASR_OPENAI_API_KEY = os.getenv("ASR_OPENAI_API_KEY", OPENAI_API_KEY)
+# ASR client: requires a REAL OpenAI-compatible key (not OpenRouter — it doesn't support audio)
+# Only create asr_client when ASR_OPENAI_API_KEY is explicitly set and not a placeholder
+ASR_OPENAI_API_KEY = os.getenv("ASR_OPENAI_API_KEY", "")  # must be set explicitly; don't fall back to OPENAI_API_KEY
+if not ASR_OPENAI_API_KEY:
+    # Also accept OPENAI_API_KEY only if it looks like a real key (not a placeholder)
+    _candidate = os.getenv("OPENAI_API_KEY", "")
+    if not _is_placeholder_key(_candidate):
+        ASR_OPENAI_API_KEY = _candidate
 ASR_BASE_URL = os.getenv("ASR_BASE_URL", "")
-if OPENAI_AVAILABLE and ASR_OPENAI_API_KEY:
+if OPENAI_AVAILABLE and ASR_OPENAI_API_KEY and not _is_placeholder_key(ASR_OPENAI_API_KEY):
     try:
         asr_kwargs = {"api_key": ASR_OPENAI_API_KEY}
         if ASR_BASE_URL:
@@ -87,6 +104,9 @@ if OPENAI_AVAILABLE and ASR_OPENAI_API_KEY:
         asr_client = None
 else:
     asr_client = None
+    if ASR_OPENAI_API_KEY:
+        print("[ASR] OPENAI_API_KEY looks like a placeholder, skipping asr_client. "
+              "Set ASR_OPENAI_API_KEY for cloud Whisper, or use local faster-whisper.")
 
 
 # ============= Analysis Engine =============
@@ -541,20 +561,59 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
             return f.read()
 
 
-def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") -> str:
-    """Transcribe Chinese audio bytes with Whisper-compatible endpoint."""
-    client_for_asr = asr_client or client_sync
-    if not client_for_asr:
+# faster-whisper local model cache (lazy init)
+_fw_model = None
+_FW_MODEL_SIZE = os.getenv("LOCAL_WHISPER_MODEL", "base")  # tiny/base/small/medium
+
+
+def _transcribe_local_whisper(audio_bytes: bytes) -> str:
+    """Local transcription with faster-whisper (no API key required)."""
+    global _fw_model
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
         raise RuntimeError(
-            "ASR client unavailable. Set ASR_OPENAI_API_KEY (recommended) or OPENAI_API_KEY."
+            "faster-whisper 未安装。运行: pip install faster-whisper"
         )
 
-    transcript = client_for_asr.audio.transcriptions.create(
-        model="whisper-1",
-        file=(filename, io.BytesIO(audio_bytes), "audio/wav"),
-        language="zh",
-    )
-    return (transcript.text or "").strip()
+    if _fw_model is None:
+        print(f"[ASR-local] 首次加载 faster-whisper '{_FW_MODEL_SIZE}' 模型，请稍候...")
+        _fw_model = WhisperModel(_FW_MODEL_SIZE, device="cpu", compute_type="int8")
+
+    # 将音频写入临时文件
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
+    try:
+        segments, _ = _fw_model.transcribe(tmp_path, language="zh", beam_size=5)
+        return " ".join(seg.text.strip() for seg in segments).strip()
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") -> str:
+    """Transcribe Chinese audio bytes.
+    Priority:
+      1. asr_client (OpenAI-compatible cloud Whisper, requires valid ASR_OPENAI_API_KEY)
+      2. faster-whisper (local, free, no API key needed)
+    """
+    # 优先使用云端 ASR
+    if asr_client:
+        try:
+            transcript = asr_client.audio.transcriptions.create(
+                model="whisper-1",
+                file=(filename, io.BytesIO(audio_bytes), "audio/wav"),
+                language="zh",
+            )
+            return (transcript.text or "").strip()
+        except Exception as e:
+            print(f"[ASR-cloud] 失败 ({e})，切换本地 faster-whisper...")
+
+    # Fallback: 本地 faster-whisper
+    return _transcribe_local_whisper(audio_bytes)
 
 
 # ============= Data Sources =============

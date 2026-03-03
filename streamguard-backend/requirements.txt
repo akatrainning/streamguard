@@ -9,3 +9,4 @@ protobuf
 selenium
 webdriver-manager
 imageio-ffmpeg
+faster-whisper
