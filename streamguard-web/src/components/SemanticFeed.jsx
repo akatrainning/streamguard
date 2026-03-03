@@ -6,6 +6,13 @@ const TYPE_CFG = {
   trap: { label: "TRAP", color: "var(--trap)", bg: "var(--trap-bg)", border: "var(--trap-border)" },
 };
 
+// 来源标签配置：告诉消费者"这条分析从哪来"
+const SOURCE_CFG = {
+  audio:   { icon: "🎤", label: "主播话术", color: "#0096FF", bg: "rgba(0,150,255,0.12)", border: "rgba(0,150,255,0.3)" },
+  chat:    { icon: "💬", label: "观众质疑", color: "#FFA500", bg: "rgba(255,165,0,0.12)",  border: "rgba(255,165,0,0.3)"  },
+  default: { icon: "📋", label: "分析",     color: "var(--text-muted)", bg: "transparent", border: "transparent" },
+};
+
 const LAW_REFS = {
   fact: [
     "\u300a\u5e7f\u544a\u6cd5\u300b\u7b2c4\u6761\uff1a\u5e7f\u544a\u5185\u5bb9\u5e94\u5f53\u771f\u5b9e\u3001\u5408\u6cd5",
@@ -67,11 +74,14 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
       {/* Header with filter tabs */}
       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>
-            {"\u8bed\u4e49\u5206\u6790\u9988\u9001"}
-          </span>
+          <div>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>话术风险分析</span>
+            <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 8 }}>
+              🎤 主播话术 + 💬 观众质疑
+            </span>
+          </div>
           <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            {utterances.length} {"\u6761"}
+            {utterances.length} 条
           </span>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
@@ -118,13 +128,27 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
                   <span style={{ fontWeight: 600, color: cfg.color }}>{cfg.label}</span>
+                  {/* 来源徽章：消费者能清楚知道分析来自主播话术还是观众质疑 */}
+                  {(() => {
+                    const src = SOURCE_CFG[item.source] || SOURCE_CFG.default;
+                    if (!item.source) return null;
+                    return (
+                      <span style={{
+                        fontSize: 9, padding: "1px 5px", borderRadius: 4,
+                        background: src.bg, color: src.color, border: `1px solid ${src.border}`,
+                        fontWeight: 500,
+                      }}>
+                        {src.icon} {src.label}
+                      </span>
+                    );
+                  })()}
                   {/* Score bar */}
                   <div style={{ width: 60, height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, position: "relative" }}>
                     <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(item.score || 0) * 100}%`, background: cfg.color, borderRadius: 2 }} />
                   </div>
                   <span className="mono" style={{ color: "var(--text-muted)" }}>{item.score?.toFixed(2)}</span>
                   <span style={{ color: "var(--text-muted)", marginLeft: "auto" }}>{item.timestamp}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 10 }}>{isOpen ? "\u25b2" : "\u25bc"}</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: 10 }}>{isOpen ? "▲" : "▼"}</span>
                 </div>
               </div>
 
@@ -166,7 +190,11 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
         })}
         {!filtered.length && (
           <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)", fontSize: 12 }}>
-            {"\u6682\u65e0\u6570\u636e"}
+            <div style={{ fontSize: 24, marginBottom: 8 }}>🔍</div>
+            <div>等待话术分析数据…</div>
+            <div style={{ fontSize: 10, marginTop: 6, color: "var(--text-muted)", opacity: 0.7 }}>
+              主播话术（音频转写）和高风险弹幕<br/>将自动出现在此处
+            </div>
           </div>
         )}
       </div>

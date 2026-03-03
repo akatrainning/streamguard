@@ -143,7 +143,20 @@ export function useRealStream({
 
       if (msg.event === "chat") {
         setChatMessages(prev => [
-          { id: Date.now(), user: msg.user, text: msg.text, timestamp: msg.timestamp },
+          {
+            id: Date.now(),
+            user: msg.user,
+            text: msg.text,
+            timestamp: msg.timestamp,
+            // 保留后端语义分析字段（供LiveStreamPanel情感/意图可视化使用）
+            sentiment:      msg.sentiment      || "neutral",
+            intent:         msg.intent         || "other",
+            flags:          msg.flags          || [],
+            risk_score:     msg.risk_score     || 0,
+            label:          msg.label          || "💬 普通弹幕",
+            sentiment_icon: msg.sentiment_icon || "😐",
+            correlation:    msg.correlation    || "unrelated",
+          },
           ...prev,
         ].slice(0, recentChatLimit));
         setMessageTotals(prev => ({

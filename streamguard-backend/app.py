@@ -60,17 +60,6 @@ LLM_BASE_URL = os.getenv(
 # Cost-effective default model (can be overridden by env LLM_MODEL)
 LLM_MODEL = os.getenv("LLM_MODEL", "deepseek/deepseek-chat")
 
-
-def _is_placeholder_key(key: str) -> bool:
-    """检测是否为占位符/模板 API Key，避免用假 key 请求官方 API。"""
-    if not key:
-        return True
-    low = key.lower()
-    placeholders = ("your_", "sk-your", "your-api", "placeholder", "xxx", "yyy", "zzz",
-                    "<", ">", "enter", "replace", "example", "here", "test")
-    return any(low.startswith(p) or p in low for p in placeholders)
-
-
 if OPENAI_AVAILABLE and LLM_API_KEY:
     try:
         kwargs = {"api_key": LLM_API_KEY}
@@ -85,16 +74,10 @@ else:
     client_sync = None
     client_async = None
 
-# ASR client: requires a REAL OpenAI-compatible key (not OpenRouter — it doesn't support audio)
-# Only create asr_client when ASR_OPENAI_API_KEY is explicitly set and not a placeholder
-ASR_OPENAI_API_KEY = os.getenv("ASR_OPENAI_API_KEY", "")  # must be set explicitly; don't fall back to OPENAI_API_KEY
-if not ASR_OPENAI_API_KEY:
-    # Also accept OPENAI_API_KEY only if it looks like a real key (not a placeholder)
-    _candidate = os.getenv("OPENAI_API_KEY", "")
-    if not _is_placeholder_key(_candidate):
-        ASR_OPENAI_API_KEY = _candidate
+# ASR client: prefer OpenAI official endpoint/key for Whisper compatibility
+ASR_OPENAI_API_KEY = os.getenv("ASR_OPENAI_API_KEY", OPENAI_API_KEY)
 ASR_BASE_URL = os.getenv("ASR_BASE_URL", "")
-if OPENAI_AVAILABLE and ASR_OPENAI_API_KEY and not _is_placeholder_key(ASR_OPENAI_API_KEY):
+if OPENAI_AVAILABLE and ASR_OPENAI_API_KEY:
     try:
         asr_kwargs = {"api_key": ASR_OPENAI_API_KEY}
         if ASR_BASE_URL:
@@ -104,9 +87,6 @@ if OPENAI_AVAILABLE and ASR_OPENAI_API_KEY and not _is_placeholder_key(ASR_OPENA
         asr_client = None
 else:
     asr_client = None
-    if ASR_OPENAI_API_KEY:
-        print("[ASR] OPENAI_API_KEY looks like a placeholder, skipping asr_client. "
-              "Set ASR_OPENAI_API_KEY for cloud Whisper, or use local faster-whisper.")
 
 
 # ============= Analysis Engine =============
@@ -510,12 +490,11 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
 
 def _get_ffmpeg_bin() -> str:
     """
-    自动获取 ffmpeg 可执行文件路径。
+    自动获取 ffmpeg 路径。
     优先顺序：
-      1. imageio-ffmpeg 内置二进制（pip install imageio-ffmpeg，无需手动安装）
-      2. 系统 PATH 中的 ffmpeg
+      1. imageio-ffmpeg 内置二进制（pip install imageio-ffmpeg，无需手动安装、无需配 PATH）
+      2. 系统 PATH 中的 ffmpeg（已手动安装的用户 fallback）
     """
-    # 尝试 imageio-ffmpeg（自带静态二进制，无需用户安装）
     try:
         import imageio_ffmpeg
         path = imageio_ffmpeg.get_ffmpeg_exe()
@@ -523,7 +502,6 @@ def _get_ffmpeg_bin() -> str:
             return path
     except Exception:
         pass
-    # 备用：系统 PATH
     path = shutil.which("ffmpeg")
     if path:
         return path
@@ -535,7 +513,8 @@ def _get_ffmpeg_bin() -> str:
 
 def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
     """Capture a short audio clip from a live stream URL.
-    Uses imageio-ffmpeg (bundled, no system install needed) or falls back to system ffmpeg.
+    Uses imageio-ffmpeg (bundled binary, no system install needed)
+    or falls back to system ffmpeg.
     """
     ffmpeg_bin = _get_ffmpeg_bin()
 
@@ -561,13 +540,13 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
             return f.read()
 
 
-# faster-whisper local model cache (lazy init)
+# faster-whisper 本地模型缓存（惰性初始化）
 _fw_model = None
 _FW_MODEL_SIZE = os.getenv("LOCAL_WHISPER_MODEL", "base")  # tiny/base/small/medium
 
 
 def _transcribe_local_whisper(audio_bytes: bytes) -> str:
-    """Local transcription with faster-whisper (no API key required)."""
+    """Local transcription via faster-whisper (no API key, no cloud)."""
     global _fw_model
     try:
         from faster_whisper import WhisperModel
@@ -575,12 +554,9 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
         raise RuntimeError(
             "faster-whisper 未安装。运行: pip install faster-whisper"
         )
-
     if _fw_model is None:
         print(f"[ASR-local] 首次加载 faster-whisper '{_FW_MODEL_SIZE}' 模型，请稍候...")
         _fw_model = WhisperModel(_FW_MODEL_SIZE, device="cpu", compute_type="int8")
-
-    # 将音频写入临时文件
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
@@ -597,10 +573,9 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
 def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") -> str:
     """Transcribe Chinese audio bytes.
     Priority:
-      1. asr_client (OpenAI-compatible cloud Whisper, requires valid ASR_OPENAI_API_KEY)
-      2. faster-whisper (local, free, no API key needed)
+      1. asr_client — OpenAI cloud Whisper (requires valid ASR_OPENAI_API_KEY)
+      2. faster-whisper — local, free, no API key needed
     """
-    # 优先使用云端 ASR
     if asr_client:
         try:
             transcript = asr_client.audio.transcriptions.create(
@@ -611,8 +586,6 @@ def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") 
             return (transcript.text or "").strip()
         except Exception as e:
             print(f"[ASR-cloud] 失败 ({e})，切换本地 faster-whisper...")
-
-    # Fallback: 本地 faster-whisper
     return _transcribe_local_whisper(audio_bytes)
 
 
@@ -705,6 +678,57 @@ class DouyinLiveSource:
     def __init__(self, room_id: str):
         self.room_id = room_id
 
+    async def _audio_loop(self, callback):
+        """
+        连续音频监听后台循环（消费者级实用方案）：
+        自动发现直播媒体流 → 每 15s 采集一窗口 → 转写 → 推送 utterance 事件到前端。
+        无需 API Key：优先 faster-whisper 本地模型。
+        """
+        print(f"[audio-loop] 正在发现直播媒体流（房间: {self.room_id}）...")
+        try:
+            media_url = await asyncio.to_thread(_discover_douyin_media_url, self.room_id, 20)
+        except Exception as e:
+            print(f"[audio-loop] 媒体流发现失败: {e}")
+            return
+
+        if not media_url:
+            print("[audio-loop] 未能找到可用媒体流，音频监听退出（直播间可能已下线或有反爬限制）")
+            return
+
+        print(f"[audio-loop] ✓ 发现媒体流，开始连续监听: {media_url[:80]}...")
+        WINDOW_SECS = 15  # 每次采集 15 秒，兼顾句子完整性与响应延迟
+
+        while True:
+            try:
+                audio_bytes = await asyncio.to_thread(
+                    _capture_audio_clip_bytes, media_url, WINDOW_SECS
+                )
+                text = await asyncio.to_thread(
+                    _transcribe_zh_audio_bytes, audio_bytes, "live_loop.wav"
+                )
+                if text and len(text.strip()) > 3:
+                    analysis = analyze_with_keywords(text)
+                    await callback({
+                        "event": "utterance",
+                        "id": int(time.time() * 1000),
+                        "text": text.strip(),
+                        "timestamp": time.strftime("%H:%M:%S"),
+                        "source": "audio",   # 标记来源：音频转写
+                        **analysis,
+                    })
+                    print(f"[audio-loop] 📝 转写: {text[:60]}{'...' if len(text)>60 else ''}")
+                else:
+                    print("[audio-loop] 静默片段，跳过")
+            except asyncio.CancelledError:
+                print("[audio-loop] 已停止")
+                break
+            except Exception as e:
+                print(f"[audio-loop] 采集/转写错误: {e}")
+                await asyncio.sleep(6)  # 出错后等 6s 再重试，防止过频重试
+                continue
+            # 短暂间隔，避免与上一窗口完全重叠
+            await asyncio.sleep(1)
+
     async def stream(self, callback):
         from douyin_cdp import stream_douyin_cdp
 
@@ -717,17 +741,37 @@ class DouyinLiveSource:
                 if text.strip():
                     # 弹幕语义分析（将最近话术传入做关联分析）
                     chat_analysis = analyze_chat_light(text, recent_utterance=last_utterance_text)
-                    await callback({
-                        **evt,
-                        **chat_analysis,
-                    })
+                    await callback({**evt, **chat_analysis})
+
+                    # ★ 对高风险弹幕（质疑/投诉）同步生成 utterance 事件填充 SemanticFeed
+                    # 这解决了抖音模式下 SemanticFeed 始终空白的问题
+                    if (chat_analysis.get("risk_score", 0) >= 0.5
+                            or chat_analysis.get("intent") in ("doubt", "complaint")):
+                        utt_analysis = analyze_with_keywords(text)
+                        await callback({
+                            "event": "utterance",
+                            "id": int(time.time() * 1000),
+                            "text": text,
+                            "timestamp": evt.get("timestamp", time.strftime("%H:%M:%S")),
+                            "source": "chat",   # 标记来源：弹幕质疑/投诉
+                            **utt_analysis,
+                        })
             elif evt.get("event") == "utterance":
                 last_utterance_text = evt.get("text", "")
                 await callback(evt)
             else:
                 await callback(evt)
 
-        await stream_douyin_cdp(self.room_id, _on_event)
+        # 后台启动连续音频监听（自动转写主播话术 → utterance 事件）
+        audio_task = asyncio.create_task(self._audio_loop(callback))
+        try:
+            await stream_douyin_cdp(self.room_id, _on_event)
+        finally:
+            audio_task.cancel()
+            try:
+                await audio_task
+            except asyncio.CancelledError:
+                pass
 
 
 @app.websocket("/ws/douyin/{room_id}")
