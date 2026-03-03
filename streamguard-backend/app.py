@@ -1042,13 +1042,13 @@ async def session_summary(payload: dict):
     if not client_async or not LLM_API_KEY:
         advice = []
         if trap_rate >= 30:
-            advice.append({"level": "high", "title": "高陷阱话术占比", "body": f"本次陷阱话术占比 {trap_rate}%，风险较高，建议重点核查限时促销、价格误导类话术。"})
+            advice.append({"level": "high", "title": "高陷阱话术占比", "body": f"本次陷阱话术占比 {trap_rate}%，风险较高，建议用户重点核查限时促销、价格误导类话术。"})
         elif trap_rate >= 15:
-            advice.append({"level": "medium", "title": "陷阱话术需关注", "body": f"陷阱话术占比 {trap_rate}%，建议复查标注为 TRAP 的条目，确认是否存在虚假宣传。"})
+            advice.append({"level": "medium", "title": "陷阱话术需关注", "body": f"陷阱话术占比 {trap_rate}%，建议用户复查标注为 TRAP 的条目，确认是否存在虚假宣传。"})
         else:
             advice.append({"level": "low", "title": "整体话术较规范", "body": "本次监控陷阱话术比例较低，主播话术总体合规。"})
-        advice.append({"level": "info", "title": "理性指数评级", "body": f"理性指数 {ri} 分，{'处于合理区间，继续保持。' if ri >= 70 else '偏低，建议关注主播情绪化表达。'}"})
-        advice.append({"level": "info", "title": "建议", "body": "建议留存本报告用于合规存档，如需深度分析可查看各话术详情。"})
+        advice.append({"level": "info", "title": "理性指数评级", "body": f"理性指数 {ri} 分，{'处于合理区间，继续保持。' if ri >= 70 else '偏低，建议用户关注主播情绪化表达。'}"})
+        advice.append({"level": "info", "title": "建议", "body": "建议用户留存本报告用于合规存档，如需深度分析可查看各话术详情。"})
         return {"ai_advice": advice, "generated_by": "rule-engine"}
 
     # LLM 生成深度分析
@@ -1079,10 +1079,9 @@ async def session_summary(payload: dict):
 2. "advice": JSON数组，4~6条建议，每条包含：
    - level: "high" | "medium" | "low" | "info"
    - title: 建议标题（10字以内）
-   - body: 具体说明（50~100字，必须结合实际数据和弹幕内容）
+   - body: 具体说明（50~100字，必须结合实际数据和弹幕内容，明确建议是给用户的）
 
 只返回 JSON 对象，不要有额外文字。"""
-
     try:
         resp = await client_async.chat.completions.create(
             model=LLM_MODEL,
