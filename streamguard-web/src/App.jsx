@@ -36,7 +36,7 @@ export default function App() {
   const realStream = useRealStream({
     mode: dataSource === "douyin" ? "douyin" : "mock",
     roomId: sourceConfig.roomId,
-    wsBase: sourceConfig.wsBase || "ws://localhost:8010",
+    wsBase: sourceConfig.wsBase || "ws://localhost:8012",
     enabled: dataSource === "douyin",
   });
 
@@ -66,7 +66,7 @@ export default function App() {
     mediaUrl,
   } = streamData || {};
 
-  const apiBase = (sourceConfig.wsBase || "ws://localhost:8010").replace(/^ws/i, "http");
+  const apiBase = (sourceConfig.wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
 
   /** 点击"结束监控"：冻结快照 → 断开连接 → 弹出报告 */
   const handleEndSession = useCallback(() => {
@@ -116,7 +116,7 @@ export default function App() {
     setSourceConfig((prev) => ({
       ...prev,
       roomId,
-      wsBase: prev.wsBase || "ws://localhost:8010",
+      wsBase: prev.wsBase || "ws://localhost:8012",
     }));
     setPage("dashboard");
   }, []);
@@ -177,7 +177,7 @@ export default function App() {
           {sourceConfig.roomId && (
             <VideoPlayer
               roomId={sourceConfig.roomId}
-              wsBase={sourceConfig.wsBase || "http://localhost:8010"}
+              wsBase={sourceConfig.wsBase || "http://localhost:8012"}
             />
           )}
 
