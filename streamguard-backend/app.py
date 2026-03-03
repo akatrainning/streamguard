@@ -807,6 +807,18 @@ async def ws_douyin_stream(websocket: WebSocket, room_id: str):
             pass
 
 
+@app.get("/media-url")
+async def get_media_url(roomId: str):
+    """Return a discovered stream URL for a Douyin room (m3u8/flv).
+    The backend will briefly launch a headless browser to sniff network requests,
+    so the call may take a few seconds.
+    """
+    url = _discover_douyin_media_url(roomId)
+    from fastapi import HTTPException
+    if not url:
+        raise HTTPException(status_code=404, detail="media url not found")
+    return {"url": url}
+
 @app.get("/analyze")
 async def analyze_text(text: str):
     """Analyze single utterance"""

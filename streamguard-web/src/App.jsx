@@ -2,6 +2,7 @@
 import { useSimulatedStream } from "./hooks/useSimulatedStream";
 import { useRealStream } from "./hooks/useRealStream";
 import Header from "./components/Header";
+import VideoPlayer from "./components/VideoPlayer";
 import LiveStreamPanel from "./components/LiveStreamPanel";
 import SemanticFeed from "./components/SemanticFeed";
 import RationalityGauge from "./components/RationalityGauge";
@@ -110,6 +111,14 @@ export default function App() {
             recentLimits={recentLimits}
             onReconnect={() => realStream.reconnectNow?.()}
           />
+
+          {/* 视频播放器区域 */}
+          {sourceConfig.roomId && (
+            <VideoPlayer
+              roomId={sourceConfig.roomId}
+              wsBase={sourceConfig.wsBase || "http://localhost:8010"}
+            />
+          )}
 
           <div style={{
             display: "grid", gridTemplateColumns: "380px 1fr",

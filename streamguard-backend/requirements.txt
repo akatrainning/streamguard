@@ -5,6 +5,7 @@ openai>=1.0.0
 python-dotenv
 python-multipart
 requests
+httpx
 protobuf
 selenium
 webdriver-manager
