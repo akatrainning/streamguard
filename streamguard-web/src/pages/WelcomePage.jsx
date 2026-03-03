@@ -1,8 +1,19 @@
+import { useState } from "react";
 import "./WelcomePage.css";
 
 export default function WelcomePage({ onEnter }) {
+  const [isExiting, setIsExiting] = useState(false);
+
+  const handleEnter = () => {
+    if (isExiting) return;
+    setIsExiting(true);
+    window.setTimeout(() => {
+      onEnter?.();
+    }, 700);
+  };
+
   return (
-    <div className="welcome-page">
+    <div className={`welcome-page ${isExiting ? "is-exiting" : ""}`}>
       <div className="welcome-grid" aria-hidden="true" />
       <div className="welcome-scanlines" aria-hidden="true" />
       <div className="welcome-glow" aria-hidden="true" />
@@ -13,7 +24,7 @@ export default function WelcomePage({ onEnter }) {
         </div>
         <h1>StreamGuard</h1>
         <p>守护直播内容与舆情风险，实时感知异常与趋势信号。</p>
-        <button className="welcome-enter" onClick={onEnter}>
+        <button className="welcome-enter" onClick={handleEnter} disabled={isExiting}>
           点击进入→
         </button>
         <div className="welcome-hint mono">Enter / 点击进入</div>
