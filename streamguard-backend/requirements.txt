@@ -8,3 +8,4 @@ requests
 protobuf
 selenium
 webdriver-manager
+imageio-ffmpeg

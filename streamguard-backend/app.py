@@ -162,6 +162,107 @@ def _clamp01(v: float) -> float:
     return max(0.0, min(1.0, float(v)))
 
 
+# ============= Chat Semantic Analysis =============
+
+_CHAT_POS     = ["好用","喜欢","买了","下单","真香","赞","不错","推荐","支持","期待","满意","值得","棒","厉害","冲","必买"]
+_CHAT_NEG     = ["假货","骗人","差评","退货","质量差","失望","坑","黑心","不好","难用","后悔","太贵","不值","垃圾"]
+_CHAT_DOUBT   = ["真的吗","假的吧","可靠吗","有效吗","正品吗","可信吗","别买","小心","真的有用","管用吗","骗人的","假的","怎么证明","哪有这么好"]
+_CHAT_COMPLAINT = ["投诉","退款","假的","骗局","举报","不靠谱","买亏了","太坑","没用","没效果","打假","维权","客服","售后"]
+_CHAT_PURCHASE  = ["下单","买了","拍了","求链接","怎么买","加购","收藏","要一个","几件","发链接","购买","怎么下单","在哪里买"]
+_CHAT_QUESTION  = ["吗","吗？","吧？","？","?","怎么","能不能","有没有","是不是","多少","哪里","什么时候","为什么","咋","啥","需要","适合"]
+_CHAT_AD_SPAM   = ["加微信","私信我","wx","vx","拿货价","批发","便宜出","代购","渠道","刷单","号请联系","加我","找我"]
+_CHAT_SUPPORT   = ["主播加油","支持主播","主播好","YYDS","爱了","美美的","帅","顶","666","永远支持","全程支持"]
+
+# Intent labels in Chinese
+_INTENT_LABEL = {
+    "purchase":  "🛒 购买意向",
+    "question":  "❓ 提问咨询",
+    "complaint": "🚨 客诉投诉",
+    "doubt":     "🤔 质疑话术",
+    "support":   "🙌 支持主播",
+    "ad_spam":   "🚫 广告刷屏",
+    "other":     "💬 普通弹幕",
+}
+_SENTIMENT_LABEL = {"pos": "😊", "neg": "😠", "neutral": "😐"}
+
+
+def analyze_chat_light(text: str, recent_utterance: str = "") -> dict:
+    """
+    轻量中文弹幕语义分析（纯规则，零延迟）。
+    返回: sentiment / intent / flags / risk_score / correlation / label
+    correlation: 与最近一条话术的语义关联 (support_claim / doubt_claim / unrelated)
+    """
+    t = (text or "").strip()
+    if not t:
+        return {"sentiment": "neutral", "intent": "other", "flags": [],
+                "risk_score": 0.0, "correlation": "unrelated", "label": "💬 普通弹幕"}
+
+    # Sentiment
+    pos_hits = sum(1 for w in _CHAT_POS if w in t)
+    neg_hits = sum(1 for w in _CHAT_NEG if w in t)
+    sentiment = "pos" if pos_hits > neg_hits else "neg" if neg_hits > pos_hits else "neutral"
+
+    # Intent (priority: ad_spam > complaint > doubt > purchase > support > question > other)
+    intent = "other"
+    flags: list[str] = []
+
+    if any(w in t for w in _CHAT_AD_SPAM):
+        intent, flags = "ad_spam", ["广告刷屏"]
+        sentiment = "neg"
+    elif any(w in t for w in _CHAT_COMPLAINT):
+        intent, flags = "complaint", ["客诉投诉"]
+        sentiment = "neg"
+    elif any(w in t for w in _CHAT_DOUBT):
+        intent, flags = "doubt", ["质疑话术"]
+        if sentiment == "pos":
+            sentiment = "neutral"
+    elif any(w in t for w in _CHAT_PURCHASE):
+        intent = "purchase"
+    elif any(w in t for w in _CHAT_SUPPORT):
+        intent = "support"
+        if sentiment == "neg":
+            sentiment = "neutral"
+    elif any(w in t for w in _CHAT_QUESTION):
+        intent = "question"
+
+    # 刷屏检测（字符集非常小但文本较长）
+    if len(set(t)) <= 3 and len(t) >= 6:
+        flags.append("重复刷屏")
+        intent = "ad_spam"
+
+    # 与最近话术的关联性
+    correlation = "unrelated"
+    if recent_utterance:
+        ru = recent_utterance.lower()
+        # 话术中含极限词/夸大词，弹幕在质疑 → 关联质疑
+        utterance_risk_words = ["全网最低", "最", "绝", "100%", "百分之百", "神奇", "立刻", "马上", "秒", "万能"]
+        if intent == "doubt" and any(w in ru for w in utterance_risk_words):
+            correlation = "doubt_claim"
+            flags.append("疑问当前话术")
+        elif intent in ("purchase", "support") and sentiment == "pos":
+            correlation = "support_claim"
+        elif intent == "complaint":
+            correlation = "doubt_claim"
+            flags.append("投诉关联话术")
+
+    # Risk score
+    risk_map = {"ad_spam": 0.9, "complaint": 0.75, "doubt": 0.55, "question": 0.1,
+                "purchase": 0.0, "support": 0.0, "other": 0.0}
+    risk = risk_map.get(intent, 0.0)
+    if sentiment == "neg" and risk < 0.4:
+        risk = 0.4
+
+    return {
+        "sentiment":   sentiment,                          # pos / neg / neutral
+        "intent":      intent,                             # purchase / question / complaint / doubt / support / ad_spam / other
+        "flags":       flags,                              # 中文警示标签
+        "risk_score":  round(risk, 2),
+        "correlation": correlation,                        # support_claim / doubt_claim / unrelated
+        "label":       _INTENT_LABEL.get(intent, "💬 普通弹幕"),
+        "sentiment_icon": _SENTIMENT_LABEL.get(sentiment, "😐"),
+    }
+
+
 def analyze_audio_with_rules(text: str) -> dict:
     """Audio-focused rule engine for livestream compliance semantics."""
     t = (text or "").strip()
@@ -387,11 +488,36 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
             pass
 
 
+def _get_ffmpeg_bin() -> str:
+    """
+    自动获取 ffmpeg 可执行文件路径。
+    优先顺序：
+      1. imageio-ffmpeg 内置二进制（pip install imageio-ffmpeg，无需手动安装）
+      2. 系统 PATH 中的 ffmpeg
+    """
+    # 尝试 imageio-ffmpeg（自带静态二进制，无需用户安装）
+    try:
+        import imageio_ffmpeg
+        path = imageio_ffmpeg.get_ffmpeg_exe()
+        if path and os.path.isfile(path):
+            return path
+    except Exception:
+        pass
+    # 备用：系统 PATH
+    path = shutil.which("ffmpeg")
+    if path:
+        return path
+    raise RuntimeError(
+        "ffmpeg 未找到。请运行: pip install imageio-ffmpeg  "
+        "（或手动安装系统 ffmpeg 并加入 PATH）"
+    )
+
+
 def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
-    """Use ffmpeg to capture a short audio clip from a live stream URL."""
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if not ffmpeg_bin:
-        raise RuntimeError("ffmpeg not found. Please install ffmpeg and ensure it is in PATH")
+    """Capture a short audio clip from a live stream URL.
+    Uses imageio-ffmpeg (bundled, no system install needed) or falls back to system ffmpeg.
+    """
+    ffmpeg_bin = _get_ffmpeg_bin()
 
     with tempfile.TemporaryDirectory() as td:
         out_wav = os.path.join(td, "clip.wav")
@@ -466,10 +592,12 @@ class MockLiveSource:
 
     async def stream(self, callback):
         idx = 0
+        last_utterance = ""  # 记录最近一条话术，供弹幕关联分析用
         while True:
             await asyncio.sleep(random.uniform(2.5, 4.0))
             text = self.UTTERANCES[idx % len(self.UTTERANCES)]
             idx += 1
+            last_utterance = text
             analysis = analyze_utterance(text)
             await callback({
                 "event": "utterance",
@@ -480,11 +608,13 @@ class MockLiveSource:
             })
 
             chat = random.choice(self.CHATS)
+            chat_analysis = analyze_chat_light(chat, recent_utterance=last_utterance)
             await callback({
                 "event": "chat",
                 "user": f"User{random.randint(1000, 9999)}",
                 "text": chat,
                 "timestamp": time.strftime("%H:%M:%S"),
+                **chat_analysis,
             })
 
 
@@ -519,20 +649,22 @@ class DouyinLiveSource:
     async def stream(self, callback):
         from douyin_cdp import stream_douyin_cdp
 
+        last_utterance_text = ""
+
         async def _on_event(evt: dict):
+            nonlocal last_utterance_text
             if evt.get("event") == "chat":
                 text = evt.get("text", "")
                 if text.strip():
-                    analysis = analyze_utterance(text)
+                    # 弹幕语义分析（将最近话术传入做关联分析）
+                    chat_analysis = analyze_chat_light(text, recent_utterance=last_utterance_text)
                     await callback({
-                        "event":     "utterance",
-                        "id":        int(time.time() * 1000),
-                        "text":      text,
-                        "user":      evt.get("user", "User"),
-                        "timestamp": evt.get("timestamp", time.strftime("%H:%M:%S")),
-                        **analysis,
+                        **evt,
+                        **chat_analysis,
                     })
-                    await callback(evt)
+            elif evt.get("event") == "utterance":
+                last_utterance_text = evt.get("text", "")
+                await callback(evt)
             else:
                 await callback(evt)
 
@@ -576,6 +708,12 @@ async def ws_douyin_stream(websocket: WebSocket, room_id: str):
 async def analyze_text(text: str):
     """Analyze single utterance"""
     return analyze_utterance(text)
+
+
+@app.get("/chat-analyze")
+async def chat_analyze(text: str, recent_utterance: str = ""):
+    """Analyze a single danmaku/chat message"""
+    return analyze_chat_light(text, recent_utterance=recent_utterance)
 
 
 @app.post("/transcribe")

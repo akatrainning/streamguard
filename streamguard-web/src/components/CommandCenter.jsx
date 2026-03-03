@@ -1,4 +1,60 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
+
+// ─── 音频分析流程步骤 ───────────────────────────────────────────
+const AUDIO_STEPS = [
+  { key: "discover",    label: "发现直播媒体流",   desc: "从直播间提取音视频URL" },
+  { key: "capture",     label: "捕获音频片段",     desc: "实时录制音频数据" },
+  { key: "transcribe",  label: "ASR 语音转写",     desc: "Whisper 将音频转为文本" },
+  { key: "analyze",     label: "语义对齐分析",     desc: "LLM 评估话术合规性" },
+  { key: "done",        label: "分析完成",          desc: "结构化结果已就绪" },
+];
+const STEP_KEY_ORDER = AUDIO_STEPS.map(s => s.key);
+
+function AudioStepIndicator({ currentStep, error }) {
+  const currentIdx = STEP_KEY_ORDER.indexOf(currentStep);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, margin: "8px 0" }}>
+      {AUDIO_STEPS.map((step, idx) => {
+        const isDone    = currentIdx > idx || currentStep === "done";
+        const isActive  = STEP_KEY_ORDER[currentIdx] === step.key && currentStep !== "done";
+        const isError   = error && isActive;
+        const color = isError ? "#FF3366" : isDone ? "#00FF88" : isActive ? "#FFD700" : "var(--text-muted)";
+        const bg    = isError ? "rgba(255,51,102,0.08)" : isDone ? "rgba(0,255,136,0.07)" :
+                      isActive ? "rgba(255,215,0,0.08)" : "transparent";
+        return (
+          <div key={step.key} style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "4px 7px",
+            borderRadius: 6, background: bg,
+            border: `1px solid ${isActive || isDone ? color + "33" : "transparent"}`,
+            transition: "all 0.3s",
+          }}>
+            {/* 图标 */}
+            <span style={{ fontSize: 13, width: 18, textAlign: "center", flexShrink: 0 }}>
+              {isError ? "✗" : isDone ? "✓" : isActive ? "⏳" : "○"}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, color, fontWeight: isActive ? 600 : 400 }}>{step.label}</div>
+              {isActive && (
+                <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 1 }}>{step.desc}</div>
+              )}
+            </div>
+            {/* 活跃时的动画点 */}
+            {isActive && !error && (
+              <span style={{ display: "flex", gap: 3 }}>
+                {[0,1,2].map(i => (
+                  <span key={i} style={{
+                    width: 4, height: 4, borderRadius: "50%", background: "#FFD700",
+                    animation: `blink 1.2s ${i * 0.3}s infinite`,
+                  }} />
+                ))}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function CommandCenter({
   dataSource,
@@ -15,6 +71,8 @@ export default function CommandCenter({
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioError, setAudioError] = useState("");
   const [audioResult, setAudioResult] = useState(null);
+  const [audioStep, setAudioStep]   = useState("");   // 当前进度步骤key
+  const abortRef = useRef(null);
 
   const watchWords = useMemo(() => (
     watchInput
@@ -48,6 +106,7 @@ export default function CommandCenter({
 
   const apiBase = (sourceConfig?.wsBase || "ws://localhost:8010").replace(/^ws/i, "http");
 
+  // ─── 分步音频分析 ───────────────────────────────────────────
   const runAudioAnalysis = async () => {
     if (dataSource !== "douyin") {
       setAudioError("当前仅抖音数据源支持直播间音频分析");
@@ -57,23 +116,43 @@ export default function CommandCenter({
       setAudioError("请先填写并连接直播间房间号");
       return;
     }
-
     setAudioLoading(true);
     setAudioError("");
+    setAudioResult(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // 分步骤模拟进度（实际请求耗时对应各阶段）
+    const stepDelays = { discover: 0, capture: 1200, transcribe: 2800, analyze: 5500 };
+    for (const [step, delay] of Object.entries(stepDelays)) {
+      setTimeout(() => {
+        if (!controller.signal.aborted) setAudioStep(step);
+      }, delay);
+    }
+
     try {
       const sec = Math.max(8, Math.min(90, Number(audioSecs) || 20));
       const url = `${apiBase}/douyin/audio-analyze/${sourceConfig.roomId}?seconds=${sec}`;
-      const res = await fetch(url, { method: "POST" });
+      const res = await fetch(url, { method: "POST", signal: controller.signal });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.detail || "音频分析失败");
-      }
+      if (!res.ok) throw new Error(data?.detail || "音频分析失败");
+      setAudioStep("done");
       setAudioResult(data);
     } catch (e) {
-      setAudioError(e?.message || "音频分析失败");
+      if (e.name !== "AbortError") {
+        setAudioError(e?.message || "音频分析失败");
+        setAudioStep("");
+      }
     } finally {
-      setAudioLoading(false);
+      if (!controller.signal.aborted) setAudioLoading(false);
     }
+  };
+
+  const cancelAudio = () => {
+    abortRef.current?.abort();
+    setAudioLoading(false);
+    setAudioStep("");
+    setAudioError("已取消");
   };
 
   const exportSnapshot = () => {
@@ -197,92 +276,101 @@ export default function CommandCenter({
 
       {/* Audio semantic analysis */}
       <div style={{ borderTop: "1px solid var(--border)", padding: "10px 12px" }}>
-        <Card title="直播间音频→ASR→语义分析（手动触发）">
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+        <Card title="直播间音频 → ASR → 语义分析">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>采样时长(秒)</span>
             <input
-              type="number"
-              min={8}
-              max={90}
-              value={audioSecs}
+              type="number" min={8} max={90} value={audioSecs}
               onChange={(e) => setAudioSecs(e.target.value)}
               style={{
-                width: 72,
-                padding: "4px 6px",
-                borderRadius: 6,
-                background: "var(--bg-tertiary)",
-                border: "1px solid var(--border)",
-                color: "var(--text-primary)",
-                fontSize: 12,
+                width: 64, padding: "4px 6px", borderRadius: 6,
+                background: "var(--bg-tertiary)", border: "1px solid var(--border)",
+                color: "var(--text-primary)", fontSize: 12,
               }}
             />
-            <button onClick={runAudioAnalysis} style={btnStyle} disabled={audioLoading}>
-              {audioLoading ? "分析中..." : "开始音频分析"}
-            </button>
+            {!audioLoading ? (
+              <button onClick={runAudioAnalysis} style={btnStyle}>▶ 开始分析</button>
+            ) : (
+              <button onClick={cancelAudio} style={{ ...btnStyle, color: "var(--trap)" }}>✕ 取消</button>
+            )}
+            {audioResult && !audioLoading && (
+              <span className="mono" style={{ fontSize: 10, color: "var(--fact)" }}>
+                ✓ {audioResult.latency_ms}ms
+              </span>
+            )}
           </div>
 
-          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>
-            仅在你手动点击时抓取一次音频片段，不做自动高频轮询，降低反爬风险。
-          </div>
-
-          {audioError && (
-            <div style={{ fontSize: 11, color: "var(--trap)", marginBottom: 8 }}>
-              {audioError}
-            </div>
+          {/* 分步骤进度 */}
+          {(audioLoading || audioStep === "done") && (
+            <AudioStepIndicator currentStep={audioStep} error={audioError} />
           )}
 
-          {audioResult && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {audioError && !audioLoading && (
+            <div style={{ fontSize: 11, color: "var(--trap)", margin: "6px 0" }}>⚠ {audioError}</div>
+          )}
+
+          {/* 结果区 */}
+          {audioResult && audioStep === "done" && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              {/* 整体结论 */}
               <div style={{
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                padding: 8,
-                background: "var(--bg-secondary)",
+                display: "flex", gap: 10, padding: 8, borderRadius: 6,
+                background: "var(--bg-secondary)", border: "1px solid var(--border)",
               }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>转写文本</div>
-                <div style={{ maxHeight: 120, overflowY: "auto", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                <TypeBadge type={audioResult.analysis?.type} score={audioResult.analysis?.score} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>改进建议</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                    {audioResult.analysis?.suggestion || "--"}
+                  </div>
+                </div>
+              </div>
+              {/* 违规项 */}
+              {(audioResult.analysis?.violations || []).length > 0 && (
+                <div style={{ padding: 7, borderRadius: 6, background: "rgba(255,51,102,0.06)",
+                  border: "1px solid rgba(255,51,102,0.2)" }}>
+                  <div style={{ fontSize: 10, color: "#FF3366", marginBottom: 4 }}>检出违规项</div>
+                  {audioResult.analysis.violations.slice(0, 5).map((v, i) => (
+                    <div key={i} style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 2 }}>• {v}</div>
+                  ))}
+                </div>
+              )}
+              {/* 转写文本 */}
+              <div style={{ padding: 7, borderRadius: 6,
+                background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 3 }}>转写原文</div>
+                <div style={{ maxHeight: 80, overflowY: "auto", fontSize: 11,
+                  color: "var(--text-secondary)", lineHeight: 1.5 }}>
                   {audioResult.transcript || "--"}
                 </div>
               </div>
-
-              <div style={{
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                padding: 8,
-                background: "var(--bg-secondary)",
-              }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>整体语义结论</div>
-                <KV k="类别" v={audioResult.analysis?.type || "--"} mono />
-                <KV k="得分" v={audioResult.analysis?.score ?? "--"} mono />
-                <KV k="引擎" v={audioResult.analysis?.engine || "--"} mono />
-                <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-secondary)" }}>
-                  {(audioResult.analysis?.violations || []).slice(0, 4).map((x, i) => (
-                    <div key={i}>• {x}</div>
-                  ))}
+              {/* 逐句风险 */}
+              {(audioResult.sentence_analysis || []).length > 0 && (
+                <div style={{ padding: 7, borderRadius: 6,
+                  background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>逐句风险评估</div>
+                  <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 5 }}>
+                    {audioResult.sentence_analysis.map((row) => {
+                      const riskColor = row.analysis?.type === "trap" ? "#FF3366"
+                        : row.analysis?.type === "hype" ? "#FFD700" : "#00FF88";
+                      return (
+                        <div key={row.idx} style={{
+                          padding: "4px 7px", borderRadius: 5,
+                          borderLeft: `3px solid ${riskColor}`,
+                          background: "var(--bg-tertiary)",
+                        }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                            <span className="mono" style={{ fontSize: 9, color: riskColor, fontWeight: 600 }}>
+                              [{row.idx}] {row.analysis?.type?.toUpperCase()} · {row.analysis?.score}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{row.text}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-
-              <div style={{
-                gridColumn: "1 / -1",
-                border: "1px solid var(--border)",
-                borderRadius: 6,
-                padding: 8,
-                background: "var(--bg-secondary)",
-              }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>逐句风险（规则引擎）</div>
-                <div style={{ maxHeight: 140, overflowY: "auto" }}>
-                  {(audioResult.sentence_analysis || []).map((row) => (
-                    <div key={row.idx} style={{ marginBottom: 6, paddingBottom: 6, borderBottom: "1px dashed var(--border)" }}>
-                      <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-                        [{row.idx}] {row.text}
-                      </div>
-                      <div className="mono" style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
-                        type={row.analysis?.type} score={row.analysis?.score}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
           )}
         </Card>
@@ -290,6 +378,21 @@ export default function CommandCenter({
     </div>
   );
 }
+
+function TypeBadge({ type, score }) {
+  const colors = { trap: "#FF3366", hype: "#FFD700", fact: "#00FF88" };
+  const labels = { trap: "陷阱话术", hype: "夸大话术", fact: "合规话术" };
+  const c = colors[type] || "var(--text-muted)";
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "6px 10px", borderRadius: 6, border: `1px solid ${c}33`, background: `${c}11`,
+      flexShrink: 0, minWidth: 60 }}>
+      <span className="mono" style={{ fontSize: 18, fontWeight: 700, color: c }}>{((score || 0)*100).toFixed(0)}</span>
+      <span style={{ fontSize: 9, color: c, marginTop: 2 }}>{labels[type] || type}</span>
+    </div>
+  );
+}
+
 
 function Card({ title, children }) {
   return (
