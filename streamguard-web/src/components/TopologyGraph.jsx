@@ -17,6 +17,8 @@ export default function TopologyGraph({ utterances = [] }) {
   const [activeNode, setActiveNode] = useState(null);
   const [showDrift, setShowDrift] = useState(false);
   const [onlyTrap, setOnlyTrap] = useState(false);
+  const [windowSize, setWindowSize] = useState(12);
+  const [sortKey, setSortKey] = useState("driftMagnitude");
 
   const W = 900, H = 240;
   const PAD_X = 48, PAD_RIGHT = 28;
@@ -58,6 +60,75 @@ export default function TopologyGraph({ utterances = [] }) {
 
   const driftCount = edges.filter(e => e.isDrift).length;
   const trapCount = edges.filter(e => e.isTrap).length;
+
+  const stats = useMemo(() => {
+    const total = nodes.length;
+    const counts = nodes.reduce((acc, n) => {
+      acc[n.type] = (acc[n.type] || 0) + 1;
+      return acc;
+    }, { fact: 0, hype: 0, trap: 0 });
+    const avgScore = total
+      ? Math.round(nodes.reduce((s, n) => s + (n.score || 0), 0) / total * 100)
+      : 0;
+    const driftNodes = new Set();
+    edges.forEach(e => {
+      if (e.isDrift) {
+        driftNodes.add(e.from.idx);
+        driftNodes.add(e.to.idx);
+      }
+    });
+
+    const windowStats = (size, offset) => {
+      if (!total) return { driftRate: 0, trapRate: 0, edgeCount: 0 };
+      const end = Math.max(0, total - offset);
+      const start = Math.max(0, end - size);
+      const inRange = new Set();
+      for (let i = start; i < end; i += 1) inRange.add(i);
+      const wEdges = edges.filter(e => inRange.has(e.from.idx) && inRange.has(e.to.idx));
+      const wDrift = wEdges.filter(e => e.isDrift).length;
+      const wTrap = wEdges.filter(e => e.isTrap).length;
+      const edgeCount = wEdges.length || 1;
+      return {
+        driftRate: wDrift / edgeCount,
+        trapRate: wTrap / edgeCount,
+        edgeCount: wEdges.length
+      };
+    };
+
+    const cur = windowStats(windowSize, 0);
+    const prev = windowStats(windowSize, windowSize);
+    const driftDelta = prev.edgeCount
+      ? Math.round((cur.driftRate - prev.driftRate) * 100)
+      : null;
+
+    return {
+      total,
+      counts,
+      avgScore,
+      driftNodeCount: driftNodes.size,
+      driftDelta,
+    };
+  }, [nodes, edges, windowSize]);
+
+  const ranking = useMemo(() => {
+    const items = nodes.map((node, idx) => {
+      const driftEdges = edges.filter(e => e.isDrift && (e.from.idx === node.idx || e.to.idx === node.idx)).length;
+      const trapEdges = edges.filter(e => e.isTrap && (e.from.idx === node.idx || e.to.idx === node.idx)).length;
+      const prev = nodes[idx - 1];
+      const confDrop = prev ? Math.max(0, (prev.score || 0) - (node.score || 0)) : 0;
+      return {
+        node,
+        driftMagnitude: driftEdges + (node.type === "trap" ? 0.5 : 0),
+        crossClassStrength: driftEdges,
+        trapDensity: trapEdges,
+        confDrop,
+        recent: idx,
+      };
+    });
+    return items
+      .sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0))
+      .slice(0, 6);
+  }, [nodes, edges, sortKey]);
 
   return (
     <div style={{
@@ -206,43 +277,126 @@ export default function TopologyGraph({ utterances = [] }) {
 
       {/* Footer stats */}
 
-      {/* Details panel */}
+      {/* Summary + Risk ranking */}
       <div style={{
         marginTop: 8,
         background: "var(--bg-tertiary)",
         borderTop: "1px solid var(--border)",
-        padding: "8px 12px",
-        maxHeight: 160,
-        overflowY: "auto",
+        padding: "10px 12px 12px",
+        display: "grid",
+        gridTemplateColumns: "1fr 1.4fr",
+        gap: 12,
         fontSize: 11,
         color: "var(--text-secondary)"
       }}>
-        {nodes.map(node => (
-          <details
-            key={node.idx}
-            open={activeNode?.idx === node.idx}
-            style={{
-              marginBottom: 4,
-              background: "var(--bg-secondary)",
-              border: `1px solid ${TC[node.type]}44`,
-              borderRadius: 4,
-              padding: "4px 6px"
-            }}
-            onClick={() => setActiveNode(node)}
-          >
-            <summary style={{ cursor: "pointer", color: TC[node.type] }}>
-              {TL[node.type]} #{node.idx + 1} – {Math.round((node.score||0)*100)}%
-            </summary>
-            <div style={{ marginTop: 4, lineHeight: 1.4 }}>
-              {node.text}
-              {node.timestamp && (
-                <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-muted)" }}>
-                  {node.timestamp}
-                </div>
-              )}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>全局概览</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[6, 12, 16].map(n => (
+                <TogBtn key={n} active={windowSize === n} color="var(--accent)" onClick={() => setWindowSize(n)}>
+                  最近{n}
+                </TogBtn>
+              ))}
             </div>
-          </details>
-        ))}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <MetricCard label="节点总量" value={stats.total} />
+            <MetricCard label="跨类节点" value={stats.driftNodeCount} accent={TC.hype} />
+            <MetricCard label="陷阱边" value={trapCount} accent={TC.trap} />
+            <MetricCard label="平均置信度" value={`${stats.avgScore}%`} accent={TC.fact} />
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>FACT / HYPE / TRAP 比例</span>
+              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                漂移趋势
+                <span style={{ marginLeft: 6, color: stats.driftDelta == null ? "var(--text-muted)" : (stats.driftDelta >= 0 ? TC.hype : TC.fact) }}>
+                  {stats.driftDelta == null ? "—" : `${stats.driftDelta > 0 ? "+" : ""}${stats.driftDelta}%`}
+                </span>
+              </span>
+            </div>
+            <div style={{
+              height: 10,
+              borderRadius: 6,
+              overflow: "hidden",
+              display: "flex",
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)"
+            }}>
+              <RatioSeg color={TC.fact} value={stats.counts.fact} total={stats.total} />
+              <RatioSeg color={TC.hype} value={stats.counts.hype} total={stats.total} />
+              <RatioSeg color={TC.trap} value={stats.counts.trap} total={stats.total} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>风险优先级</span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              {[
+                { key: "driftMagnitude", label: "漂移幅度" },
+                { key: "crossClassStrength", label: "跨类强度" },
+                { key: "trapDensity", label: "陷阱边密度" },
+                { key: "confDrop", label: "置信度下降" },
+                { key: "recent", label: "最近新增" },
+              ].map(opt => (
+                <TogBtn key={opt.key} active={sortKey === opt.key} color={TC.hype} onClick={() => setSortKey(opt.key)}>
+                  {opt.label}
+                </TogBtn>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {ranking.map(({ node }) => (
+              <div key={node.idx} style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
+                alignItems: "center",
+                padding: "6px 8px",
+                borderRadius: 6,
+                background: "var(--bg-secondary)",
+                border: `1px solid ${TC[node.type]}33`
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ color: TC[node.type], fontWeight: 600, fontSize: 11 }}>
+                      {TL[node.type]} #{node.idx + 1}
+                    </span>
+                    <span className="mono" style={{ color: TC[node.type] }}>
+                      {Math.round((node.score || 0) * 100)}%
+                    </span>
+                    {node.timestamp && (
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{node.timestamp}</span>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {node.text}
+                  </div>
+                </div>
+                <button onClick={() => setActiveNode(node)} style={{
+                  marginLeft: 8,
+                  padding: "3px 8px",
+                  borderRadius: 4,
+                  background: "transparent",
+                  border: `1px solid ${TC[node.type]}55`,
+                  color: TC[node.type],
+                  cursor: "pointer",
+                  fontSize: 10
+                }}>
+                  定位拓扑
+                </button>
+              </div>
+            ))}
+            {!ranking.length && (
+              <div style={{ padding: "10px 8px", color: "var(--text-muted)" }}>暂无异常漂移节点</div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div style={{
@@ -253,7 +407,7 @@ export default function TopologyGraph({ utterances = [] }) {
         <span>{"\u8de8\u7c7b"} <span className="mono" style={{ color: TC.hype }}>{driftCount}</span></span>
         <span>{"\u9677\u9631\u8fb9"} <span className="mono" style={{ color: TC.trap }}>{trapCount}</span></span>
         <span style={{ marginLeft: "auto", fontSize: 10 }}>
-          {"\u70b9\u51fb\u8282\u70b9\u67e5\u770b\u8be6\u60c5"}
+          {"\u70b9\u51fb\u699c\u5355\u53ef\u5b9a\u4f4d\u62d3\u6251\u8282\u70b9"}
         </span>
       </div>
     </div>
@@ -271,4 +425,27 @@ function TogBtn({ active, color, onClick, children }) {
       {children}
     </button>
   );
+}
+
+function MetricCard({ label, value, accent = "var(--accent)" }) {
+  return (
+    <div style={{
+      padding: "8px 10px",
+      borderRadius: 6,
+      background: "var(--bg-secondary)",
+      border: "1px solid var(--border)",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 8
+    }}>
+      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{label}</span>
+      <span className="mono" style={{ fontSize: 12, color: accent }}>{value}</span>
+    </div>
+  );
+}
+
+function RatioSeg({ color, value, total }) {
+  const pct = total ? (value / total) * 100 : 0;
+  return <div style={{ width: `${pct}%`, background: color, opacity: 0.5 }} />;
 }
