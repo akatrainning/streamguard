@@ -23,6 +23,7 @@ const TYPE_COLOR = {
 function TranscriptItem({ item }) {
   const color = TYPE_COLOR[item.type] || "var(--text-secondary)";
   const isRisk = item.type === "trap" || item.type === "hype";
+  const keywords = Array.isArray(item.keywords) ? item.keywords : [];
   return (
     <div style={{
       padding: "6px 10px",
@@ -46,9 +47,29 @@ function TranscriptItem({ item }) {
           {item.timestamp}
         </span>
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.55 }}>
+      {/* 润色后的展示文本 */}
+      <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.6 }}>
         {item.text}
       </div>
+      {/* 关键词标签 */}
+      {keywords.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 5 }}>
+          {keywords.map((kw, i) => (
+            <span key={i} style={{
+              fontSize: 9, padding: "1px 7px", borderRadius: 10, fontWeight: 600,
+              background: `${color}18`, color, border: `1px solid ${color}38`,
+            }}>
+              {kw}
+            </span>
+          ))}
+        </div>
+      )}
+      {/* 原始转写（折叠提示，用于调试） */}
+      {item.raw_text && item.raw_text !== item.text && (
+        <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4, opacity: 0.6 }}>
+          原文: {item.raw_text.slice(0, 60)}{item.raw_text.length > 60 ? "…" : ""}
+        </div>
+      )}
     </div>
   );
 }
@@ -117,7 +138,7 @@ export default function LiveVideoPlayer({
   utterances = [],
   isConnected = false,
   dataSource = "mock",
-  apiBase = "http://localhost:8010",   // 新增：用于构造代理 URL
+  apiBase = "http://localhost:8011",   // 新增：用于构造代理 URL
 }) {
   const [playError, setPlayError] = useState(null);
   const [showVideo, setShowVideo] = useState(true);

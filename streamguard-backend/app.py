@@ -589,6 +589,64 @@ def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") 
     return _transcribe_local_whisper(audio_bytes)
 
 
+def _polish_asr_text(raw_text: str) -> dict:
+    """
+    将 Whisper 原始转写文本整理为通顺句子并提取关键词。
+    - LLM 可用时：调用 LLM 重组句子 + 提取关键词（JSON 返回）
+    - LLM 不可用时：规则去重 + 词频关键词提取
+    返回: { display_text, keywords, raw_text }
+    """
+    # -------- 规则预清理（总是运行）--------
+    cleaned = raw_text.strip()
+    # 去除 ASR 常见重复片段（如"好的好的好的"）
+    cleaned = re.sub(r'([\u4e00-\u9fa5a-zA-Z]{1,8})\1{1,4}', r'\1', cleaned)
+    # 去除孤立语气词
+    cleaned = re.sub(r'(?<![^\s])[嗯啊哦哎唉呢吧哈]{1,3}(?![^\s])', '', cleaned)
+    cleaned = re.sub(r'\s+', '', cleaned).strip()
+
+    # -------- LLM 润色（优先）--------
+    if client_sync and LLM_API_KEY:
+        try:
+            resp = client_sync.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "你是直播内容整理助手。将主播的口语化 ASR 转写整理为：\n"
+                            "1. display_text：1~3 句完整、通顺的中文句子，保留核心信息，去除口头禅/重复词/无意义填充词。\n"
+                            "2. keywords：3~6 个关键词数组，只保留产品特点、价格、功效、促销等最重要的词语。\n"
+                            "严格只返回 JSON，不要额外文字：{\"display_text\": \"...\", \"keywords\": [\"...\"]}"
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"原始转写：{raw_text[:600]}",
+                    },
+                ],
+                max_tokens=220,
+                temperature=0.15,
+            )
+            content = resp.choices[0].message.content.strip()
+            m = re.search(r'\{.*\}', content, re.DOTALL)
+            if m:
+                result = json.loads(m.group())
+                display = (result.get("display_text") or cleaned).strip()
+                keywords = [k for k in (result.get("keywords") or []) if k and len(k) >= 2][:6]
+                print(f"[polish-asr] ✓ LLM 润色完成: {display[:50]}...")
+                return {"display_text": display, "keywords": keywords, "raw_text": raw_text}
+        except Exception as e:
+            print(f"[polish-asr] LLM 润色失败: {e}，回退规则提取")
+
+    # -------- 规则关键词提取（回退）--------
+    from collections import Counter
+    STOP = {"这个", "然后", "就是", "我们", "大家", "一个", "一些", "非常", "可以", "已经", "现在"}
+    words = re.findall(r'[\u4e00-\u9fa5]{2,6}', cleaned)
+    freq = Counter(w for w in words if w not in STOP)
+    keywords = [w for w, _ in freq.most_common(6)]
+    return {"display_text": cleaned, "keywords": keywords, "raw_text": raw_text}
+
+
 # ============= Data Sources =============
 
 class MockLiveSource:
@@ -707,11 +765,15 @@ class DouyinLiveSource:
                     _transcribe_zh_audio_bytes, audio_bytes, "live_loop.wav"
                 )
                 if text and len(text.strip()) > 3:
-                    analysis = analyze_with_keywords(text)
+                    # 润色：整理为通顺句子 + 提取关键词
+                    polish = await asyncio.to_thread(_polish_asr_text, text)
+                    analysis = analyze_with_keywords(polish["raw_text"])
                     await callback({
                         "event": "utterance",
                         "id": int(time.time() * 1000),
-                        "text": text.strip(),
+                        "text": polish["display_text"],   # 展示润色后的文本
+                        "raw_text": polish["raw_text"],   # 保留原始转写供调试
+                        "keywords": polish["keywords"],   # 关键词标签
                         "timestamp": time.strftime("%H:%M:%S"),
                         "source": "audio",   # 标记来源：音频转写
                         **analysis,

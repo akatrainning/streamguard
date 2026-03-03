@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export default function VideoPlayer({ roomId, wsBase = "http://localhost:8010" }) {
+export default function VideoPlayer({ roomId, wsBase = "http://localhost:8011" }) {
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

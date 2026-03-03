@@ -133,7 +133,7 @@ export default function App() {
           {sourceConfig.roomId && (
             <VideoPlayer
               roomId={sourceConfig.roomId}
-              wsBase={sourceConfig.wsBase || "http://localhost:8010"}
+              wsBase={sourceConfig.wsBase || "http://localhost:8011"}
             />
           )}
 
