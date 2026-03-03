@@ -104,7 +104,7 @@ export default function CommandCenter({
     ? new Date(connection.lastMessageAt).toLocaleTimeString("zh-CN", { hour12: false })
     : "--";
 
-  const apiBase = (sourceConfig?.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
+  const apiBase = (sourceConfig?.wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
 
   // ─── 分步音频分析 ───────────────────────────────────────────
   const runAudioAnalysis = async () => {
@@ -160,7 +160,7 @@ export default function CommandCenter({
       generatedAt: new Date().toISOString(),
       source: dataSource,
       roomId: sourceConfig?.roomId || null,
-      wsBase: sourceConfig?.wsBase || "ws://localhost:8011",
+      wsBase: sourceConfig?.wsBase || "ws://localhost:8012",
       connection: {
         connected: connection.connected,
         connecting: connection.connecting,

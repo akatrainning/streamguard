@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 
-export default function VideoPlayer({ roomId, wsBase = "http://localhost:8011" }) {
+/** 从任意形式输入提取纯数字房间ID */
+function extractRoomId(input = "") {
+  const text = decodeURIComponent((input || "").trim());
+  if (!text) return "";
+  if (/^\d{6,24}$/.test(text)) return text;
+  try {
+    const u = new URL(text);
+    const q = u.searchParams.get("room_id") || u.searchParams.get("roomId") || u.searchParams.get("web_rid");
+    if (q && /^\d{6,24}$/.test(q)) return q;
+  } catch {}
+  const m = text.match(/(?:live\.)?douyin\.com\/(\d{6,24})/i);
+  if (m) return m[1];
+  const d = text.match(/(\d{6,24})/);
+  return d ? d[1] : "";
+}
+
+export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localhost:8012" }) {
+  const roomId = extractRoomId(roomIdRaw || "");
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

@@ -122,7 +122,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                   border: `1px solid ${cfg.border}`,
                 }}>
                 <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5, marginBottom: 4 }}>
-                  {item.text}
+                  {item.display_text || item.text}
                 </div>
                 {Array.isArray(item.keywords) && item.keywords.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
@@ -194,6 +194,18 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                       </div>
                       <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>
                         {item.suggestion}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 原始语音转写（仅 display_text 与原文不同时展示） */}
+                  {item.display_text && item.display_text !== item.text && (
+                    <div style={{ marginTop: 8, padding: "7px 10px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6 }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, marginBottom: 3 }}>
+                        🎙 原始转写
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, fontStyle: "italic" }}>
+                        {item.text}
                       </div>
                     </div>
                   )}

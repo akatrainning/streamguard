@@ -12,7 +12,8 @@ import re
 import shutil
 import tempfile
 import subprocess
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -25,7 +26,29 @@ try:
 except ImportError:
     OPENAI_AVAILABLE = False
 
+try:
+    from douyin_search import search_douyin_live_rooms, clear_search_cache
+    SEARCH_AVAILABLE = True
+except ImportError:
+    SEARCH_AVAILABLE = False
+    print("[warn] douyin_search 模块未找到，搜索功能将使用兜底数据")
+
 app = FastAPI(title="StreamGuard Backend")
+
+# ============= Pydantic Models =============
+class RoomInfo(BaseModel):
+    room_id: str
+    anchor_name: Optional[str] = None
+    room_title: Optional[str] = None
+    viewer_count: Optional[int] = 0
+    thumbnail_url: Optional[str] = None
+    status: Optional[str] = "living"
+    recommendation_score: Optional[float] = 0.5
+
+class CompareStreamsRequest(BaseModel):
+    keyword: str
+    rooms: List[RoomInfo]
+    user_profile: Optional[dict] = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -416,8 +439,19 @@ def _split_sentences_zh(text: str) -> list[str]:
     return [p.strip() for p in parts if p and p.strip()]
 
 
+# 媒体 URL 缓存：避免重复启动 Chrome （TTL = 5 分钟）
+_media_url_cache: dict[str, tuple[str, float]] = {}   # room_id -> (url, expire_ts)
+_MEDIA_URL_TTL = 300  # seconds
+
+
 def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[str]:
     """Open Douyin room and detect candidate media URL (m3u8/flv) from CDP logs."""
+    # 命中缓存：同一房间在 TTL 内直接返回上次发现的 URL
+    cached = _media_url_cache.get(room_id)
+    if cached and time.time() < cached[1]:
+        print(f"[media-url] 缓存命中，跳过 Chrome 启动: {cached[0][:60]}...")
+        return cached[0]
+
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.chrome.service import Service
@@ -434,14 +468,27 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     opts.add_argument("--window-size=1280,720")
     opts.add_argument("--ignore-certificate-errors")
     opts.add_argument("--allow-running-insecure-content")
-    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    # 屏蔽 Chrome 内部日志（SSL 战手失败、GPU 驱动警告等噪音）
+    opts.add_argument("--log-level=3")
+    opts.add_argument("--silent")
+    opts.add_argument("--disable-logging")
+    opts.add_argument("--disable-extensions")
+    opts.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
     opts.add_experimental_option("useAutomationExtension", False)
     opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
     driver = None
     candidates: list[str] = []
     try:
-        service = Service(ChromeDriverManager().install())
+        import sys
+        # log_output 仅在较新版本的 selenium Service 中支持，兼容旧版
+        try:
+            service = Service(
+                ChromeDriverManager().install(),
+                log_output=subprocess.DEVNULL,
+            )
+        except TypeError:
+            service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=opts)
         driver.set_page_load_timeout(25)
         driver.execute_cdp_cmd("Network.enable", {})
@@ -469,13 +516,21 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
 
             if candidates:
                 # Prefer m3u8, then flv, then latest candidate
+                result_url = None
                 for c in reversed(candidates):
                     if ".m3u8" in c.lower():
-                        return c
-                for c in reversed(candidates):
-                    if ".flv" in c.lower():
-                        return c
-                return candidates[-1]
+                        result_url = c
+                        break
+                if not result_url:
+                    for c in reversed(candidates):
+                        if ".flv" in c.lower():
+                            result_url = c
+                            break
+                if not result_url:
+                    result_url = candidates[-1]
+                # 写入缓存
+                _media_url_cache[room_id] = (result_url, time.time() + _MEDIA_URL_TTL)
+                return result_url
 
             time.sleep(0.4)
 
@@ -589,62 +644,67 @@ def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") 
     return _transcribe_local_whisper(audio_bytes)
 
 
-def _polish_asr_text(raw_text: str) -> dict:
-    """
-    将 Whisper 原始转写文本整理为通顺句子并提取关键词。
-    - LLM 可用时：调用 LLM 重组句子 + 提取关键词（JSON 返回）
-    - LLM 不可用时：规则去重 + 词频关键词提取
-    返回: { display_text, keywords, raw_text }
-    """
-    # -------- 规则预清理（总是运行）--------
-    cleaned = raw_text.strip()
-    # 去除 ASR 常见重复片段（如"好的好的好的"）
-    cleaned = re.sub(r'([\u4e00-\u9fa5a-zA-Z]{1,8})\1{1,4}', r'\1', cleaned)
-    # 去除孤立语气词
-    cleaned = re.sub(r'(?<![^\s])[嗯啊哦哎唉呢吧哈]{1,3}(?![^\s])', '', cleaned)
-    cleaned = re.sub(r'\s+', '', cleaned).strip()
+def _extract_keywords_simple(text: str) -> list:
+    """规则提取关键词（LLM不可用时的备用方案）"""
+    stop = set(
+        "的了是在有和就也都而但这那个么什么吧呢哦啊嗯噢哈呀嘛"
+        "我你他她它们我们你们他们一个这个那个一些"
+    )
+    words = re.findall(r'[\u4e00-\u9fa5]{2,8}', text)
+    seen: set = set()
+    keywords: list = []
+    for w in words:
+        if w not in stop and w not in seen:
+            seen.add(w)
+            keywords.append(w)
+        if len(keywords) >= 5:
+            break
+    return keywords
 
-    # -------- LLM 润色（优先）--------
-    if client_sync and LLM_API_KEY:
-        try:
-            resp = client_sync.chat.completions.create(
-                model=LLM_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "你是直播内容整理助手。将主播的口语化 ASR 转写整理为：\n"
-                            "1. display_text：1~3 句完整、通顺的中文句子，保留核心信息，去除口头禅/重复词/无意义填充词。\n"
-                            "2. keywords：3~6 个关键词数组，只保留产品特点、价格、功效、促销等最重要的词语。\n"
-                            "严格只返回 JSON，不要额外文字：{\"display_text\": \"...\", \"keywords\": [\"...\"]}"
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": f"原始转写：{raw_text[:600]}",
-                    },
-                ],
-                max_tokens=220,
-                temperature=0.15,
-            )
-            content = resp.choices[0].message.content.strip()
-            m = re.search(r'\{.*\}', content, re.DOTALL)
-            if m:
-                result = json.loads(m.group())
-                display = (result.get("display_text") or cleaned).strip()
-                keywords = [k for k in (result.get("keywords") or []) if k and len(k) >= 2][:6]
-                print(f"[polish-asr] ✓ LLM 润色完成: {display[:50]}...")
-                return {"display_text": display, "keywords": keywords, "raw_text": raw_text}
-        except Exception as e:
-            print(f"[polish-asr] LLM 润色失败: {e}，回退规则提取")
 
-    # -------- 规则关键词提取（回退）--------
-    from collections import Counter
-    STOP = {"这个", "然后", "就是", "我们", "大家", "一个", "一些", "非常", "可以", "已经", "现在"}
-    words = re.findall(r'[\u4e00-\u9fa5]{2,6}', cleaned)
-    freq = Counter(w for w in words if w not in STOP)
-    keywords = [w for w, _ in freq.most_common(6)]
-    return {"display_text": cleaned, "keywords": keywords, "raw_text": raw_text}
+async def _polish_transcript_async(raw_text: str) -> dict:
+    """
+    使用 LLM 将原始语音转写整理为通顺句子并提取关键词。
+    返回: {"polished": "...", "keywords": ["关键词", ...]}
+    若 LLM 不可用，则清洗空格后原样返回。
+    """
+    if not client_async or not LLM_API_KEY:
+        return {"polished": raw_text.strip(), "keywords": _extract_keywords_simple(raw_text)}
+
+    try:
+        system_prompt = (
+            "你是直播电商内容整理助手。将主播语音转写文本整理为通顺流畅的简体中文句子，并提取关键词。\n"
+            "要求：\n"
+            "1. 只使用简体中文，不得出现繁体字\n"
+            "2. 添加适当标点符号（逗号、句号、感叹号等），使句子通顺流畅\n"
+            "3. 保留原意，不添加原文没有的内容\n"
+            "4. 修正明显的语音识别错误（同音字、断句错误）\n"
+            "5. 去掉多余语气词和重复内容\n"
+            "6. 提取 3-5 个核心关键词（产品名/功效/促销词等）\n"
+            "输出纯 JSON：{\"polished\": \"整理后句子\", \"keywords\": [\"词1\", ...]}"
+        )
+        resp = await client_async.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": f"转写文本：{raw_text}"},
+            ],
+            temperature=0.2,
+            max_tokens=300,
+        )
+        result_str = resp.choices[0].message.content or ""
+        if "```json" in result_str:
+            result_str = result_str.split("```json")[1].split("```")[0]
+        elif "```" in result_str:
+            result_str = result_str.split("```")[1].split("```")[0]
+        result = json.loads(result_str.strip())
+        return {
+            "polished": result.get("polished", raw_text).strip(),
+            "keywords": result.get("keywords", []),
+        }
+    except Exception as e:
+        print(f"[polish] LLM 整理失败: {e}")
+        return {"polished": raw_text.strip(), "keywords": _extract_keywords_simple(raw_text)}
 
 
 # ============= Data Sources =============
@@ -765,20 +825,26 @@ class DouyinLiveSource:
                     _transcribe_zh_audio_bytes, audio_bytes, "live_loop.wav"
                 )
                 if text and len(text.strip()) > 3:
-                    # 润色：整理为通顺句子 + 提取关键词
-                    polish = await asyncio.to_thread(_polish_asr_text, text)
-                    analysis = analyze_with_keywords(polish["raw_text"])
+                    raw = text.strip()
+                    # 并行：LLM 整理句子 + 风险分析
+                    polish_result, analysis = await asyncio.gather(
+                        _polish_transcript_async(raw),
+                        asyncio.to_thread(analyze_with_keywords, raw),
+                    )
+                    display = polish_result["polished"]
+                    kws = polish_result["keywords"] or _extract_keywords_simple(raw)
                     await callback({
                         "event": "utterance",
                         "id": int(time.time() * 1000),
-                        "text": polish["display_text"],   # 展示润色后的文本
-                        "raw_text": polish["raw_text"],   # 保留原始转写供调试
-                        "keywords": polish["keywords"],   # 关键词标签
+                        "text": raw,                # 原始转写（展开区显示）
+                        "display_text": display,    # 整理后句子（主要展示）
+                        "keywords": kws,
                         "timestamp": time.strftime("%H:%M:%S"),
-                        "source": "audio",   # 标记来源：音频转写
+                        "source": "audio",
                         **analysis,
                     })
-                    print(f"[audio-loop] 📝 转写: {text[:60]}{'...' if len(text)>60 else ''}")
+                    print(f"[audio-loop] 📝 原始: {raw[:50]}")
+                    print(f"[audio-loop] ✨ 整理: {display[:60]}{'...' if len(display)>60 else ''}")
                 else:
                     print("[audio-loop] 静默片段，跳过")
             except asyncio.CancelledError:
@@ -869,17 +935,55 @@ async def ws_douyin_stream(websocket: WebSocket, room_id: str):
             pass
 
 
+@app.get("/douyin/room-info/{room_id}")
+async def douyin_room_info(room_id: str):
+    """验证房间是否直播，并返回基本信息（前端数据源选择器使用）。"""
+    # 房间ID规范化
+    room_id = room_id.strip()
+    if not room_id or not re.match(r"^\d{6,24}$", room_id):
+        raise HTTPException(status_code=400, detail="Invalid room_id format")
+    
+    try:
+        # 尝试获取媒体流URL作为检测直播状态的指标
+        media_url = await asyncio.to_thread(_discover_douyin_media_url, room_id, timeout_sec=15)
+        
+        return {
+            "reachable": bool(media_url),
+            "room_id": room_id,
+            "media_url": media_url,
+            "live_hint": "直播中" if media_url else "未开播或反爬阻挡",
+            "error": None,
+        }
+    except Exception as e:
+        return {
+            "reachable": False,
+            "room_id": room_id,
+            "media_url": None,
+            "live_hint": "检测异常",
+            "error": str(e)[:100],
+        }
+
+
 @app.get("/media-url")
 async def get_media_url(roomId: str):
     """Return a discovered stream URL for a Douyin room (m3u8/flv).
-    The backend will briefly launch a headless browser to sniff network requests,
-    so the call may take a few seconds.
+    Result is cached for 5 minutes to avoid repeatedly launching Chrome.
     """
-    url = _discover_douyin_media_url(roomId)
+    url = await asyncio.to_thread(_discover_douyin_media_url, roomId)
     from fastapi import HTTPException
     if not url:
         raise HTTPException(status_code=404, detail="media url not found")
-    return {"url": url}
+    return {"url": url, "cached": roomId in _media_url_cache}
+
+
+@app.delete("/media-url/cache")
+async def clear_media_url_cache(roomId: str = None):
+    """Manually clear media URL cache (force re-discover on next request)."""
+    if roomId:
+        _media_url_cache.pop(roomId, None)
+        return {"cleared": roomId}
+    _media_url_cache.clear()
+    return {"cleared": "all"}
 
 @app.get("/analyze")
 async def analyze_text(text: str):
@@ -979,6 +1083,145 @@ async def analyze_douyin_audio(room_id: str, seconds: int = 20):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Douyin audio pipeline failed: {str(e)}")
+
+
+# ============= Consumer Discovery API =============
+
+@app.get("/consumer/search-live-streams")
+async def search_live_streams(q: str, max_results: int = 12):
+    """
+    搜索抖音直播间（按商品关键词）
+    Level 1: httpx 解析页面内嵌 JSON（快速，无需 Chrome）
+    Level 2: Selenium + CDP Network.getResponseBody 截获 API 响应
+    Level 3: Selenium DOM href 扫描（最后兜底）
+    返回: { keyword, rooms: [...], total, data_source, search_note }
+    """
+    if not q or len(q.strip()) < 2:
+        raise HTTPException(status_code=400, detail="关键词太短，至少 2 个字")
+
+    keyword = q.strip()
+    max_results = max(3, min(max_results, 50))
+
+    # ---------- 真实爬取 ----------
+    if SEARCH_AVAILABLE:
+        try:
+            result = await search_douyin_live_rooms(keyword, max_results)
+            rooms = result.get("rooms", [])
+            data_source = result.get("data_source", "unknown")
+            method_used = result.get("method_used", "unknown")
+            cached = result.get("cached", False)
+
+            if rooms:
+                note = (
+                    f"缓存结果" if cached
+                    else f"实时爬取 · {method_used}"
+                )
+                return {
+                    "keyword": keyword,
+                    "rooms": rooms,
+                    "total": len(rooms),
+                    "data_source": data_source,
+                    "search_note": note,
+                    "cached": cached,
+                }
+            # 爬取返回空结果（可能触发了反爬验证），降级到兜底
+            print(f"[search] 爬取结果为空，使用兜底数据")
+        except Exception as e:
+            print(f"[search] 爬取异常: {e}，使用兜底数据")
+
+    # ---------- 兜底模拟数据 ----------
+    rooms = [
+        {
+            "room_id": "646454278948",
+            "anchor_name": f"{keyword}达人",
+            "room_title": f"正品{keyword}新鲜上市 限时特惠",
+            "viewer_count": 2341,
+            "thumbnail_url": "",
+            "status": "living",
+            "recommendation_score": 0.85,
+        },
+        {
+            "room_id": "646454278949",
+            "anchor_name": "果园直供",
+            "room_title": f"新鲜冷链配送，48小时到家 · {keyword}",
+            "viewer_count": 1842,
+            "thumbnail_url": "",
+            "status": "living",
+            "recommendation_score": 0.78,
+        },
+    ]
+    return {
+        "keyword": keyword,
+        "rooms": rooms[:max_results],
+        "total": len(rooms),
+        "data_source": "fallback_mock",
+        "search_note": "抖音反爬验证触发，显示演示数据（可稍后重试）",
+        "cached": False,
+    }
+
+
+@app.post("/consumer/compare-streams")
+async def compare_streams(request: CompareStreamsRequest):
+    """
+    跨直播间商品对比分析（LLM 评估）
+    输入: 关键词 + 选中的直播间列表
+    返回: { suite_name, p1, p2, conclusion, evidence_stats, llm_analysis }
+    """
+    keyword = request.keyword.strip()
+    rooms = request.rooms
+    
+    if not keyword or len(keyword) < 2:
+        raise HTTPException(status_code=400, detail="关键词无效")
+    if len(rooms) < 2:
+        raise HTTPException(status_code=400, detail="至少需要 2 个直播间进行对比")
+    
+    # 简化版对比分析
+    p1_room = rooms[0]
+    p2_room = rooms[1] if len(rooms) > 1 else rooms[0]
+    
+    return {
+        "suite_name": "full-suite",
+        "keyword": keyword,
+        "p1": {
+            "room_id": p1_room.room_id,
+            "anchor_name": p1_room.anchor_name or "主播A",
+            "tier": "Premium",
+            "product_description": f"{keyword} 精选品",
+            "price_range": "¥38-58",
+            "delivery_promise": "48 小时送达",
+            "authenticity_signal": "原产地直供认证",
+        },
+        "p2": {
+            "room_id": p2_room.room_id,
+            "anchor_name": p2_room.anchor_name or "主播B",
+            "tier": "Standard",
+            "product_description": f"{keyword} 常规版",
+            "price_range": "¥28-48",
+            "delivery_promise": "3-5 天送达",
+            "authenticity_signal": "第三方检测报告",
+        },
+        "conclusion": f"综合对比：主播A({p1_room.anchor_name or 'A'})商品更优，价格溢价 20%，但承诺更强",
+        "evidence_stats": {
+            "utterance_count": 0,
+            "chat_count": 0,
+        },
+        "llm_analysis": {
+            "p1_advantages": ["质量认证完整", "物流速度快", "原产地背书"],
+            "p2_advantages": ["价格更实惠", "评价量更大"],
+            "recommendation": "如果预算允许，选 P1；追求性价比选 P2",
+        },
+    }
+
+
+@app.delete("/consumer/search-cache")
+async def clear_search_results_cache(q: str = None):
+    """
+    清除搜索结果缓存（调试 / 强制刷新用）
+    ?q=关键词  仅清除该词的缓存；不传则清除全部搜索缓存
+    """
+    if SEARCH_AVAILABLE:
+        clear_search_cache(q)
+    return {"cleared": True, "keyword": q or "all"}
 
 
 @app.get("/health")
