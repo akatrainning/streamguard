@@ -16,6 +16,14 @@ function getColor(v) {
   return "#f85149";
 }
 
+function BarTick({ x, y, payload }) {
+  return (
+    <text x={x} y={y + 12} textAnchor="middle" fill="#8b949e" fontSize={9}>
+      {payload?.value}
+    </text>
+  );
+}
+
 export default function RiskRadar({ data = [] }) {
   const [view, setView] = useState("radar");
   const [activeDim, setActiveDim] = useState(null);
@@ -69,9 +77,9 @@ export default function RiskRadar({ data = [] }) {
             </RadarChart>
           </ResponsiveContainer>
         ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={data} margin={{ top: 10, right: 10, bottom: 20, left: -10 }}>
-              <XAxis dataKey="subject" tick={{ fill: "#8b949e", fontSize: 9 }} tickLine={false} axisLine={false} angle={-30} textAnchor="end" />
+          <ResponsiveContainer width="100%" height={240}>
+            <BarChart data={data} margin={{ top: 10, right: 10, bottom: 32, left: -10 }}>
+              <XAxis dataKey="subject" tick={<BarTick />} tickLine={false} axisLine={false} interval={0} />
               <YAxis domain={[0, 100]} tick={{ fill: "#484f58", fontSize: 8 }} tickLine={false} axisLine={false} />
               <Tooltip contentStyle={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 6, fontSize: 11 }} />
               <Bar dataKey="value" radius={[4, 4, 0, 0]}
