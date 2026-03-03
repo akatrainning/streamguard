@@ -205,6 +205,46 @@ export default function TopologyGraph({ utterances = [] }) {
       </div>
 
       {/* Footer stats */}
+
+      {/* Details panel */}
+      <div style={{
+        marginTop: 8,
+        background: "var(--bg-tertiary)",
+        borderTop: "1px solid var(--border)",
+        padding: "8px 12px",
+        maxHeight: 160,
+        overflowY: "auto",
+        fontSize: 11,
+        color: "var(--text-secondary)"
+      }}>
+        {nodes.map(node => (
+          <details
+            key={node.idx}
+            open={activeNode?.idx === node.idx}
+            style={{
+              marginBottom: 4,
+              background: "var(--bg-secondary)",
+              border: `1px solid ${TC[node.type]}44`,
+              borderRadius: 4,
+              padding: "4px 6px"
+            }}
+            onClick={() => setActiveNode(node)}
+          >
+            <summary style={{ cursor: "pointer", color: TC[node.type] }}>
+              {TL[node.type]} #{node.idx + 1} – {Math.round((node.score||0)*100)}%
+            </summary>
+            <div style={{ marginTop: 4, lineHeight: 1.4 }}>
+              {node.text}
+              {node.timestamp && (
+                <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-muted)" }}>
+                  {node.timestamp}
+                </div>
+              )}
+            </div>
+          </details>
+        ))}
+      </div>
+
       <div style={{
         padding: "8px 16px", borderTop: "1px solid var(--border)",
         display: "flex", gap: 16, fontSize: 11, color: "var(--text-muted)",
