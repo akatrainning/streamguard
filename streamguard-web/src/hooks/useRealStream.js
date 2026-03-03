@@ -34,6 +34,7 @@ export function useRealStream({
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [statusLog,        setStatusLog]        = useState([]);
   const [reconnectToken,   setReconnectToken]   = useState(0);
+  const [mediaUrl,         setMediaUrl]         = useState(undefined);  // undefined=等待 null=未找到 string=就绪
 
   const wsRef       = useRef(null);
   const alertId     = useRef(0);
@@ -105,11 +106,29 @@ export function useRealStream({
         return;
       }
 
+      if (msg.event === "media_url_discovered") {
+        const url = msg.url || null;  // null = not found, string = found
+        setMediaUrl(url);
+        if (url) {
+          pushLog(`媒体流地址已就绪: ${url.slice(0, 60)}...`);
+        } else {
+          pushLog("未能找到媒体流（可能未开播或有反爬限制）");
+        }
+        return;
+      }
+
       if (msg.event === "utterance") {
         const item = {
           uid: msg.id, id: msg.id,
           text: msg.text, type: msg.type,
           score: msg.score, timestamp: msg.timestamp,
+          source: msg.source,
+          raw_text: msg.raw_text,
+          keywords: msg.keywords || [],
+          violations: msg.violations || [],
+          suggestion: msg.suggestion || "",
+          sub_scores: msg.sub_scores || {},
+          engine: msg.engine,
         };
         setUtterances(prev => [item, ...prev].slice(0, recentUtteranceLimit));
         setRationalityIndex(prev => {
@@ -254,6 +273,7 @@ export function useRealStream({
     recentLimits: { utterances: recentUtteranceLimit, chats: recentChatLimit },
     connected, connecting, error,
     lastMessageAt, connectionAttempts, statusLog, reconnectNow,
+    mediaUrl,
     product: { name: "Live Product", brand: "Live Room", price: "--", stock: "--" },
   };
 }

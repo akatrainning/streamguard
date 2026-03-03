@@ -1,8 +1,10 @@
 ﻿const TABS = [
-  { id: "dashboard", label: "\u5b9e\u65f6\u76d1\u63a7" },
-  { id: "history",   label: "\u5386\u53f2\u8bb0\u5f55" },
-  { id: "analytics", label: "\u6570\u636e\u5206\u6790" },
-  { id: "rules",     label: "\u5408\u89c4\u89c4\u5219" },
+  { id: "dashboard", label: "实时监控" },
+  { id: "discover",  label: "🔍 发现直播" },
+  { id: "consumer",  label: "消费决策" },
+  { id: "history",   label: "历史记录" },
+  { id: "analytics", label: "数据分析" },
+  { id: "rules",     label: "合规规则" },
 ];
 
 export default function Header({
