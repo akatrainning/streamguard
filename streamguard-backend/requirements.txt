@@ -6,3 +6,5 @@ python-dotenv
 python-multipart
 requests
 protobuf
+selenium
+webdriver-manager

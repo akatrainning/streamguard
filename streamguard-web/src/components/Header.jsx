@@ -12,8 +12,9 @@ export default function Header({
   sessionStats = {}, currentSource, onSwitchSource,
   connectionStatus,
 }) {
-  const trapRate = utteranceCount > 0
-    ? Math.round((sessionStats.trap || 0) / utteranceCount * 100)
+  const totalForRate = sessionStats.total || utteranceCount || 0;
+  const trapRate = totalForRate > 0
+    ? Math.round((sessionStats.trap || 0) / totalForRate * 100)
     : 0;
 
   return (

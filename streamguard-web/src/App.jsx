@@ -45,6 +45,8 @@ export default function App() {
     isPaused = false, setIsPaused = () => {},
     reset = () => {}, exportReport = () => {},
     sessionStats = {},
+    messageTotals = { utterances: 0, chats: 0, total: 0 },
+    recentLimits = { utterances: 0, chats: 0 },
   } = streamData || {};
 
   const jumpToUtterance = useCallback((uid) => {
@@ -75,7 +77,7 @@ export default function App() {
     <div style={{ minHeight: "100vh" }}>
       <Header
         page={page} setPage={setPage}
-        viewerCount={viewerCount} utteranceCount={utterances.length}
+        viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
         isPaused={isPaused} setIsPaused={setIsPaused}
         onReset={reset} onExport={handleExport}
         sessionStats={sessionStats}
@@ -104,6 +106,8 @@ export default function App() {
             }}
             utterances={utterances}
             chatMessages={chatMessages}
+            messageTotals={messageTotals}
+            recentLimits={recentLimits}
             onReconnect={() => realStream.reconnectNow?.()}
           />
 

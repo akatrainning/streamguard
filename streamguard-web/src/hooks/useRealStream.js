@@ -14,6 +14,8 @@ export function useRealStream({
   roomId = "",
   wsBase = "ws://localhost:8010",
   enabled = true,
+  recentUtteranceLimit = 80,
+  recentChatLimit = 120,
 } = {}) {
   const [utterances,       setUtterances]       = useState([]);
   const [chatMessages,     setChatMessages]     = useState([]);
@@ -24,6 +26,7 @@ export function useRealStream({
   const [showGate,         setShowGate]         = useState(false);
   const [isPaused,         setIsPaused]         = useState(false);
   const [sessionStats,     setSessionStats]     = useState({ total:0, trap:0, hype:0, fact:0 });
+  const [messageTotals,    setMessageTotals]    = useState({ utterances: 0, chats: 0, total: 0 });
   const [connected,        setConnected]        = useState(false);
   const [connecting,       setConnecting]       = useState(false);
   const [error,            setError]            = useState(null);
@@ -36,6 +39,8 @@ export function useRealStream({
   const alertId     = useRef(0);
   const isPausedRef = useRef(false);
   const reconnectTimerRef = useRef(null);
+  const backoffRef  = useRef(1000);   // 初始1s，指数增长至30s
+  const heartbeatRef = useRef(null);  // 心跳定时器
   isPausedRef.current = isPaused;
 
   const pushLog = useCallback((line) => {
@@ -55,7 +60,12 @@ export function useRealStream({
     setError(null);
     pushLog(`connecting -> ${url}`);
 
-    wsRef.current?.close();
+    // 清理旧连接和心跳
+    clearTimeout(heartbeatRef.current);
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      wsRef.current.onclose = null; // 防止触发旧onclose的重连
+      wsRef.current.close();
+    }
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
@@ -63,13 +73,28 @@ export function useRealStream({
       setConnected(true);
       setConnecting(false);
       setError(null);
+      backoffRef.current = 1000; // 连接成功后重置backoff
       pushLog("websocket connected");
       console.log("[StreamGuard] WebSocket connected:", url);
+      // 心跳检测：45s没有收到消息就主动重连
+      const scheduleHeartbeat = () => {
+        clearTimeout(heartbeatRef.current);
+        heartbeatRef.current = setTimeout(() => {
+          if (wsRef.current === ws && ws.readyState === WebSocket.OPEN) {
+            pushLog("heartbeat timeout (45s no data), reconnecting...");
+            ws.close();
+          }
+        }, 45000);
+      };
+      scheduleHeartbeat();
+      ws._scheduleHeartbeat = scheduleHeartbeat; // 每收到消息刷新
     };
 
     ws.onmessage = (event) => {
       if (isPausedRef.current) return;
       setLastMessageAt(Date.now());
+      // 重置心跳计时器
+      ws._scheduleHeartbeat?.();
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
 
@@ -86,7 +111,7 @@ export function useRealStream({
           text: msg.text, type: msg.type,
           score: msg.score, timestamp: msg.timestamp,
         };
-        setUtterances(prev => [item, ...prev].slice(0, 20));
+        setUtterances(prev => [item, ...prev].slice(0, recentUtteranceLimit));
         setRationalityIndex(prev => {
           const delta = msg.type === "trap" ? -8 : msg.type === "hype" ? -3 : +4;
           return Math.max(15, Math.min(95, prev + delta));
@@ -99,6 +124,11 @@ export function useRealStream({
           trap:  prev.trap  + (msg.type === "trap"  ? 1 : 0),
           hype:  prev.hype  + (msg.type === "hype"  ? 1 : 0),
           fact:  prev.fact  + (msg.type === "fact"  ? 1 : 0),
+        }));
+        setMessageTotals(prev => ({
+          utterances: prev.utterances + 1,
+          chats: prev.chats,
+          total: prev.total + 1,
         }));
         if (msg.type === "trap") {
           alertId.current++;
@@ -115,7 +145,12 @@ export function useRealStream({
         setChatMessages(prev => [
           { id: Date.now(), user: msg.user, text: msg.text, timestamp: msg.timestamp },
           ...prev,
-        ].slice(0, 30));
+        ].slice(0, recentChatLimit));
+        setMessageTotals(prev => ({
+          utterances: prev.utterances,
+          chats: prev.chats + 1,
+          total: prev.total + 1,
+        }));
       }
       if (msg.event === "viewer_join") setViewerCount(prev => prev + 1);
       if (msg.event === "viewer_count") setViewerCount(msg.count);
@@ -128,12 +163,17 @@ export function useRealStream({
     };
 
     ws.onclose = () => {
+      clearTimeout(heartbeatRef.current);
       setConnected(false);
       setConnecting(false);
-      pushLog("websocket closed, retry in 5s");
-      if (enabled) {
+      if (enabled && wsRef.current === ws) {
+        const delay = backoffRef.current;
+        backoffRef.current = Math.min(delay * 2, 30000); // 最长30s
+        pushLog(`websocket closed, retry in ${(delay/1000).toFixed(1)}s`);
         clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = setTimeout(connect, 5000);
+        reconnectTimerRef.current = setTimeout(connect, delay);
+      } else {
+        pushLog("websocket closed");
       }
     };
 
@@ -143,14 +183,18 @@ export function useRealStream({
       setConnecting(false);
       pushLog("websocket error");
     };
-  }, [mode, roomId, wsBase, enabled, pushLog]);
+  }, [mode, roomId, wsBase, enabled, pushLog, recentUtteranceLimit, recentChatLimit]);
 
   useEffect(() => {
     if (!enabled) return;
     connect();
     return () => {
       clearTimeout(reconnectTimerRef.current);
-      wsRef.current?.close();
+      clearTimeout(heartbeatRef.current);
+      if (wsRef.current) {
+        wsRef.current.onclose = null; // 防止触发重连
+        wsRef.current.close();
+      }
     };
   }, [connect, enabled, reconnectToken]);
 
@@ -162,9 +206,11 @@ export function useRealStream({
     setAlerts([]);
     setViewerCount(0);
     setSessionStats({ total:0, trap:0, hype:0, fact:0 });
+    setMessageTotals({ utterances: 0, chats: 0, total: 0 });
   }, []);
 
   const reconnectNow = useCallback(() => {
+    backoffRef.current = 1000; // 手动重连重置backoff
     pushLog("manual reconnect requested");
     setReconnectToken(v => v + 1);
   }, [pushLog]);
@@ -191,6 +237,8 @@ export function useRealStream({
     utterances, chatMessages, rationalityIndex, riskData, alerts,
     viewerCount, showGate, setShowGate, isPaused, setIsPaused,
     reset, exportReport, sessionStats,
+    messageTotals,
+    recentLimits: { utterances: recentUtteranceLimit, chats: recentChatLimit },
     connected, connecting, error,
     lastMessageAt, connectionAttempts, statusLog, reconnectNow,
     product: { name: "Live Product", brand: "Live Room", price: "--", stock: "--" },

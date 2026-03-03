@@ -6,9 +6,15 @@ export default function CommandCenter({
   connection,
   utterances,
   chatMessages,
+  messageTotals,
+  recentLimits,
   onReconnect,
 }) {
   const [watchInput, setWatchInput] = useState("最后, 限时, 第一, 全网最低");
+  const [audioSecs, setAudioSecs] = useState(20);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioError, setAudioError] = useState("");
+  const [audioResult, setAudioResult] = useState(null);
 
   const watchWords = useMemo(() => (
     watchInput
@@ -31,12 +37,44 @@ export default function CommandCenter({
     })).sort((a, b) => b.count - a.count);
   }, [watchWords, corpus]);
 
-  const totalMsgs = utterances.length + chatMessages.length;
+  const totalMsgs = messageTotals?.total ?? (utterances.length + chatMessages.length);
+  const totalUtterances = messageTotals?.utterances ?? utterances.length;
+  const totalChats = messageTotals?.chats ?? chatMessages.length;
   const activeMins = Math.max(1, Math.round(totalMsgs / 20));
   const throughput = Math.round(totalMsgs / activeMins);
   const lastSeen = connection.lastMessageAt
     ? new Date(connection.lastMessageAt).toLocaleTimeString("zh-CN", { hour12: false })
     : "--";
+
+  const apiBase = (sourceConfig?.wsBase || "ws://localhost:8010").replace(/^ws/i, "http");
+
+  const runAudioAnalysis = async () => {
+    if (dataSource !== "douyin") {
+      setAudioError("当前仅抖音数据源支持直播间音频分析");
+      return;
+    }
+    if (!sourceConfig?.roomId) {
+      setAudioError("请先填写并连接直播间房间号");
+      return;
+    }
+
+    setAudioLoading(true);
+    setAudioError("");
+    try {
+      const sec = Math.max(8, Math.min(90, Number(audioSecs) || 20));
+      const url = `${apiBase}/douyin/audio-analyze/${sourceConfig.roomId}?seconds=${sec}`;
+      const res = await fetch(url, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.detail || "音频分析失败");
+      }
+      setAudioResult(data);
+    } catch (e) {
+      setAudioError(e?.message || "音频分析失败");
+    } finally {
+      setAudioLoading(false);
+    }
+  };
 
   const exportSnapshot = () => {
     const payload = {
@@ -52,8 +90,13 @@ export default function CommandCenter({
         error: connection.error,
       },
       kpi: {
-        utterances: utterances.length,
-        chats: chatMessages.length,
+        utterances: totalUtterances,
+        chats: totalChats,
+        totalMessages: totalMsgs,
+        recentWindow: {
+          utterances: recentLimits?.utterances ?? utterances.length,
+          chats: recentLimits?.chats ?? chatMessages.length,
+        },
         throughputPerMin: throughput,
       },
       watchStats,
@@ -100,12 +143,14 @@ export default function CommandCenter({
 
         {/* Throughput */}
         <Card title="吞吐与负载">
-          <KV k="语义条数" v={utterances.length} mono />
-          <KV k="聊天条数" v={chatMessages.length} mono />
-          <KV k="总消息" v={totalMsgs} mono />
+          <KV k="语义条数(累计)" v={totalUtterances} mono />
+          <KV k="聊天条数(累计)" v={totalChats} mono />
+          <KV k="总消息(累计)" v={totalMsgs} mono />
+          <KV k="最近语义缓存" v={`${utterances.length}/${recentLimits?.utterances ?? utterances.length}`} mono />
+          <KV k="最近聊天缓存" v={`${chatMessages.length}/${recentLimits?.chats ?? chatMessages.length}`} mono />
           <KV k="估算速率" v={`${throughput}/min`} mono />
           <div style={{ marginTop: 8, fontSize: 10, color: "var(--text-muted)" }}>
-            速率按当前会话消息量估算，用于快速评估抓流稳定性。
+            仅限制前端最近 N 条显示；累计计数不封顶，不影响抓流频率。
           </div>
         </Card>
 
@@ -148,6 +193,99 @@ export default function CommandCenter({
             <div className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>-- no logs --</div>
           )}
         </div>
+      </div>
+
+      {/* Audio semantic analysis */}
+      <div style={{ borderTop: "1px solid var(--border)", padding: "10px 12px" }}>
+        <Card title="直播间音频→ASR→语义分析（手动触发）">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>采样时长(秒)</span>
+            <input
+              type="number"
+              min={8}
+              max={90}
+              value={audioSecs}
+              onChange={(e) => setAudioSecs(e.target.value)}
+              style={{
+                width: 72,
+                padding: "4px 6px",
+                borderRadius: 6,
+                background: "var(--bg-tertiary)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+                fontSize: 12,
+              }}
+            />
+            <button onClick={runAudioAnalysis} style={btnStyle} disabled={audioLoading}>
+              {audioLoading ? "分析中..." : "开始音频分析"}
+            </button>
+          </div>
+
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 8 }}>
+            仅在你手动点击时抓取一次音频片段，不做自动高频轮询，降低反爬风险。
+          </div>
+
+          {audioError && (
+            <div style={{ fontSize: 11, color: "var(--trap)", marginBottom: 8 }}>
+              {audioError}
+            </div>
+          )}
+
+          {audioResult && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                padding: 8,
+                background: "var(--bg-secondary)",
+              }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>转写文本</div>
+                <div style={{ maxHeight: 120, overflowY: "auto", fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  {audioResult.transcript || "--"}
+                </div>
+              </div>
+
+              <div style={{
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                padding: 8,
+                background: "var(--bg-secondary)",
+              }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>整体语义结论</div>
+                <KV k="类别" v={audioResult.analysis?.type || "--"} mono />
+                <KV k="得分" v={audioResult.analysis?.score ?? "--"} mono />
+                <KV k="引擎" v={audioResult.analysis?.engine || "--"} mono />
+                <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-secondary)" }}>
+                  {(audioResult.analysis?.violations || []).slice(0, 4).map((x, i) => (
+                    <div key={i}>• {x}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{
+                gridColumn: "1 / -1",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                padding: 8,
+                background: "var(--bg-secondary)",
+              }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>逐句风险（规则引擎）</div>
+                <div style={{ maxHeight: 140, overflowY: "auto" }}>
+                  {(audioResult.sentence_analysis || []).map((row) => (
+                    <div key={row.idx} style={{ marginBottom: 6, paddingBottom: 6, borderBottom: "1px dashed var(--border)" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                        [{row.idx}] {row.text}
+                      </div>
+                      <div className="mono" style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
+                        type={row.analysis?.type} score={row.analysis?.score}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );

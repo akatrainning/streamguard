@@ -21,6 +21,17 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 
+# ---------------------------------------------------------------------------
+# ChromeDriver path cache (avoid re-downloading on every connect)
+# ---------------------------------------------------------------------------
+_CHROMEDRIVER_PATH: Optional[str] = None
+
+def _get_chromedriver_path() -> str:
+    global _CHROMEDRIVER_PATH
+    if _CHROMEDRIVER_PATH is None:
+        _CHROMEDRIVER_PATH = ChromeDriverManager().install()
+    return _CHROMEDRIVER_PATH
+
 
 # ---------------------------------------------------------------------------
 # Protobuf helpers (lightweight, no proto compilation)
@@ -177,9 +188,9 @@ class DouyinCDPScraper:
         opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
         try:
-            service = Service(ChromeDriverManager().install())
+            service = Service(_get_chromedriver_path())
             self.driver = webdriver.Chrome(service=service, options=opts)
-            self.driver.set_page_load_timeout(25)
+            self.driver.set_page_load_timeout(20)
         except Exception as e:
             self.q.put({"event": "error", "message": f"Chrome start failed: {e}"})
             return
@@ -201,7 +212,19 @@ class DouyinCDPScraper:
                     "status": "connecting",
                     "message": "Page load timeout, continue listening WebSocket frames...",
                 })
-            time.sleep(3)
+            # 智能等待：轮询检测首条WS帧，最长等5s，而非固定sleep
+            _wait_start = time.time()
+            while time.time() - _wait_start < 5:
+                try:
+                    _probe = self.driver.get_log("performance")
+                except Exception:
+                    break
+                if any(
+                    json.loads(e["message"])["message"].get("method", "").startswith("Network.webSocket")
+                    for e in _probe
+                ):
+                    break
+                time.sleep(0.2)
 
             # Check page loaded
             title = self.driver.title
@@ -275,7 +298,7 @@ class DouyinCDPScraper:
                     })
                     last_note_ts = now
 
-                time.sleep(0.3)
+                time.sleep(0.1)
 
         except Exception as e:
             self.q.put({"event": "error", "message": f"CDP error: {e}"})
@@ -351,7 +374,7 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
                         last_error = evt.get("message")
                     await callback(evt)
 
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.05)
 
             # Drain any remaining events after thread exits
             while True:
