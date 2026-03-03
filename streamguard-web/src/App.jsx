@@ -1,4 +1,4 @@
-﻿import { useRef, useCallback, useState, useMemo } from "react";
+import { useRef, useCallback, useState, useMemo } from "react";
 import { useSimulatedStream } from "./hooks/useSimulatedStream";
 import { useRealStream } from "./hooks/useRealStream";
 import Header from "./components/Header";
@@ -13,17 +13,23 @@ import RationalityGate from "./components/RationalityGate";
 import DataSourceSelector from "./components/DataSourceSelector";
 import CommandCenter from "./components/CommandCenter";
 import LiveVideoPlayer from "./components/LiveVideoPlayer";
+import SessionReportModal from "./components/SessionReportModal";
 import HistoryPage from "./pages/HistoryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import RulesPage from "./pages/RulesPage";
 import ConsumerAdvisorPage from "./pages/ConsumerAdvisorPage";
 import LiveDiscoverPage from "./pages/LiveDiscoverPage";
+import WelcomePage from "./pages/WelcomePage";
 
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState({});
   const [page, setPage] = useState("dashboard");
+  const [entryStep, setEntryStep] = useState("welcome");
   const [showSourceSelector, setShowSourceSelector] = useState(false);
+  // 结束监控相关状态
+  const [sessionSnapshot, setSessionSnapshot] = useState(null); // 非 null 时展示报告
+  const sessionStartRef = useRef(null); // 记录连接成功时间
   const feedRef = useRef(null);
 
   const simulated = useSimulatedStream();
@@ -33,6 +39,12 @@ export default function App() {
     wsBase: sourceConfig.wsBase || "ws://localhost:8012",
     enabled: dataSource === "douyin",
   });
+
+  // 记录首次连接时间（用于报告时长计算）
+  const isConnected = realStream.connected;
+  if (isConnected && !sessionStartRef.current) {
+    sessionStartRef.current = Date.now();
+  }
 
   const streamData = useMemo(() => {
     if (!dataSource) return null;
@@ -55,6 +67,33 @@ export default function App() {
   } = streamData || {};
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
+
+  /** 点击"结束监控"：冻结快照 → 断开连接 → 弹出报告 */
+  const handleEndSession = useCallback(() => {
+    // 冻结当前数据快照
+    setSessionSnapshot({
+      utterances: [...utterances],
+      chatMessages: [...chatMessages],
+      stats: { ...sessionStats },
+      rationalityIndex,
+      riskData: [...riskData],
+      roomId: sourceConfig.roomId || null,
+      startTime: sessionStartRef.current,
+      endTime: Date.now(),
+    });
+    // 断开 WebSocket，停止自动重连
+    realStream.disconnect?.();
+  }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, realStream]);
+
+  /** 报告关闭 → 完全重置，回到数据源选择 */
+  const handleReportClose = useCallback(() => {
+    setSessionSnapshot(null);
+    reset();
+    sessionStartRef.current = null;
+    setDataSource(null);
+    setSourceConfig({});
+    setPage("dashboard");
+  }, [reset]);
 
   const jumpToUtterance = useCallback((uid) => {
     if (page !== "dashboard") setPage("dashboard");
@@ -82,6 +121,10 @@ export default function App() {
     setPage("dashboard");
   }, []);
 
+  if (entryStep === "welcome") {
+    return <WelcomePage onEnter={() => setEntryStep("app")} />;
+  }
+
   // Source selection screen
   if (!dataSource) {
     return (
@@ -98,6 +141,7 @@ export default function App() {
         viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
         isPaused={isPaused} setIsPaused={setIsPaused}
         onReset={reset} onExport={handleExport}
+        onEnd={dataSource !== "mock" ? handleEndSession : undefined}
         sessionStats={sessionStats}
         currentSource={dataSource}
         onSwitchSource={() => setShowSourceSelector(true)}
@@ -211,6 +255,15 @@ export default function App() {
         >
           <DataSourceSelector onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
         </div>
+      )}
+
+      {/* 会话总结报告弹窗（结束监控后展示）*/}
+      {sessionSnapshot && (
+        <SessionReportModal
+          snapshot={sessionSnapshot}
+          apiBase={apiBase}
+          onClose={handleReportClose}
+        />
       )}
     </div>
   );

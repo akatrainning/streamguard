@@ -6,6 +6,10 @@ dist/
 wheels/
 *.egg-info
 
+# Model cache (large files, do not commit)
+whisper_cache/
+streamguard-backend/whisper_cache/
+
 .ipynb_checkpoints/
 
 # venv

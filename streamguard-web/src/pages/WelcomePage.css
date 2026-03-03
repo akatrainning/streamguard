@@ -1,0 +1,148 @@
+.welcome-page {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(1200px 700px at 70% 10%, rgba(88, 166, 255, 0.18), transparent 60%),
+    radial-gradient(900px 700px at 20% 85%, rgba(46, 238, 201, 0.16), transparent 60%),
+    linear-gradient(180deg, #05070b 0%, #0c121c 60%, #0a0f16 100%);
+  overflow: hidden;
+  color: #e6f1ff;
+}
+
+.welcome-grid {
+  position: absolute;
+  inset: -35% -25% 0;
+  background-image:
+    linear-gradient(rgba(88, 166, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 166, 255, 0.16) 1px, transparent 1px);
+  background-size: 64px 64px;
+  transform: perspective(920px) rotateX(66deg);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.welcome-scanlines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  mix-blend-mode: screen;
+  opacity: 0.3;
+  animation: scan 6s linear infinite;
+  pointer-events: none;
+}
+
+.welcome-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(500px 260px at 50% 45%, rgba(76, 255, 218, 0.16), transparent 70%),
+    radial-gradient(800px 420px at 50% 52%, rgba(88, 166, 255, 0.14), transparent 70%);
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.welcome-orbit {
+  position: absolute;
+  width: 680px;
+  height: 680px;
+  border-radius: 50%;
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  box-shadow: 0 0 140px rgba(88, 166, 255, 0.14);
+  animation: rotate 18s linear infinite;
+  pointer-events: none;
+}
+
+.welcome-core {
+  position: relative;
+  max-width: 680px;
+  padding: 52px 60px 46px;
+  text-align: center;
+  border-radius: 20px;
+  background: rgba(12, 17, 26, 0.88);
+  border: 1px solid rgba(88, 166, 255, 0.26);
+  box-shadow:
+    0 20px 70px rgba(0, 0, 0, 0.55),
+    0 0 50px rgba(88, 166, 255, 0.22);
+  backdrop-filter: blur(10px);
+  z-index: 2;
+}
+
+.welcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.35);
+  letter-spacing: 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.welcome-status {
+  color: #64f5c4;
+  font-weight: 600;
+}
+
+.welcome-core h1 {
+  font-size: clamp(30px, 4.6vw, 44px);
+  margin-bottom: 14px;
+}
+
+.welcome-core p {
+  color: rgba(230, 241, 255, 0.7);
+  font-size: 15px;
+  margin: 0 auto 28px;
+  max-width: 540px;
+}
+
+.welcome-enter {
+  position: relative;
+  padding: 14px 44px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #58a6ff, #48f7d2);
+  color: #041017;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    0 0 24px rgba(88, 166, 255, 0.4),
+    0 0 50px rgba(72, 247, 210, 0.28);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.welcome-enter:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow:
+    0 0 30px rgba(88, 166, 255, 0.6),
+    0 0 70px rgba(72, 247, 210, 0.4);
+  filter: brightness(1.06);
+}
+
+.welcome-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  color: rgba(230, 241, 255, 0.45);
+}
+
+@keyframes scan {
+  0% { transform: translateY(-20%); }
+  100% { transform: translateY(20%); }
+}
+
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

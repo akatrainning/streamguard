@@ -10,6 +10,7 @@ import os
 import io
 import re
 import shutil
+import sys
 import tempfile
 import subprocess
 from typing import Optional, List
@@ -71,17 +72,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# OpenAI Configuration
+# LLM Configuration — 优先级: DeepSeek > OpenRouter > OpenAI
+DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-LLM_API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY
-LLM_PROVIDER = "openrouter" if OPENROUTER_API_KEY else "openai"
-LLM_BASE_URL = os.getenv(
-    "LLM_BASE_URL",
-    "https://openrouter.ai/api/v1" if LLM_PROVIDER == "openrouter" else ""
-)
-# Cost-effective default model (can be overridden by env LLM_MODEL)
-LLM_MODEL = os.getenv("LLM_MODEL", "deepseek/deepseek-chat")
+OPENAI_API_KEY    = os.getenv("OPENAI_API_KEY", "")
+
+if DEEPSEEK_API_KEY:
+    LLM_API_KEY  = DEEPSEEK_API_KEY
+    LLM_PROVIDER = "deepseek"
+    LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
+    LLM_MODEL    = os.getenv("LLM_MODEL", "deepseek-chat")
+elif OPENROUTER_API_KEY:
+    LLM_API_KEY  = OPENROUTER_API_KEY
+    LLM_PROVIDER = "openrouter"
+    LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
+    LLM_MODEL    = os.getenv("LLM_MODEL", "deepseek/deepseek-chat")
+elif OPENAI_API_KEY:
+    LLM_API_KEY  = OPENAI_API_KEY
+    LLM_PROVIDER = "openai"
+    LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
+    LLM_MODEL    = os.getenv("LLM_MODEL", "gpt-4o-mini")
+else:
+    LLM_API_KEY  = ""
+    LLM_PROVIDER = "none"
+    LLM_BASE_URL = ""
+    LLM_MODEL    = ""
 
 if OPENAI_AVAILABLE and LLM_API_KEY:
     try:
@@ -606,12 +621,14 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
     try:
         from faster_whisper import WhisperModel
     except ImportError:
-        raise RuntimeError(
-            "faster-whisper 未安装。运行: pip install faster-whisper"
-        )
+        raise RuntimeError("faster-whisper 未安装")
     if _fw_model is None:
-        print(f"[ASR-local] 首次加载 faster-whisper '{_FW_MODEL_SIZE}' 模型，请稍候...")
-        _fw_model = WhisperModel(_FW_MODEL_SIZE, device="cpu", compute_type="int8")
+        print(f"[ASR-local] 首次加载 faster-whisper 模型，请稍候...")
+        model_path = os.path.join(os.path.dirname(__file__), "whisper_base_model")
+        if not os.path.isdir(model_path):
+            model_path = _FW_MODEL_SIZE
+        print(f"[ASR-local] 使用模型: {model_path}")
+        _fw_model = WhisperModel(model_path, device="cpu", compute_type="int8")
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
@@ -641,7 +658,11 @@ def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") 
             return (transcript.text or "").strip()
         except Exception as e:
             print(f"[ASR-cloud] 失败 ({e})，切换本地 faster-whisper...")
-    return _transcribe_local_whisper(audio_bytes)
+    try:
+        return _transcribe_local_whisper(audio_bytes)
+    except Exception as e:
+        print(f"[ASR-local] 失败 ({e})，返回空字符串")
+        return ""
 
 
 def _extract_keywords_simple(text: str) -> list:
@@ -1222,6 +1243,120 @@ async def clear_search_results_cache(q: str = None):
     if SEARCH_AVAILABLE:
         clear_search_cache(q)
     return {"cleared": True, "keyword": q or "all"}
+
+
+@app.post("/session/summary")
+async def session_summary(payload: dict):
+    """
+    接收前端本次监控的完整数据快照，
+    调用 LLM 生成结构化 AI 综合建议，返回给前端展示。
+    """
+    utterances   = payload.get("utterances", [])
+    chat_messages = payload.get("chatMessages", [])
+    stats        = payload.get("stats", {})
+    room_id      = payload.get("roomId", "未知")
+    duration_s   = payload.get("durationSeconds", 0)
+    ri           = payload.get("rationalityIndex", 0)
+
+    total     = stats.get("total", 0)
+    trap_n    = stats.get("trap", 0)
+    hype_n    = stats.get("hype", 0)
+    fact_n    = stats.get("fact", 0)
+    trap_rate = round(trap_n / total * 100, 1) if total > 0 else 0
+
+    # 取风险最高的几条话术
+    sorted_u = sorted(utterances, key=lambda x: x.get("score", 1), reverse=False)
+    top_risks = sorted_u[:8]
+    top_risk_lines = "\n".join(
+        f"  [{u.get('type','?').upper()}] {u.get('text','')[:80]}"
+        for u in top_risks
+    )
+    # 取所有话术文本（转写内容摘要）
+    all_utterance_texts = "\n".join(
+        f"  {u.get('text','')[:60]}" for u in utterances[:30]
+    )
+    # 取弹幕样本
+    chat_sample = "\n".join(
+        f"  [{c.get('user','用户')}]: {c.get('text','')[:40]}"
+        for c in chat_messages[:30]
+    )
+
+    # 无 LLM 时的规则兜底
+    if not client_async or not LLM_API_KEY:
+        advice = []
+        if trap_rate >= 30:
+            advice.append({"level": "high", "title": "高陷阱话术占比", "body": f"本次陷阱话术占比 {trap_rate}%，风险较高，建议重点核查限时促销、价格误导类话术。"})
+        elif trap_rate >= 15:
+            advice.append({"level": "medium", "title": "陷阱话术需关注", "body": f"陷阱话术占比 {trap_rate}%，建议复查标注为 TRAP 的条目，确认是否存在虚假宣传。"})
+        else:
+            advice.append({"level": "low", "title": "整体话术较规范", "body": "本次监控陷阱话术比例较低，主播话术总体合规。"})
+        advice.append({"level": "info", "title": "理性指数评级", "body": f"理性指数 {ri} 分，{'处于合理区间，继续保持。' if ri >= 70 else '偏低，建议关注主播情绪化表达。'}"})
+        advice.append({"level": "info", "title": "建议", "body": "建议留存本报告用于合规存档，如需深度分析可查看各话术详情。"})
+        return {"ai_advice": advice, "generated_by": "rule-engine"}
+
+    # LLM 生成深度分析
+    minutes = duration_s // 60
+    seconds = duration_s % 60
+    duration_str = f"{minutes}分{seconds}秒" if minutes > 0 else f"{seconds}秒"
+
+    prompt = f"""你是一名直播电商合规分析师。以下是一次直播监控会话的完整数据，请先做内容总结，再给出结构化合规建议。
+
+【会话概况】
+- 直播间: {room_id}
+- 监控时长: {duration_str}
+- 主播话术总数: {total} 条
+- 理性指数: {ri} 分（满分100，越高越理性）
+- 事实型(FACT): {fact_n} 条 / 夸大型(HYPE): {hype_n} 条 / 陷阱型(TRAP): {trap_n} 条（陷阱占比 {trap_rate}%）
+
+【主播转写内容摘要（最近30条）】
+{all_utterance_texts if all_utterance_texts else '  （无转写内容）'}
+
+【高风险话术（score最低的8条）】
+{top_risk_lines if top_risk_lines else '  （无明显高风险话术）'}
+
+【观众弹幕样本（最近30条）】
+{chat_sample if chat_sample else '  （无弹幕数据）'}
+
+请返回一个 JSON 对象，包含两个字段：
+1. "summary": 字符串，150字以内，综合主播话术和观众弹幕，描述本场直播的整体情况（主播卖了什么、观众反应如何、整体风险如何）
+2. "advice": JSON数组，4~6条建议，每条包含：
+   - level: "high" | "medium" | "low" | "info"
+   - title: 建议标题（10字以内）
+   - body: 具体说明（50~100字，必须结合实际数据和弹幕内容）
+
+只返回 JSON 对象，不要有额外文字。"""
+
+    try:
+        resp = await client_async.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": "你是直播合规AI助手，返回JSON格式分析报告。"},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=1000,
+        )
+        raw = resp.choices[0].message.content or "[]"
+        if "```json" in raw:
+            raw = raw.split("```json")[1].split("```")[0]
+        elif "```" in raw:
+            raw = raw.split("```")[1].split("```")[0]
+        parsed = json.loads(raw.strip())
+        # 支持新格式 {summary, advice} 和旧格式 []
+        if isinstance(parsed, dict):
+            advice = parsed.get("advice", [])
+            summary = parsed.get("summary", "")
+        elif isinstance(parsed, list):
+            advice = parsed
+            summary = ""
+        else:
+            raise ValueError("unexpected format")
+        return {"ai_advice": advice, "ai_summary": summary, "generated_by": "llm"}
+    except Exception as e:
+        return {
+            "ai_advice": [{"level": "info", "title": "AI分析暂不可用", "body": f"AI建议生成失败（{str(e)[:60]}），请查看本地统计数据。"}],
+            "generated_by": "fallback",
+        }
 
 
 @app.get("/health")

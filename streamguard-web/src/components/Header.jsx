@@ -10,7 +10,7 @@
 export default function Header({
   page, setPage,
   viewerCount = 0, utteranceCount = 0,
-  isPaused, setIsPaused, onReset, onExport,
+  isPaused, setIsPaused, onReset, onExport, onEnd,
   sessionStats = {}, currentSource, onSwitchSource,
   connectionStatus,
 }) {
@@ -83,6 +83,11 @@ export default function Header({
           </Btn>
           <Btn onClick={onReset}>{"\u91cd\u7f6e"}</Btn>
           <Btn onClick={onExport}>{"\u5bfc\u51fa"}</Btn>
+          {onEnd && (
+            <Btn onClick={onEnd} danger>
+              ⏹ 结束监控
+            </Btn>
+          )}
         </div>
       </div>
 
@@ -108,12 +113,14 @@ function Stat({ color, label, value }) {
   return <span><span style={{ color, fontWeight: 600 }}>{value}</span> {label}</span>;
 }
 
-function Btn({ onClick, children }) {
+function Btn({ onClick, children, danger }) {
   return (
     <button onClick={onClick} style={{
       padding: "4px 10px", borderRadius: 6,
-      background: "var(--bg-tertiary)", border: "1px solid var(--border)",
-      color: "var(--text-secondary)", fontSize: 11, cursor: "pointer",
+      background: danger ? "rgba(248,81,73,0.12)" : "var(--bg-tertiary)",
+      border: danger ? "1px solid rgba(248,81,73,0.4)" : "1px solid var(--border)",
+      color: danger ? "#f85149" : "var(--text-secondary)",
+      fontSize: 11, cursor: "pointer", fontWeight: danger ? 600 : 400,
     }}>
       {children}
     </button>

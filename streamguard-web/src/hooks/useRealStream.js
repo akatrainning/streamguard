@@ -247,6 +247,20 @@ export function useRealStream({
     setReconnectToken(v => v + 1);
   }, [pushLog]);
 
+  /** 主动断开连接并停止自动重连（结束监控时使用） */
+  const disconnect = useCallback(() => {
+    clearTimeout(reconnectTimerRef.current);
+    clearTimeout(heartbeatRef.current);
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setConnected(false);
+    setConnecting(false);
+    pushLog("session ended by user");
+  }, [pushLog]);
+
   const exportReport = useCallback((uList, ri, rd, stats) => {
     const lines = [
       "=== StreamGuard Report ===",
@@ -272,7 +286,7 @@ export function useRealStream({
     messageTotals,
     recentLimits: { utterances: recentUtteranceLimit, chats: recentChatLimit },
     connected, connecting, error,
-    lastMessageAt, connectionAttempts, statusLog, reconnectNow,
+    lastMessageAt, connectionAttempts, statusLog, reconnectNow, disconnect,
     mediaUrl,
     product: { name: "Live Product", brand: "Live Room", price: "--", stock: "--" },
   };
