@@ -1,10 +1,10 @@
-﻿const TABS = [
-  { id: "dashboard", label: "实时监控" },
-  { id: "discover",  label: "🔍 发现直播" },
-  { id: "consumer",  label: "消费决策" },
-  { id: "history",   label: "历史记录" },
-  { id: "analytics", label: "数据分析" },
-  { id: "rules",     label: "合规规则" },
+const TABS = [
+  { id: "dashboard", label: "实时监控", description: "集中查看直播监控全景与关键风险信号。" },
+  { id: "discover", label: "🔍 发现直播", description: "按关键词发现目标直播间并快速切换监控。" },
+  { id: "consumer", label: "消费决策", description: "基于实时证据给出更稳健的消费建议。" },
+  { id: "history", label: "历史记录", description: "回看历史会话、事件与关键结论，便于复盘。" },
+  { id: "analytics", label: "数据分析", description: "汇总趋势与统计，定位高频异常与变化原因。" },
+  { id: "rules", label: "合规规则", description: "维护规则与阈值配置，提升命中率和稳定性。" },
 ];
 
 export default function Header({
@@ -18,6 +18,7 @@ export default function Header({
   const trapRate = totalForRate > 0
     ? Math.round((sessionStats.trap || 0) / totalForRate * 100)
     : 0;
+  const activeTab = TABS.find((tab) => tab.id === page) || TABS[0];
 
   return (
     <header style={{ background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)" }}>
@@ -46,8 +47,8 @@ export default function Header({
               animation: !connectionStatus.connected && !connectionStatus.error ? "blink 1s infinite" : "none",
             }} />
             {connectionStatus.connected
-              ? `已连接 ${connectionStatus.roomId}`
-              : connectionStatus.error ? "连接失败" : "连接中…"}
+              ? `\u5df2\u8fde\u63a5 ${connectionStatus.roomId}`
+              : connectionStatus.error ? "\u8fde\u63a5\u5931\u8d25" : "\u8fde\u63a5\u4e2d\u2026"}
           </div>
         )}
 
@@ -55,19 +56,19 @@ export default function Header({
         <div style={{ display: "flex", gap: 14, marginLeft: "auto", alignItems: "center", fontSize: 12, color: "var(--text-secondary)" }}>
           <span>{"\u{1f441}"} {viewerCount.toLocaleString()}</span>
           <span>{"\u{1f4ac}"} {utteranceCount}</span>
-          <Stat color="var(--fact)" value={sessionStats.fact || 0} label="事实" />
-          <Stat color="var(--hype)" value={sessionStats.hype || 0} label="夸大" />
-          <Stat color="var(--trap)" value={sessionStats.trap || 0} label="陷阱" />
+          <Stat color="var(--fact)" value={sessionStats.fact || 0} label="\u4e8b\u5b9e" />
+          <Stat color="var(--hype)" value={sessionStats.hype || 0} label="\u5938\u5927" />
+          <Stat color="var(--trap)" value={sessionStats.trap || 0} label="\u9677\u9631" />
           {trapRate > 0 && (
             <span style={{
               fontWeight: 600,
               color: trapRate >= 30 ? "var(--trap)" : trapRate >= 15 ? "var(--hype)" : "var(--fact)",
             }}>
-              风险 {trapRate}%
+              {"\u98ce\u9669"} {trapRate}%
             </span>
           )}
           {isPaused && (
-            <span style={{ color: "var(--hype)", fontWeight: 600 }}>⏸ 已暂停</span>
+            <span style={{ color: "var(--hype)", fontWeight: 600 }}>{"\u23f8"} \u5df2\u6682\u505c</span>
           )}
         </div>
 
@@ -75,14 +76,14 @@ export default function Header({
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
           {currentSource && (
             <Btn onClick={onSwitchSource}>
-              {currentSource === "mock" ? "模拟" : "抖音"} ⋮
+              {currentSource === "mock" ? "\u6a21\u62df" : "\u6296\u97f3"} \u25be
             </Btn>
           )}
-          <Btn onClick={() => setIsPaused(p => !p)}>
-            {isPaused ? "▶ 继续" : "⏸ 暂停"}
+          <Btn onClick={() => setIsPaused((p) => !p)}>
+            {isPaused ? "\u25b6 \u7ee7\u7eed" : "\u23f8 \u6682\u505c"}
           </Btn>
-          <Btn onClick={onReset}>重置</Btn>
-          <Btn onClick={onExport}>导出</Btn>
+          <Btn onClick={onReset}>{"\u91cd\u7f6e"}</Btn>
+          <Btn onClick={onExport}>{"\u5bfc\u51fa"}</Btn>
           {onEnd && (
             <Btn onClick={onEnd} danger>
               ⏹ 结束监控
@@ -92,18 +93,49 @@ export default function Header({
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", padding: "0 20px" }}>
-        {TABS.map(tab => (
+      <div style={{
+        display: "flex",
+        padding: "0 20px",
+        borderBottom: "1px solid var(--border)",
+      }}>
+        {TABS.map((tab) => (
           <button key={tab.id} onClick={() => setPage(tab.id)} style={{
-            padding: "8px 16px", background: "none", border: "none",
+            padding: "10px 18px",
+            marginBottom: -1,
+            background: page === tab.id ? "rgba(255,255,255,0.03)" : "transparent",
+            border: page === tab.id ? "1px solid var(--border)" : "1px solid transparent",
             borderBottom: page === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
+            borderTopLeftRadius: 10,
+            borderTopRightRadius: 10,
             color: page === tab.id ? "var(--text-primary)" : "var(--text-muted)",
-            fontWeight: page === tab.id ? 600 : 400,
-            fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            fontWeight: page === tab.id ? 700 : 500,
+            textShadow: page === tab.id ? "0 0 10px rgba(88,166,255,0.28)" : "none",
+            fontSize: 13,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            transition: "all .16s ease",
           }}>
             {tab.label}
           </button>
         ))}
+      </div>
+
+      <div style={{ padding: "0 20px 12px" }}>
+        <div style={{
+          border: "1px solid var(--border)",
+          borderTop: "none",
+          borderRadius: "0 10px 10px 10px",
+          background: "linear-gradient(180deg, rgba(33,38,45,0.85), rgba(22,27,34,0.9))",
+          padding: "14px 18px",
+        }}>
+          <span style={{
+            color: "var(--text-secondary)",
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}>
+            {activeTab.description}
+          </span>
+        </div>
       </div>
     </header>
   );
