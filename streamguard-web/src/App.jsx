@@ -229,7 +229,7 @@ export default function App() {
               ? "minmax(420px, 1.2fr) minmax(360px, 1fr) minmax(420px, 1.6fr)"
               : "minmax(420px, 1.2fr) minmax(520px, 1.8fr)",
             gap: 14,
-            alignItems: "start",
+            alignItems: "stretch",
           }}>
             {/* 列 1（仅抖音模式）：保留可正常播放的大视频，并拉伸到与右侧两列对齐 */}
             {dataSource === "douyin" && (
@@ -272,17 +272,21 @@ export default function App() {
               </div>
             )}
             {/* 列 2：弹幕实时流 + 语义分析 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
               <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
-              <SemanticFeed ref={feedRef} utterances={utterances} />
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <SemanticFeed ref={feedRef} utterances={utterances} />
+              </div>
             </div>
             {/* 列 3：图表 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <RationalityGauge value={rationalityIndex} utterances={utterances} />
                 <RiskRadar data={riskData} />
               </div>
-              <TopologyGraph utterances={utterances} />
+              <div style={{ marginTop: "auto", height: 520 }}>
+                <TopologyGraph utterances={utterances} />
+              </div>
             </div>
           </div>
         </div>
