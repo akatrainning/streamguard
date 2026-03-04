@@ -133,7 +133,8 @@ export default function TopologyGraph({ utterances = [] }) {
   return (
     <div style={{
       background: "var(--bg-secondary)", border: "1px solid var(--border)",
-      borderRadius: 10, overflow: "hidden", flex: 1, minHeight: 320,
+      borderRadius: 10, overflow: "hidden", minHeight: 320, height: "100%",
+      display: "flex", flexDirection: "column",
     }}>
       {/* Header */}
       <div style={{
@@ -165,6 +166,8 @@ export default function TopologyGraph({ utterances = [] }) {
         </div>
       </div>
 
+      {/* Body */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
       {/* SVG */}
       <div style={{ position: "relative" }}>
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
@@ -334,8 +337,8 @@ export default function TopologyGraph({ utterances = [] }) {
         </div>
 
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>风险优先级</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 10 }}>
+            <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0 }}>风险优先级</span>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
               {[
                 { key: "driftMagnitude", label: "漂移幅度" },
@@ -409,6 +412,7 @@ export default function TopologyGraph({ utterances = [] }) {
         <span style={{ marginLeft: "auto", fontSize: 10 }}>
           {"\u70b9\u51fb\u699c\u5355\u53ef\u5b9a\u4f4d\u62d3\u6251\u8282\u70b9"}
         </span>
+      </div>
       </div>
     </div>
   );
