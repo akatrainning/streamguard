@@ -253,7 +253,7 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
         justifyContent: "space-between",
         alignItems: "center",
       }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>📺 实时直播</span>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>实时直播</span>
         {loading && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>加载中...</span>}
       </div>
 

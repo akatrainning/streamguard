@@ -37,13 +37,7 @@ export default function Header({
     }}>
       <div style={{ display: "flex", alignItems: "center", padding: "14px 22px", gap: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{
-            fontSize: 17,
-            padding: "5px 8px",
-            borderRadius: 8,
-            background: "var(--accent-soft)",
-            border: "1px solid rgba(63,140,255,0.38)",
-          }}>{"\u{1f6e1}\ufe0f"}</span>
+          <StreamGuardMark />
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1 }}>StreamGuard</span>
             <span style={{ fontSize: 11, color: "var(--text-muted)", letterSpacing: 0.5 }}>Live Monitoring Console</span>
@@ -169,6 +163,44 @@ export default function Header({
         </>
       )}
     </header>
+  );
+}
+
+function StreamGuardMark() {
+  return (
+    <svg
+      width="32"
+      height="32"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      style={{ display: "block", flexShrink: 0 }}
+    >
+      <defs>
+        <linearGradient id="sgMarkStroke_s" x1="2" y1="22" x2="22" y2="2" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="var(--fact)" stopOpacity="0.95" />
+          <stop offset="0.45" stopColor="var(--accent)" stopOpacity="0.95" />
+          <stop offset="1" stopColor="var(--purple)" stopOpacity="0.9" />
+        </linearGradient>
+      </defs>
+
+      {/* Mirror-S stream + guard hook (original) */}
+      <path
+        d="M6.2 7.2c0-2.1 1.7-3.8 3.8-3.8h4.1c2.1 0 3.8 1.7 3.8 3.8S16.2 11 14.1 11H9.9c-2.1 0-3.8 1.7-3.8 3.8s1.7 3.8 3.8 3.8h4.1c2.1 0 3.8-1.7 3.8-3.8"
+        fill="none"
+        stroke="url(#sgMarkStroke_s)"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M18.2 18.2l2.1 2.1"
+        fill="none"
+        stroke="url(#sgMarkStroke_s)"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 

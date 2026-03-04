@@ -98,7 +98,7 @@ export default function RulesPage() {
     <div style={{ padding:"24px", maxWidth:"1200px", margin:"0 auto" }}>
       <div style={{ marginBottom:"20px" }}>
         <h1 style={{ fontSize:"20px", fontWeight:700, color:"#00FFE0", margin:0, letterSpacing:"1px" }}>规则图谱</h1>
-        <div style={{ fontSize:"12px", color:"rgba(228,240,255,0.4)", marginTop:"4px" }}>
+        <div style={{ fontSize:"12px", color:"var(--text-secondary)", marginTop:"4px" }}>
           收录 {RULES.length} 条合规规则 · 实时语义对齐检测引擎索引
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function RulesPage() {
               background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,255,224,0.15)",
               color:"rgba(228,240,255,0.8)", fontSize:"12px", outline:"none", fontFamily:"Inter,sans-serif" }}/>
           <span style={{ position:"absolute", left:"10px", top:"50%", transform:"translateY(-50%)",
-            fontSize:"12px", color:"rgba(228,240,255,0.3)", pointerEvents:"none" }}>🔍</span>
+            fontSize:"12px", color:"var(--text-muted)", pointerEvents:"none" }}>🔍</span>
         </div>
         {[
           { key:"all",    label:"全部风险" },
@@ -125,7 +125,7 @@ export default function RulesPage() {
             fontSize:"10px", fontWeight:600, fontFamily:"Inter,sans-serif",
             background: riskFilter===f.key ? "rgba(0,255,224,0.1)" : "rgba(255,255,255,0.03)",
             border:`1px solid ${riskFilter===f.key ? "rgba(0,255,224,0.35)" : "rgba(255,255,255,0.08)"}`,
-            color: riskFilter===f.key ? "#00FFE0" : "rgba(228,240,255,0.4)", transition:"all 0.2s",
+            color: riskFilter===f.key ? "#00FFE0" : "var(--text-secondary)", transition:"all 0.2s",
           }}>{f.label}</button>
         ))}
       </div>
@@ -139,7 +139,7 @@ export default function RulesPage() {
             fontWeight: lawFilter===l ? 600 : 400,
             background: lawFilter===l ? "rgba(0,150,255,0.12)" : "rgba(255,255,255,0.02)",
             border:`1px solid ${lawFilter===l ? "rgba(0,150,255,0.35)" : "rgba(255,255,255,0.07)"}`,
-            color: lawFilter===l ? "#0096FF" : "rgba(228,240,255,0.35)", transition:"all 0.2s",
+            color: lawFilter===l ? "#0096FF" : "var(--text-secondary)", transition:"all 0.2s",
           }}>{l} ({RULES.filter(r => l === "全部" || r.law === l).length})</button>
         ))}
       </div>
@@ -162,7 +162,7 @@ export default function RulesPage() {
                     <span style={{ fontSize:"9px", padding:"2px 7px", borderRadius:"4px",
                       background:"rgba(0,150,255,0.12)", border:"1px solid rgba(0,150,255,0.25)",
                       color:"#0096FF", letterSpacing:"0.5px", fontFamily:"Inter" }}>{rule.law}</span>
-                    <span style={{ fontSize:"9px", color:"rgba(228,240,255,0.3)" }}>{rule.article}</span>
+                    <span style={{ fontSize:"9px", color:"var(--text-muted)" }}>{rule.article}</span>
                     <span className="mono" style={{ fontSize:"9px", color:"rgba(228,240,255,0.2)" }}>{rule.id}</span>
                   </div>
                   <div style={{ display:"flex", gap:"6px", alignItems:"center" }}>

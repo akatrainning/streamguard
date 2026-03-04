@@ -247,7 +247,7 @@ export default function App() {
             display: page === "dashboard" ? "flex" : "none",
             flexDirection: "column",
             gap: 16,
-            ...(lockDashboardHeight ? { height: "100%", minHeight: 0, overflow: "hidden" } : null),
+            ...(lockDashboardHeight ? { height: "100%", minHeight: 0, overflow: "auto" } : null),
           }}
         >
           <div className="sg-dashboard-head">
@@ -270,23 +270,101 @@ export default function App() {
           </div>
 
           {dashboardSection === "ops" && (
-            <CommandCenter
-              dataSource={dataSource}
-              sourceConfig={sourceConfig}
-              connection={{
-                connected: realStream.connected,
-                connecting: realStream.connecting,
-                error: realStream.error,
-                lastMessageAt: realStream.lastMessageAt,
-                connectionAttempts: realStream.connectionAttempts,
-                statusLog: realStream.statusLog,
-              }}
-              utterances={utterances}
-              chatMessages={chatMessages}
-              messageTotals={messageTotals}
-              recentLimits={recentLimits}
-              onReconnect={() => realStream.reconnectNow?.()}
-            />
+            <div className="sg-ops-grid">
+              <CommandCenter
+                dataSource={dataSource}
+                sourceConfig={sourceConfig}
+                connection={{
+                  connected: realStream.connected,
+                  connecting: realStream.connecting,
+                  error: realStream.error,
+                  lastMessageAt: realStream.lastMessageAt,
+                  connectionAttempts: realStream.connectionAttempts,
+                  statusLog: realStream.statusLog,
+                }}
+                utterances={utterances}
+                chatMessages={chatMessages}
+                messageTotals={messageTotals}
+                recentLimits={recentLimits}
+                onReconnect={() => realStream.reconnectNow?.()}
+              />
+
+              <div className="sg-ops-side">
+                <div className="sg-ops-card">
+                  <div className="sg-ops-card-head">
+                    <div className="sg-ops-card-title">关键指标</div>
+                    <div className="sg-ops-card-subtitle">
+                      <span className="mono">{new Date().toLocaleTimeString("zh-CN", { hour12: false })}</span>
+                    </div>
+                  </div>
+                  <div className="sg-ops-card-body">
+                    <div className="sg-ops-kv">
+                      <span className="sg-ops-k">在线观众</span>
+                      <span className="sg-ops-v mono">{viewerCount || 0}</span>
+                    </div>
+                    <div className="sg-ops-kv">
+                      <span className="sg-ops-k">理性指数</span>
+                      <span className="sg-ops-v mono">{Math.round(rationalityIndex || 0)}/100</span>
+                    </div>
+                    <div className="sg-ops-kv">
+                      <span className="sg-ops-k">累计语义</span>
+                      <span className="sg-ops-v mono">{messageTotals.utterances || utterances.length}</span>
+                    </div>
+                    <div className="sg-ops-kv">
+                      <span className="sg-ops-k">累计弹幕</span>
+                      <span className="sg-ops-v mono">{messageTotals.chats || chatMessages.length}</span>
+                    </div>
+                    <div className="sg-ops-kv">
+                      <span className="sg-ops-k">当前数据源</span>
+                      <span className="sg-ops-v">{dataSource || "--"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="sg-ops-card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+                  <div className="sg-ops-card-head">
+                    <div className="sg-ops-card-title">最新告警</div>
+                    <div className="sg-ops-card-subtitle">
+                      {alerts?.length ? `${alerts.length} 条` : "暂无告警"}
+                    </div>
+                  </div>
+                  <div className="sg-ops-card-body" style={{ overflow: "auto", flex: 1, minHeight: 0 }}>
+                    <div className="sg-ops-alerts">
+                      {(alerts || []).slice(0, 6).map((a) => {
+                        const clickable = !!a.utteranceId;
+                        return (
+                          <div
+                            key={a.id}
+                            className={`sg-ops-alert ${clickable ? "is-clickable" : ""}`}
+                            onClick={() => clickable && jumpToUtterance(a.utteranceId)}
+                            role={clickable ? "button" : undefined}
+                            tabIndex={clickable ? 0 : undefined}
+                            onKeyDown={(e) => {
+                              if (!clickable) return;
+                              if (e.key === "Enter" || e.key === " ") jumpToUtterance(a.utteranceId);
+                            }}
+                          >
+                            <div className="sg-ops-alert-meta">
+                              <div className="sg-ops-alert-meta-left">
+                                <span className="sg-ops-pill mono">score {a.score}</span>
+                                <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>{a.timestamp}</span>
+                              </div>
+                              <span style={{ fontSize: 12, color: "var(--trap)", fontWeight: 800 }}>TRAP</span>
+                            </div>
+                            <div className="sg-ops-alert-text">{a.text}</div>
+                          </div>
+                        );
+                      })}
+                      {(!alerts || alerts.length === 0) && (
+                        <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "6px 2px" }}>
+                          直播中若出现高风险话术，会在这里沉淀为可回看条目。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* VideoPlayer 容器 - 始终挂载，通过 display 控制可见性 */}
