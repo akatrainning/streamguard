@@ -12,7 +12,6 @@ import AlertBanner from "./components/AlertBanner";
 import RationalityGate from "./components/RationalityGate";
 import DataSourceSelector from "./components/DataSourceSelector";
 import CommandCenter from "./components/CommandCenter";
-import LiveVideoPlayer from "./components/LiveVideoPlayer";
 import SessionReportModal from "./components/SessionReportModal";
 import SwitchRoomModal from "./components/SwitchRoomModal";
 import HistoryPage from "./pages/HistoryPage";
@@ -21,6 +20,71 @@ import RulesPage from "./pages/RulesPage";
 import ConsumerAdvisorPage from "./pages/ConsumerAdvisorPage";
 import LiveDiscoverPage from "./pages/LiveDiscoverPage";
 import WelcomePage from "./pages/WelcomePage";
+
+function LiveTranscriptCard({ items = [], isConnected = false }) {
+  return (
+    <div style={{
+      background: "var(--bg-secondary)",
+      border: "1px solid var(--border)",
+      borderRadius: 10,
+      overflow: "hidden",
+    }}>
+      <div style={{
+        padding: "10px 14px",
+        borderBottom: "1px solid var(--border)",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 600 }}>🎙️ 主播语音转写</span>
+        <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          {items.length} 段
+        </span>
+      </div>
+
+      <div style={{ padding: "10px 14px" }}>
+        <div style={{
+          minHeight: 120,
+          maxHeight: 260,
+          overflowY: "auto",
+        }}>
+          {items.length === 0 ? (
+            <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", padding: "26px 0" }}>
+              {isConnected ? "转写引擎已启动，等待下一段…" : "连接直播间后自动开始转写"}
+            </div>
+          ) : (
+            items.slice(0, 40).map((u, idx) => (
+              <div key={u.uid || u.id || idx} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 2 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{u.text}</span>
+                  <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>
+                    {u.timestamp || ""}
+                  </span>
+                </div>
+                {u.keywords?.length ? (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {u.keywords.slice(0, 6).map((kw, i) => (
+                      <span key={i} style={{
+                        fontSize: 9,
+                        padding: "1px 7px",
+                        borderRadius: 10,
+                        background: "rgba(0,150,255,0.10)",
+                        color: "#7fc8ff",
+                        border: "1px solid rgba(0,150,255,0.18)",
+                      }}>
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
@@ -67,10 +131,13 @@ export default function App() {
     sessionStats = {},
     messageTotals = { utterances: 0, chats: 0, total: 0 },
     recentLimits = { utterances: 0, chats: 0 },
-    mediaUrl,
   } = streamData || {};
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
+  const audioUtterances = useMemo(
+    () => utterances.filter(u => u.source === "audio"),
+    [utterances]
+  );
 
   /** 点击"结束监控"：冻结快照 → 断开连接 → 弹出报告 */
   const handleEndSession = useCallback(() => {
@@ -225,30 +292,54 @@ export default function App() {
             onReconnect={() => realStream.reconnectNow?.()}
           />
 
-          {/* 视频播放器区域 */}
-          {sourceConfig.roomId && (
-            <VideoPlayer
-              roomId={sourceConfig.roomId}
-              wsBase={sourceConfig.wsBase || "http://localhost:8011"}
-            />
-          )}
-
           <div style={{
             display: "grid",
-            gridTemplateColumns: dataSource === "douyin" ? "420px 360px 1fr" : "380px 1fr",
+            gridTemplateColumns: dataSource === "douyin"
+              ? "minmax(420px, 1.2fr) minmax(360px, 1fr) minmax(420px, 1.6fr)"
+              : "minmax(420px, 1.2fr) minmax(520px, 1.8fr)",
             gap: 14,
+            alignItems: "start",
           }}>
-            {/* 列 1（仅抖音模式）：直播视频 + 实时转写 */}
+            {/* 列 1（仅抖音模式）：保留可正常播放的大视频 + 语音转写 */}
             {dataSource === "douyin" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <LiveVideoPlayer
-                  roomId={sourceConfig.roomId}
-                  mediaUrl={mediaUrl}
-                  utterances={utterances}
-                  isConnected={realStream.connected}
-                  dataSource={dataSource}
-                  apiBase={apiBase}
-                />
+                {sourceConfig.roomId ? (
+                  <VideoPlayer
+                    roomId={sourceConfig.roomId}
+                    wsBase={sourceConfig.wsBase || "http://localhost:8011"}
+                  />
+                ) : (
+                  <div style={{
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    overflow: "hidden",
+                  }}>
+                    <div style={{
+                      padding: "10px 14px",
+                      borderBottom: "1px solid var(--border)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>📺 实时直播</span>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>未选择房间</span>
+                    </div>
+                    <div style={{
+                      background: "#000",
+                      aspectRatio: "16/9",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--text-muted)",
+                      fontSize: 12,
+                    }}>
+                      请输入直播间后开始播放
+                    </div>
+                  </div>
+                )}
+
+                <LiveTranscriptCard items={audioUtterances} isConnected={realStream.connected} />
               </div>
             )}
             {/* 列 2：弹幕实时流 + 语义分析 */}
