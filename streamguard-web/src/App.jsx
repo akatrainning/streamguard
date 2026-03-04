@@ -21,71 +21,6 @@ import ConsumerAdvisorPage from "./pages/ConsumerAdvisorPage";
 import LiveDiscoverPage from "./pages/LiveDiscoverPage";
 import WelcomePage from "./pages/WelcomePage";
 
-function LiveTranscriptCard({ items = [], isConnected = false }) {
-  return (
-    <div style={{
-      background: "var(--bg-secondary)",
-      border: "1px solid var(--border)",
-      borderRadius: 10,
-      overflow: "hidden",
-    }}>
-      <div style={{
-        padding: "10px 14px",
-        borderBottom: "1px solid var(--border)",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}>
-        <span style={{ fontSize: 13, fontWeight: 600 }}>🎙️ 主播语音转写</span>
-        <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          {items.length} 段
-        </span>
-      </div>
-
-      <div style={{ padding: "10px 14px" }}>
-        <div style={{
-          minHeight: 120,
-          maxHeight: 260,
-          overflowY: "auto",
-        }}>
-          {items.length === 0 ? (
-            <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", padding: "26px 0" }}>
-              {isConnected ? "转写引擎已启动，等待下一段…" : "连接直播间后自动开始转写"}
-            </div>
-          ) : (
-            items.slice(0, 40).map((u, idx) => (
-              <div key={u.uid || u.id || idx} style={{ padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 2 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>{u.text}</span>
-                  <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)", flexShrink: 0 }}>
-                    {u.timestamp || ""}
-                  </span>
-                </div>
-                {u.keywords?.length ? (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {u.keywords.slice(0, 6).map((kw, i) => (
-                      <span key={i} style={{
-                        fontSize: 9,
-                        padding: "1px 7px",
-                        borderRadius: 10,
-                        background: "rgba(0,150,255,0.10)",
-                        color: "#7fc8ff",
-                        border: "1px solid rgba(0,150,255,0.18)",
-                      }}>
-                        {kw}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState({});
@@ -134,10 +69,6 @@ export default function App() {
   } = streamData || {};
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
-  const audioUtterances = useMemo(
-    () => utterances.filter(u => u.source === "audio"),
-    [utterances]
-  );
 
   /** 点击"结束监控"：冻结快照 → 断开连接 → 弹出报告 */
   const handleEndSession = useCallback(() => {
@@ -300,9 +231,9 @@ export default function App() {
             gap: 14,
             alignItems: "start",
           }}>
-            {/* 列 1（仅抖音模式）：保留可正常播放的大视频 + 语音转写 */}
+            {/* 列 1（仅抖音模式）：保留可正常播放的大视频，并拉伸到与右侧两列对齐 */}
             {dataSource === "douyin" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, alignSelf: "stretch" }}>
                 {sourceConfig.roomId ? (
                   <VideoPlayer
                     roomId={sourceConfig.roomId}
@@ -334,12 +265,10 @@ export default function App() {
                       color: "var(--text-muted)",
                       fontSize: 12,
                     }}>
-                      请输入直播间后开始播放
-                    </div>
+                    请输入直播间后开始播放
                   </div>
+                </div>
                 )}
-
-                <LiveTranscriptCard items={audioUtterances} isConnected={realStream.connected} />
               </div>
             )}
             {/* 列 2：弹幕实时流 + 语义分析 */}

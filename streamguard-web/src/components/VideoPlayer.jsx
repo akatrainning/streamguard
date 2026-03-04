@@ -205,6 +205,7 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
       overflow: "hidden",
       display: "flex",
       flexDirection: "column",
+      height: "100%",
     }}>
       {/* Header */}
       <div style={{
@@ -222,7 +223,8 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
       <div style={{
         position: "relative",
         background: "#000",
-        aspectRatio: "16/9",
+        flex: 1,
+        minHeight: 260,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
