@@ -66,34 +66,12 @@ export default function CommandCenter({
   recentLimits,
   onReconnect,
 }) {
-  const [watchInput, setWatchInput] = useState("最后, 限时, 第一, 全网最低");
   const [audioSecs, setAudioSecs] = useState(20);
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioError, setAudioError] = useState("");
   const [audioResult, setAudioResult] = useState(null);
   const [audioStep, setAudioStep]   = useState("");   // 当前进度步骤key
   const abortRef = useRef(null);
-
-  const watchWords = useMemo(() => (
-    watchInput
-      .split(/[，,\s]+/)
-      .map(s => s.trim())
-      .filter(Boolean)
-      .slice(0, 20)
-  ), [watchInput]);
-
-  const corpus = useMemo(() => {
-    const u = utterances.map(x => x.text || "");
-    const c = chatMessages.map(x => x.text || "");
-    return [...u, ...c].join("\n");
-  }, [utterances, chatMessages]);
-
-  const watchStats = useMemo(() => {
-    return watchWords.map(w => ({
-      word: w,
-      count: corpus ? (corpus.match(new RegExp(escapeRegExp(w), "g")) || []).length : 0,
-    })).sort((a, b) => b.count - a.count);
-  }, [watchWords, corpus]);
 
   const totalMsgs = messageTotals?.total ?? (utterances.length + chatMessages.length);
   const totalUtterances = messageTotals?.utterances ?? utterances.length;
@@ -178,7 +156,6 @@ export default function CommandCenter({
         },
         throughputPerMin: throughput,
       },
-      watchStats,
       recentUtterances: utterances.slice(0, 20),
       recentChats: chatMessages.slice(0, 40),
       statusLog: connection.statusLog || [],
@@ -209,7 +186,7 @@ export default function CommandCenter({
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr 1fr", gap: 12, padding: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 12 }}>
         {/* Connection diagnostics */}
         <Card title="连接诊断">
           <KV k="数据源" v={dataSource || "--"} />
@@ -233,28 +210,6 @@ export default function CommandCenter({
           </div>
         </Card>
 
-        {/* Watchlist */}
-        <Card title="关键词哨兵">
-          <input
-            value={watchInput}
-            onChange={e => setWatchInput(e.target.value)}
-            placeholder="输入关键词，逗号分隔"
-            style={{
-              width: "100%", padding: "6px 8px", borderRadius: 6,
-              background: "var(--bg-tertiary)", border: "1px solid var(--border)",
-              color: "var(--text-primary)", fontSize: 12, outline: "none",
-            }}
-          />
-          <div style={{ marginTop: 8, maxHeight: 130, overflowY: "auto" }}>
-            {watchStats.length === 0 && <div style={{ fontSize: 11, color: "var(--text-muted)" }}>暂无关键词</div>}
-            {watchStats.map(item => (
-              <div key={item.word} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
-                <span style={{ color: "var(--text-secondary)" }}>{item.word}</span>
-                <span className="mono" style={{ color: item.count > 0 ? "var(--trap)" : "var(--text-muted)" }}>{item.count}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
 
       {/* Status log */}
@@ -352,6 +307,4 @@ const btnStyle = {
   cursor: "pointer",
 };
 
-function escapeRegExp(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+
