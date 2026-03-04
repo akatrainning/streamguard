@@ -120,17 +120,23 @@ export function useRealStream({
       if (msg.event === "utterance") {
         const item = {
           uid: msg.id, id: msg.id,
-          text: msg.text, type: msg.type,
+          text: msg.text,                           // 原始转写（展开区显示）
+          display_text: msg.display_text || msg.text, // 整理后文本（主要展示）
+          type: msg.type,
           score: msg.score, timestamp: msg.timestamp,
           source: msg.source,
-          raw_text: msg.raw_text,
+          raw_text: msg.text,                       // 保留原始备用
           keywords: msg.keywords || [],
           violations: msg.violations || [],
           suggestion: msg.suggestion || "",
           sub_scores: msg.sub_scores || {},
           engine: msg.engine,
         };
-        setUtterances(prev => [item, ...prev].slice(0, recentUtteranceLimit));
+        setUtterances(prev => {
+          // 去重：如果 ID 已存在则跳过（防止 WebSocket 重连导致重复消息）
+          if (prev.some(u => u.id === item.id)) return prev;
+          return [item, ...prev].slice(0, recentUtteranceLimit);
+        });
         setRationalityIndex(prev => {
           const delta = msg.type === "trap" ? -8 : msg.type === "hype" ? -3 : +4;
           return Math.max(15, Math.min(95, prev + delta));
@@ -161,23 +167,28 @@ export function useRealStream({
       }
 
       if (msg.event === "chat") {
-        setChatMessages(prev => [
-          {
-            id: Date.now(),
-            user: msg.user,
-            text: msg.text,
-            timestamp: msg.timestamp,
-            // 保留后端语义分析字段（供LiveStreamPanel情感/意图可视化使用）
-            sentiment:      msg.sentiment      || "neutral",
-            intent:         msg.intent         || "other",
-            flags:          msg.flags          || [],
-            risk_score:     msg.risk_score     || 0,
-            label:          msg.label          || "💬 普通弹幕",
-            sentiment_icon: msg.sentiment_icon || "😐",
-            correlation:    msg.correlation    || "unrelated",
-          },
-          ...prev,
-        ].slice(0, recentChatLimit));
+        const chatId = msg.id || Date.now();
+        setChatMessages(prev => {
+          // 去重：如果 ID 已存在则跳过
+          if (msg.id && prev.some(c => c.id === chatId)) return prev;
+          return [
+            {
+              id: chatId,
+              user: msg.user,
+              text: msg.text,
+              timestamp: msg.timestamp,
+              // 保留后端语义分析字段（供LiveStreamPanel情感/意图可视化使用）
+              sentiment:      msg.sentiment      || "neutral",
+              intent:         msg.intent         || "other",
+              flags:          msg.flags          || [],
+              risk_score:     msg.risk_score     || 0,
+              label:          msg.label          || "💬 普通弹幕",
+              sentiment_icon: msg.sentiment_icon || "😐",
+              correlation:    msg.correlation    || "unrelated",
+            },
+            ...prev,
+          ].slice(0, recentChatLimit);
+        });
         setMessageTotals(prev => ({
           utterances: prev.utterances,
           chats: prev.chats + 1,

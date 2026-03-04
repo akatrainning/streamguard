@@ -122,7 +122,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                   border: `1px solid ${cfg.border}`,
                 }}>
                 <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5, marginBottom: 4 }}>
-                  {item.display_text || item.text}
+                  {item.display_text}
                 </div>
                 {Array.isArray(item.keywords) && item.keywords.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
