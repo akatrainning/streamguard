@@ -662,8 +662,8 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
             tmp_path,
             language="zh",
             beam_size=_FW_BEAM_SIZE,        # 1=贪心解码（快 3-5x），5=束搜索（准但慢）
-            vad_filter=True,               # 跳过静音段，减少无效计算
-            vad_parameters={"min_silence_duration_ms": 300},
+            vad_filter=False,              # VAD需要onnxruntime，暂时禁用
+            # vad_parameters={"min_silence_duration_ms": 300},
         )
         return " ".join(seg.text.strip() for seg in segments).strip()
     finally:
