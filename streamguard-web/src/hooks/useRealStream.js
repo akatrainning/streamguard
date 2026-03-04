@@ -141,9 +141,24 @@ export function useRealStream({
           const delta = msg.type === "trap" ? -8 : msg.type === "hype" ? -3 : +4;
           return Math.max(15, Math.min(95, prev + delta));
         });
-        setRiskData(prev => prev.map(d => ({
-          ...d, value: Math.max(10, Math.min(99, d.value + (Math.random()*6-3))),
-        })));
+        setRiskData(prev => {
+          const ss = msg.sub_scores || {};
+          // 根据 type 推算紧迫度：trap=高压 hype=中 fact=低
+          const urgencyVal = msg.type === "trap" ? 88 : msg.type === "hype" ? 55 : 18;
+          const targets = {
+            "Price Transparency": Math.round((msg.score ?? 0.5) * 100),
+            "Pressure Level":    Math.round((ss.subjectivity_index ?? 0.5) * 100),
+            "Accuracy":          Math.round((ss.semantic_consistency ?? 0.5) * 100),
+            "Urgency":           urgencyVal,
+            "Evidence":          Math.round((ss.fact_verification ?? 0.5) * 100),
+            "Compliance":        Math.round((ss.compliance_score ?? 0.5) * 100),
+          };
+          // EMA 平滑 α=0.35，避免图表跳动过大
+          return prev.map(d => ({
+            ...d,
+            value: Math.round(d.value * 0.65 + (targets[d.subject] ?? d.value) * 0.35),
+          }));
+        });
         setSessionStats(prev => ({
           total: prev.total + 1,
           trap:  prev.trap  + (msg.type === "trap"  ? 1 : 0),
