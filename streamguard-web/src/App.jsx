@@ -179,14 +179,14 @@ export default function App() {
   // Source selection screen
   if (!dataSource) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="sg-page-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
         <DataSourceSelector onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
       </div>
     );
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell sg-app">
       <Header
         page={page} setPage={setPage}
         viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
@@ -206,7 +206,7 @@ export default function App() {
 
       <main className="app-main">
       {page === "dashboard" && (
-        <div className="dashboard-page">
+        <div className="dashboard-page sg-dashboard">
           <CommandCenter
             dataSource={dataSource}
             sourceConfig={sourceConfig}
@@ -355,7 +355,7 @@ export default function App() {
         />
       )}
       {/* 粘性页脚 */}
-      <footer style={{
+      <footer className="sg-footer" style={{
         position: "relative",
         height: 32,
         background: "rgba(10,10,18,0.92)",
