@@ -19,7 +19,7 @@ export default function WelcomePage({ onEnter }) {
       <div className="welcome-glow" aria-hidden="true" />
       <div className="welcome-core">
         <div className="welcome-badge">
-          <span className="mono">STREAMGUARD</span>
+          <span className="mono">SEMANTIC</span>
           <span className="welcome-status">SECURE</span>
         </div>
         <h1>StreamGuard</h1>
@@ -27,7 +27,7 @@ export default function WelcomePage({ onEnter }) {
         <button className="welcome-enter" onClick={handleEnter} disabled={isExiting}>
           点击进入→
         </button>
-        <div className="welcome-hint mono">Enter / 点击进入</div>
+        {/* <div className="welcome-hint mono">Enter / 点击进入</div> */}
       </div>
       <div className="welcome-orbit" aria-hidden="true" />
     </div>
