@@ -112,14 +112,6 @@ export default function App() {
     }
   }, [reset]);
 
-  // Close report modal only, then resume live connection when possible.
-  const handleReportDismiss = useCallback(() => {
-    setSessionSnapshot(null);
-    if (dataSource === "douyin" && sourceConfig.roomId) {
-      realStream.reconnectNow?.();
-    }
-  }, [dataSource, sourceConfig.roomId, realStream]);
-
   const jumpToUtterance = useCallback((uid) => {
     if (page !== "dashboard") setPage("dashboard");
     setTimeout(() => feedRef.current?.highlightItem(uid), 100);
@@ -195,7 +187,6 @@ export default function App() {
   }
 
   const activeTab = NAV_TABS.find((tab) => tab.id === page) || NAV_TABS[0];
-  const lockDashboardHeight = dashboardSection === "stream"; // dashboard 始终挂载，不再依赖 page
   const NAV_ICONS = {
     dashboard: "▦",
     discover: "⌕",
@@ -247,17 +238,8 @@ export default function App() {
         </aside>
 
         <main className="sg-main">
-      {/* Dashboard - 始终挂载，通过 display 控制可见性，防止 VideoPlayer 切换页面时断开连接 */}
-        <div
-          className="sg-dashboard"
-          style={{
-            padding: "20px 24px 20px",
-            display: page === "dashboard" ? "flex" : "none",
-            flexDirection: "column",
-            gap: 16,
-            ...(lockDashboardHeight ? { height: "100%", minHeight: 0, overflow: "auto" } : null),
-          }}
-        >
+      {page === "dashboard" && (
+        <div className="sg-dashboard" style={{ padding: "20px 24px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="sg-dashboard-head">
             <div className="sg-dashboard-title">实时总览</div>
             <div className="sg-dashboard-tabs">
@@ -278,169 +260,84 @@ export default function App() {
           </div>
 
           {dashboardSection === "ops" && (
-            <div className="sg-ops-grid">
-              <CommandCenter
-                dataSource={dataSource}
-                sourceConfig={sourceConfig}
-                connection={{
-                  connected: realStream.connected,
-                  connecting: realStream.connecting,
-                  error: realStream.error,
-                  lastMessageAt: realStream.lastMessageAt,
-                  connectionAttempts: realStream.connectionAttempts,
-                  statusLog: realStream.statusLog,
-                }}
-                utterances={utterances}
-                chatMessages={chatMessages}
-                messageTotals={messageTotals}
-                recentLimits={recentLimits}
-                onReconnect={() => realStream.reconnectNow?.()}
-              />
+            <CommandCenter
+              dataSource={dataSource}
+              sourceConfig={sourceConfig}
+              connection={{
+                connected: realStream.connected,
+                connecting: realStream.connecting,
+                error: realStream.error,
+                lastMessageAt: realStream.lastMessageAt,
+                connectionAttempts: realStream.connectionAttempts,
+                statusLog: realStream.statusLog,
+              }}
+              utterances={utterances}
+              chatMessages={chatMessages}
+              messageTotals={messageTotals}
+              recentLimits={recentLimits}
+              onReconnect={() => realStream.reconnectNow?.()}
+            />
+          )}
 
-              <div className="sg-ops-side">
-                <div className="sg-ops-card">
-                  <div className="sg-ops-card-head">
-                    <div className="sg-ops-card-title">关键指标</div>
-                    <div className="sg-ops-card-subtitle">
-                      <span className="mono">{new Date().toLocaleTimeString("zh-CN", { hour12: false })}</span>
+          {dashboardSection === "stream" && (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: dataSource === "douyin"
+                ? "minmax(420px, 1.1fr) minmax(420px, 1fr)"
+                : "minmax(520px, 1fr)",
+              gap: 18,
+              alignItems: "stretch",
+            }}>
+              {dataSource === "douyin" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch" }}>
+                  {sourceConfig.roomId ? (
+                    <VideoPlayer
+                      roomId={sourceConfig.roomId}
+                      wsBase={sourceConfig.wsBase || "http://localhost:8011"}
+                    />
+                  ) : (
+                    <div style={{
+                      background: "var(--bg-secondary)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 10,
+                      overflow: "hidden",
+                    }}>
+                      <div style={{
+                        padding: "12px 16px",
+                        borderBottom: "1px solid var(--border)",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}>
+                        <span style={{ fontSize: 14, fontWeight: 700 }}>实时直播</span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>等待连接直播间</span>
+                      </div>
+                      <div style={{
+                        background: "#000",
+                        aspectRatio: "16/9",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--text-muted)",
+                        fontSize: 13,
+                      }}>
+                        请先在上方选择并连接直播间
+                      </div>
                     </div>
-                  </div>
-                  <div className="sg-ops-card-body">
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">在线观众</span>
-                      <span className="sg-ops-v mono">{viewerCount || 0}</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">理性指数</span>
-                      <span className="sg-ops-v mono">{Math.round(rationalityIndex || 0)}/100</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">累计语义</span>
-                      <span className="sg-ops-v mono">{messageTotals.utterances || utterances.length}</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">累计弹幕</span>
-                      <span className="sg-ops-v mono">{messageTotals.chats || chatMessages.length}</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">当前数据源</span>
-                      <span className="sg-ops-v">{dataSource || "--"}</span>
-                    </div>
-                  </div>
+                  )}
                 </div>
+              )}
 
-                <div className="sg-ops-card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                  <div className="sg-ops-card-head">
-                    <div className="sg-ops-card-title">最新告警</div>
-                    <div className="sg-ops-card-subtitle">
-                      {alerts?.length ? `${alerts.length} 条` : "暂无告警"}
-                    </div>
-                  </div>
-                  <div className="sg-ops-card-body" style={{ overflow: "auto", flex: 1, minHeight: 0 }}>
-                    <div className="sg-ops-alerts">
-                      {(alerts || []).slice(0, 6).map((a) => {
-                        const clickable = !!a.utteranceId;
-                        return (
-                          <div
-                            key={a.id}
-                            className={`sg-ops-alert ${clickable ? "is-clickable" : ""}`}
-                            onClick={() => clickable && jumpToUtterance(a.utteranceId)}
-                            role={clickable ? "button" : undefined}
-                            tabIndex={clickable ? 0 : undefined}
-                            onKeyDown={(e) => {
-                              if (!clickable) return;
-                              if (e.key === "Enter" || e.key === " ") jumpToUtterance(a.utteranceId);
-                            }}
-                          >
-                            <div className="sg-ops-alert-meta">
-                              <div className="sg-ops-alert-meta-left">
-                                <span className="sg-ops-pill mono">score {a.score}</span>
-                                <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>{a.timestamp}</span>
-                              </div>
-                              <span style={{ fontSize: 12, color: "var(--trap)", fontWeight: 800 }}>TRAP</span>
-                            </div>
-                            <div className="sg-ops-alert-text">{a.text}</div>
-                          </div>
-                        );
-                      })}
-                      {(!alerts || alerts.length === 0) && (
-                        <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "6px 2px" }}>
-                          直播中若出现高风险话术，会在这里沉淀为可回看条目。
-                        </div>
-                      )}
-                    </div>
-                  </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
+                <div style={{ flexShrink: 0, maxHeight: 320, overflow: "hidden" }}>
+                  <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 380 }}>
+                  <SemanticFeed ref={feedRef} utterances={utterances} />
                 </div>
               </div>
             </div>
           )}
-
-          {/* VideoPlayer 容器 - 始终挂载，通过 display 控制可见性 */}
-          <div style={{
-            display: dashboardSection === "stream" ? "grid" : "none",
-            gridTemplateColumns: dataSource === "douyin"
-              ? "minmax(420px, 1.1fr) minmax(420px, 1fr)"
-              : "minmax(520px, 1fr)",
-            gap: 18,
-            alignItems: "stretch",
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-          }}>
-            {dataSource === "douyin" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
-                {sourceConfig.roomId ? (
-                  <VideoPlayer
-                    roomId={sourceConfig.roomId}
-                    wsBase={sourceConfig.wsBase || "http://localhost:8011"}
-                    isVisible={dashboardSection === "stream"}
-                  />
-                ) : (
-                  <div style={{
-                    background: "var(--bg-secondary)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                    height: "100%",
-                  }}>
-                    <div style={{
-                      padding: "12px 16px",
-                      borderBottom: "1px solid var(--border)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}>
-                      <span style={{ fontSize: 14, fontWeight: 700 }}>实时直播</span>
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>等待连接直播间</span>
-                    </div>
-                    <div style={{
-                      background: "#000",
-                      flex: 1,
-                      minHeight: 240,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--text-muted)",
-                      fontSize: 13,
-                    }}>
-                      请先在上方选择并连接直播间
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
-              <div style={{ flex: "0 0 300px", minHeight: 0, overflow: "hidden" }}>
-                <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-                <SemanticFeed ref={feedRef} utterances={utterances} />
-              </div>
-            </div>
-          </div>
 
           {dashboardSection === "analysis" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16, minHeight: 0 }}>
@@ -454,6 +351,7 @@ export default function App() {
             </div>
           )}
         </div>
+      )}
 
       {page === "history" && <HistoryPage />}
       {page === "discover" && (
@@ -503,7 +401,6 @@ export default function App() {
         <SessionReportModal
           snapshot={sessionSnapshot}
           apiBase={apiBase}
-          onDismiss={handleReportDismiss}
           onClose={handleReportClose}
         />
       )}

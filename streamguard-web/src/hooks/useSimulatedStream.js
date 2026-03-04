@@ -24,11 +24,14 @@ export function useSimulatedStream() {
   const uIdx = useRef(0);
   const cIdx = useRef(0);
   const alertId = useRef(0);
+  const utteranceIdCounter = useRef(0);
+  const chatIdCounter = useRef(0);
   const isPausedRef = useRef(false);
   isPausedRef.current = isPaused;
 
   const reset = useCallback(() => {
     uIdx.current = 0; cIdx.current = 0; alertId.current = 0;
+    utteranceIdCounter.current = 0; chatIdCounter.current = 0;
     setUtterances([]); setChatMessages([]); setRationalityIndex(78);
     setRiskData(BASE_RISK); setAlerts([]); setViewerCount(12480);
     setShowGate(false); setIsPaused(false);
@@ -65,7 +68,8 @@ export function useSimulatedStream() {
       if (isPausedRef.current) return;
       const item = UTTERANCES[uIdx.current % UTTERANCES.length];
       uIdx.current++;
-      setUtterances(prev => [{ ...item, id: Date.now() }, ...prev].slice(0, 20));
+      utteranceIdCounter.current++;
+      setUtterances(prev => [{ ...item, id: Date.now() + utteranceIdCounter.current }, ...prev].slice(0, 20));
       setRationalityIndex(prev => {
         const delta = item.type === "trap" ? -8 : item.type === "hype" ? -3 : +4;
         return Math.max(15, Math.min(95, prev + delta + (Math.random()*4-2)));
@@ -90,7 +94,8 @@ export function useSimulatedStream() {
       if (isPausedRef.current) return;
       const msg = CHAT_MESSAGES[cIdx.current % CHAT_MESSAGES.length];
       cIdx.current++;
-      setChatMessages(prev => [{ ...msg, id: Date.now() }, ...prev].slice(0, 30));
+      chatIdCounter.current++;
+      setChatMessages(prev => [{ ...msg, id: Date.now() + chatIdCounter.current }, ...prev].slice(0, 30));
     }, 900);
 
     const vTimer = setInterval(() => {

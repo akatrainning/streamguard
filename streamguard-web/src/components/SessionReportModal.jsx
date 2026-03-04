@@ -190,13 +190,15 @@ function doExportJson(snapshot, aiAdvice) {
 }
 
 // ─── 主组件 ──────────────────────────────────────────────────────
-export default function SessionReportModal({ snapshot, apiBase, onClose }) {
+export default function SessionReportModal({ snapshot, apiBase, onClose, onDismiss }) {
+  console.log("[SessionReportModal] 组件被渲染！snapshot:", snapshot);
   const [aiAdvice, setAiAdvice]     = useState(null);
   const [aiSummary, setAiSummary]   = useState("");
   const [aiLoading, setAiLoading]   = useState(true);
   const [aiError, setAiError]       = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const fetchedRef = useRef(false);
+  const dismissModal = onDismiss || onClose;
 
   const { utterances = [], chatMessages = [], stats = {}, rationalityIndex = 0, roomId, startTime, endTime } = snapshot || {};
   const total   = stats.total || 0;
@@ -307,7 +309,7 @@ export default function SessionReportModal({ snapshot, apiBase, onClose }) {
           </div>
           {/* 关闭触发确认 */}
           <button
-            onClick={() => setShowConfirm(true)}
+            onClick={dismissModal}
             style={{
               padding: "6px 14px", borderRadius: 8, border: "1px solid var(--border)",
               background: "var(--bg)", color: "var(--text-muted)",
