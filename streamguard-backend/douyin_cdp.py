@@ -179,9 +179,22 @@ class DouyinCDPScraper:
         opts.add_argument("--ignore-certificate-errors")
         opts.add_argument("--allow-running-insecure-content")
         opts.add_argument("--mute-audio")
-        opts.add_argument("--window-size=1280,720")
+        opts.add_argument("--window-size=800,600")       # 缩小窗口，减少渲染开销
         opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        # 节省资源：禁用不必要的功能
+        opts.add_argument("--disable-extensions")
+        opts.add_argument("--disable-background-networking")   # 禁用后台网络请求
+        opts.add_argument("--disable-sync")                    # 禁用账号同步
+        opts.add_argument("--disable-translate")
+        opts.add_argument("--disable-plugins")
+        opts.add_argument("--disable-background-timer-throttling")
+        opts.add_argument("--disable-renderer-backgrounding")  # 防止 Chrome 降低后台标签优先级
+        opts.add_argument("--blink-settings=imagesEnabled=false")  # 禁止加载图片
+        opts.add_argument("--disable-javascript-harmony-shipping")
+        opts.add_argument("--js-flags=--max-old-space-size=256")   # 限制 JS 堆内存 256MB
+        opts.add_argument("--media-cache-size=1")
+        opts.add_argument("--disk-cache-size=1")
         opts.add_experimental_option("excludeSwitches", ["enable-automation"])
         opts.add_experimental_option("useAutomationExtension", False)
         # Enable performance logging for CDP WebSocket frames
@@ -298,7 +311,7 @@ class DouyinCDPScraper:
                     })
                     last_note_ts = now
 
-                time.sleep(0.1)
+                time.sleep(0.2)  # 5Hz 轮询（原 10Hz），减少 CPU 占用
 
         except Exception as e:
             self.q.put({"event": "error", "message": f"CDP error: {e}"})
@@ -374,7 +387,7 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
                         last_error = evt.get("message")
                     await callback(evt)
 
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.1)  # 10Hz（原 20Hz）
 
             # Drain any remaining events after thread exits
             while True:

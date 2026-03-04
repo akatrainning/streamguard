@@ -16,13 +16,14 @@ function extractRoomId(input = "") {
   return d ? d[1] : "";
 }
 
-export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localhost:8011" }) {
+export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localhost:8011", isVisible = true }) {
   const roomId = extractRoomId(roomIdRaw || "");
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
   const hlsRef = useRef(null);
+  const wasVisibleRef = useRef(isVisible);
 
   // 获取直播流 URL
   useEffect(() => {
@@ -197,6 +198,41 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
     };
   }, [videoUrl]);
 
+  // 处理可见性变化 - 隐藏时停止缓冲，显示时跳至直播边缘恢复播放
+  useEffect(() => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+
+    if (isVisible && !wasVisibleRef.current) {
+      // 变为可见：重新加载并跳到直播最新边缘
+      console.log("VideoPlayer: 变为可见，跳至直播边缘恢复播放");
+      if (hlsRef.current) {
+        // startLoad(-1) 让 HLS.js 从直播边缘开始重新加载，而非从暂停点
+        hlsRef.current.startLoad(-1);
+        video.play().catch((e) => console.log("VideoPlayer: play() 被拦截:", e));
+      } else if (window._flvPlayer) {
+        window._flvPlayer.play();
+      } else {
+        // 普通 src（mp4 等）：跳到末尾
+        try {
+          if (video.seekable && video.seekable.length > 0) {
+            video.currentTime = video.seekable.end(video.seekable.length - 1);
+          }
+        } catch (_) {}
+        video.play().catch(() => {});
+      }
+    } else if (!isVisible && wasVisibleRef.current) {
+      // 变为隐藏：停止缓冲（节省带宽）但保留 HLS 实例不销毁
+      console.log("VideoPlayer: 变为隐藏，停止缓冲");
+      if (hlsRef.current) {
+        hlsRef.current.stopLoad(); // 停止缓冲，保持实例
+      }
+      video.pause();
+    }
+
+    wasVisibleRef.current = isVisible;
+  }, [isVisible]);
+
   return (
     <div style={{
       background: "var(--bg-secondary)",
@@ -206,6 +242,8 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
       display: "flex",
       flexDirection: "column",
       height: "100%",
+      opacity: isVisible ? 1 : 0.5,
+      pointerEvents: isVisible ? "auto" : "none",
     }}>
       {/* Header */}
       <div style={{

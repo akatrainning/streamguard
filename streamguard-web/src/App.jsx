@@ -187,7 +187,7 @@ export default function App() {
   }
 
   const activeTab = NAV_TABS.find((tab) => tab.id === page) || NAV_TABS[0];
-  const lockDashboardHeight = page === "dashboard" && dashboardSection === "stream";
+  const lockDashboardHeight = dashboardSection === "stream"; // dashboard 始终挂载，不再依赖 page
   const NAV_ICONS = {
     dashboard: "▦",
     discover: "⌕",
@@ -239,12 +239,12 @@ export default function App() {
         </aside>
 
         <main className="sg-main">
-      {page === "dashboard" && (
+      {/* Dashboard - 始终挂载，通过 display 控制可见性，防止 VideoPlayer 切换页面时断开连接 */}
         <div
           className="sg-dashboard"
           style={{
             padding: "20px 24px 20px",
-            display: "flex",
+            display: page === "dashboard" ? "flex" : "none",
             flexDirection: "column",
             gap: 16,
             ...(lockDashboardHeight ? { height: "100%", minHeight: 0, overflow: "hidden" } : null),
@@ -289,72 +289,72 @@ export default function App() {
             />
           )}
 
-          {dashboardSection === "stream" && (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: dataSource === "douyin"
-                ? "minmax(420px, 1.1fr) minmax(420px, 1fr)"
-                : "minmax(520px, 1fr)",
-              gap: 18,
-              alignItems: "stretch",
-              flex: 1,
-              minHeight: 0,
-              overflow: "hidden",
-            }}>
-              {dataSource === "douyin" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
-                  {sourceConfig.roomId ? (
-                    <VideoPlayer
-                      roomId={sourceConfig.roomId}
-                      wsBase={sourceConfig.wsBase || "http://localhost:8011"}
-                    />
-                  ) : (
+          {/* VideoPlayer 容器 - 始终挂载，通过 display 控制可见性 */}
+          <div style={{
+            display: dashboardSection === "stream" ? "grid" : "none",
+            gridTemplateColumns: dataSource === "douyin"
+              ? "minmax(420px, 1.1fr) minmax(420px, 1fr)"
+              : "minmax(520px, 1fr)",
+            gap: 18,
+            alignItems: "stretch",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          }}>
+            {dataSource === "douyin" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
+                {sourceConfig.roomId ? (
+                  <VideoPlayer
+                    roomId={sourceConfig.roomId}
+                    wsBase={sourceConfig.wsBase || "http://localhost:8011"}
+                    isVisible={dashboardSection === "stream"}
+                  />
+                ) : (
+                  <div style={{
+                    background: "var(--bg-secondary)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                  }}>
                     <div style={{
-                      background: "var(--bg-secondary)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 10,
-                      overflow: "hidden",
+                      padding: "12px 16px",
+                      borderBottom: "1px solid var(--border)",
                       display: "flex",
-                      flexDirection: "column",
-                      height: "100%",
+                      justifyContent: "space-between",
+                      alignItems: "center",
                     }}>
-                      <div style={{
-                        padding: "12px 16px",
-                        borderBottom: "1px solid var(--border)",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}>
-                        <span style={{ fontSize: 14, fontWeight: 700 }}>实时直播</span>
-                        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>等待连接直播间</span>
-                      </div>
-                      <div style={{
-                        background: "#000",
-                        flex: 1,
-                        minHeight: 240,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--text-muted)",
-                        fontSize: 13,
-                      }}>
-                        请先在上方选择并连接直播间
-                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 700 }}>实时直播</span>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>等待连接直播间</span>
                     </div>
-                  )}
-                </div>
-              )}
+                    <div style={{
+                      background: "#000",
+                      flex: 1,
+                      minHeight: 240,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "var(--text-muted)",
+                      fontSize: 13,
+                    }}>
+                      请先在上方选择并连接直播间
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
-                <div style={{ flex: "0 0 300px", minHeight: 0, overflow: "hidden" }}>
-                  <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-                  <SemanticFeed ref={feedRef} utterances={utterances} />
-                </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
+              <div style={{ flex: "0 0 300px", minHeight: 0, overflow: "hidden" }}>
+                <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                <SemanticFeed ref={feedRef} utterances={utterances} />
               </div>
             </div>
-          )}
+          </div>
 
           {dashboardSection === "analysis" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16, minHeight: 0 }}>
@@ -368,7 +368,6 @@ export default function App() {
             </div>
           )}
         </div>
-      )}
 
       {page === "history" && <HistoryPage />}
       {page === "discover" && (

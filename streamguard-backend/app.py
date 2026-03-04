@@ -454,9 +454,9 @@ def _split_sentences_zh(text: str) -> list[str]:
     return [p.strip() for p in parts if p and p.strip()]
 
 
-# 媒体 URL 缓存：避免重复启动 Chrome （TTL = 5 分钟）
+# 媒体 URL 缓存：避免重复启动 Chrome （TTL = 15 分钟）
 _media_url_cache: dict[str, tuple[str, float]] = {}   # room_id -> (url, expire_ts)
-_MEDIA_URL_TTL = 300  # seconds
+_MEDIA_URL_TTL = 900  # seconds（上次 5分钟，现在 15分钟）
 
 
 def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[str]:
@@ -480,10 +480,20 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--mute-audio")
-    opts.add_argument("--window-size=1280,720")
+    opts.add_argument("--window-size=800,600")          # 缩小窗口
     opts.add_argument("--ignore-certificate-errors")
     opts.add_argument("--allow-running-insecure-content")
-    # 屏蔽 Chrome 内部日志（SSL 战手失败、GPU 驱动警告等噪音）
+    # 节省资源：禁用不必要的功能
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-background-networking")
+    opts.add_argument("--disable-sync")
+    opts.add_argument("--disable-translate")
+    opts.add_argument("--disable-plugins")
+    opts.add_argument("--blink-settings=imagesEnabled=false")  # 禁用图片加载
+    opts.add_argument("--js-flags=--max-old-space-size=256")
+    opts.add_argument("--media-cache-size=1")
+    opts.add_argument("--disk-cache-size=1")
+    # 屏蔽 Chrome 内部日志话音失败、GPU 驱动警告等噪音）
     opts.add_argument("--log-level=3")
     opts.add_argument("--silent")
     opts.add_argument("--disable-logging")
@@ -588,17 +598,23 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
     """
     ffmpeg_bin = _get_ffmpeg_bin()
 
+    # ffmpeg CPU 线程数：保留 2 核给系统，最少 1 线程
+    ffmpeg_threads = str(max(1, (os.cpu_count() or 4) - 2))
+
     with tempfile.TemporaryDirectory() as td:
         out_wav = os.path.join(td, "clip.wav")
         cmd = [
             ffmpeg_bin,
             "-y",
+            "-fflags", "nobuffer",          # 减少输入缓冲延迟
+            "-flags", "low_delay",
             "-i", stream_url,
             "-t", str(max(8, min(seconds, 90))),
-            "-vn",
+            "-vn",                           # 只要音频，跳过视频解码
             "-ac", "1",
             "-ar", "16000",
             "-acodec", "pcm_s16le",
+            "-threads", ffmpeg_threads,      # 限制 CPU 线程数
             out_wav,
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -613,6 +629,9 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
 # faster-whisper 本地模型缓存（惰性初始化）
 _fw_model = None
 _FW_MODEL_SIZE = os.getenv("LOCAL_WHISPER_MODEL", "base")  # tiny/base/small/medium
+# CPU 线程数：默认保留 2 核给系统，可通过环境变量覆盖
+_FW_CPU_THREADS = int(os.getenv("WHISPER_CPU_THREADS", max(1, (os.cpu_count() or 4) - 2)))
+_FW_BEAM_SIZE   = int(os.getenv("WHISPER_BEAM_SIZE", "1"))  # 1=贪心(快)/5=束搜索(准)
 
 
 def _transcribe_local_whisper(audio_bytes: bytes) -> str:
@@ -623,17 +642,29 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
     except ImportError:
         raise RuntimeError("faster-whisper 未安装")
     if _fw_model is None:
-        print(f"[ASR-local] 首次加载 faster-whisper 模型，请稍候...")
+        print(f"[ASR-local] 首次加载 faster-whisper 模型（model={_FW_MODEL_SIZE}, threads={_FW_CPU_THREADS}, beam={_FW_BEAM_SIZE}）...")
         model_path = os.path.join(os.path.dirname(__file__), "whisper_base_model")
         if not os.path.isdir(model_path):
             model_path = _FW_MODEL_SIZE
         print(f"[ASR-local] 使用模型: {model_path}")
-        _fw_model = WhisperModel(model_path, device="cpu", compute_type="int8")
+        _fw_model = WhisperModel(
+            model_path,
+            device="cpu",
+            compute_type="int8",
+            cpu_threads=_FW_CPU_THREADS,   # 限制转写线程数
+            num_workers=1,                 # 单工作进程，避免多实例竞争 CPU
+        )
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp.write(audio_bytes)
         tmp_path = tmp.name
     try:
-        segments, _ = _fw_model.transcribe(tmp_path, language="zh", beam_size=5)
+        segments, _ = _fw_model.transcribe(
+            tmp_path,
+            language="zh",
+            beam_size=_FW_BEAM_SIZE,        # 1=贪心解码（快 3-5x），5=束搜索（准但慢）
+            vad_filter=True,               # 跳过静音段，减少无效计算
+            vad_parameters={"min_silence_duration_ms": 300},
+        )
         return " ".join(seg.text.strip() for seg in segments).strip()
     finally:
         try:
@@ -819,10 +850,18 @@ class DouyinLiveSource:
 
     async def _audio_loop(self, callback):
         """
-        连续音频监听后台循环（消费者级实用方案）：
-        自动发现直播媒体流 → 每 15s 采集一窗口 → 转写 → 推送 utterance 事件到前端。
+        连续音频监听后台循环（流水线模式）：
+        自动发现直播媒体流 → 采集与转写并行流水线 → 每 ~8s 输出一条润色话术。
+
+        流水线原理：
+          采集线程（capture_worker）持续采集 8s 音频片段放入队列；
+          转写线程（transcribe_worker）同步从队列取出并处理。
+          两者并行 → 有效延迟 ≈ 8s（窗口时长），而非串行的 20+s。
+
         无需 API Key：优先 faster-whisper 本地模型。
         """
+        WINDOW_SECS = 8  # 采集窗口：8s 兼顾句子完整性与响应延迟（可调 5~10）
+
         print(f"[audio-loop] 正在发现直播媒体流（房间: {self.room_id}）...")
         try:
             media_url = await asyncio.to_thread(_discover_douyin_media_url, self.room_id, 20)
@@ -834,49 +873,93 @@ class DouyinLiveSource:
             print("[audio-loop] 未能找到可用媒体流，音频监听退出（直播间可能已下线或有反爬限制）")
             return
 
-        print(f"[audio-loop] ✓ 发现媒体流，开始连续监听: {media_url[:80]}...")
-        WINDOW_SECS = 15  # 每次采集 15 秒，兼顾句子完整性与响应延迟
+        print(f"[audio-loop] ✓ 发现媒体流，开始流水线监听: {media_url[:80]}...")
 
-        while True:
-            try:
-                audio_bytes = await asyncio.to_thread(
-                    _capture_audio_clip_bytes, media_url, WINDOW_SECS
-                )
-                text = await asyncio.to_thread(
-                    _transcribe_zh_audio_bytes, audio_bytes, "live_loop.wav"
-                )
-                if text and len(text.strip()) > 3:
-                    raw = text.strip()
-                    # 并行：LLM 整理句子 + 风险分析
-                    polish_result, analysis = await asyncio.gather(
-                        _polish_transcript_async(raw),
-                        asyncio.to_thread(analyze_with_keywords, raw),
+        # 采集队列：maxsize=2 防止转写慢时积压过多
+        audio_queue: asyncio.Queue = asyncio.Queue(maxsize=2)
+
+        # 采集间隔：每轮采集完成后额外等待，防止 CPU 持续满载
+        # 可通过环境变量调整，默认 2s（采集 8s + 等待 2s = 每 10s 一轮）
+        CAPTURE_IDLE_SECS = float(os.getenv("AUDIO_CAPTURE_IDLE", "2"))
+
+        async def capture_worker():
+            """持续采集音频片段并放入队列（不等转写完成）。"""
+            error_count = 0
+            while True:
+                try:
+                    audio_bytes = await asyncio.to_thread(
+                        _capture_audio_clip_bytes, media_url, WINDOW_SECS
                     )
-                    display = polish_result["polished"]
-                    kws = polish_result["keywords"] or _extract_keywords_simple(raw)
-                    await callback({
-                        "event": "utterance",
-                        "id": int(time.time() * 1000),
-                        "text": raw,                # 原始转写（展开区显示）
-                        "display_text": display,    # 整理后句子（主要展示）
-                        "keywords": kws,
-                        "timestamp": time.strftime("%H:%M:%S"),
-                        "source": "audio",
-                        **analysis,
-                    })
-                    print(f"[audio-loop] 📝 原始: {raw[:50]}")
-                    print(f"[audio-loop] ✨ 整理: {display[:60]}{'...' if len(display)>60 else ''}")
-                else:
-                    print("[audio-loop] 静默片段，跳过")
-            except asyncio.CancelledError:
-                print("[audio-loop] 已停止")
-                break
-            except Exception as e:
-                print(f"[audio-loop] 采集/转写错误: {e}")
-                await asyncio.sleep(6)  # 出错后等 6s 再重试，防止过频重试
-                continue
-            # 短暂间隔，避免与上一窗口完全重叠
-            await asyncio.sleep(1)
+                    # 队列满时丢弃最旧片段（转写跟不上时避免内存堆积）
+                    if audio_queue.full():
+                        try:
+                            audio_queue.get_nowait()
+                            print("[audio-loop] 队列已满，丢弃旧片段")
+                        except asyncio.QueueEmpty:
+                            pass
+                    await audio_queue.put(audio_bytes)
+                    error_count = 0
+                    # 采集间隔：给 CPU 喘息空间，避免持续满载
+                    await asyncio.sleep(CAPTURE_IDLE_SECS)
+                except asyncio.CancelledError:
+                    print("[audio-loop] 采集线程已停止")
+                    break
+                except Exception as e:
+                    error_count += 1
+                    wait = min(3 * error_count, 15)
+                    print(f"[audio-loop] 采集错误（第{error_count}次）: {e}，等待 {wait}s 后重试")
+                    await asyncio.sleep(wait)
+
+        async def transcribe_worker():
+            """从队列取音频片段 → 转写 → 润色 → 推送 utterance 事件。"""
+            while True:
+                try:
+                    audio_bytes = await audio_queue.get()
+                    try:
+                        text = await asyncio.to_thread(
+                            _transcribe_zh_audio_bytes, audio_bytes, "live_loop.wav"
+                        )
+                        if text and len(text.strip()) > 3:
+                            raw = text.strip()
+                            # 并行：LLM 润色整理 + 规则风险分析
+                            polish_result, analysis = await asyncio.gather(
+                                _polish_transcript_async(raw),
+                                asyncio.to_thread(analyze_with_keywords, raw),
+                            )
+                            display = polish_result["polished"]
+                            kws = polish_result["keywords"] or _extract_keywords_simple(raw)
+                            await callback({
+                                "event": "utterance",
+                                "id": int(time.time() * 1000),
+                                "text": raw,             # 原始转写
+                                "display_text": display, # LLM 润色后句子（主要展示）
+                                "keywords": kws,
+                                "timestamp": time.strftime("%H:%M:%S"),
+                                "source": "audio",
+                                **analysis,
+                            })
+                            print(f"[audio-loop] 📝 原始: {raw[:50]}")
+                            print(f"[audio-loop] ✨ 润色: {display[:60]}{'...' if len(display) > 60 else ''}")
+                        else:
+                            print("[audio-loop] 静默片段，跳过")
+                    finally:
+                        audio_queue.task_done()
+                except asyncio.CancelledError:
+                    print("[audio-loop] 转写线程已停止")
+                    break
+                except Exception as e:
+                    print(f"[audio-loop] 转写/分析错误: {e}")
+
+        # 并发启动采集与转写两个协程
+        capture_task = asyncio.create_task(capture_worker())
+        transcribe_task = asyncio.create_task(transcribe_worker())
+        try:
+            await asyncio.gather(capture_task, transcribe_task)
+        except asyncio.CancelledError:
+            capture_task.cancel()
+            transcribe_task.cancel()
+            await asyncio.gather(capture_task, transcribe_task, return_exceptions=True)
+            print("[audio-loop] 流水线已停止")
 
     async def stream(self, callback):
         from douyin_cdp import stream_douyin_cdp
