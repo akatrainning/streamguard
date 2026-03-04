@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 
 /**
  * LiveDiscoverPage — 抖音直播间发现 + 对比分析
@@ -10,13 +10,15 @@ import { useMemo, useState } from "react";
  *  4. 勾选 2+ 个直播间 → "对比分析" → P1/P2 跨直播间商品对比
  */
 export default function LiveDiscoverPage({
-  apiBase = "http://localhost:8012",
+  apiBase = "http://localhost:8011",
   onConnectRoom,          // (roomId: string) => void
   utterances = [],
   chatMessages = [],
 }) {
   const [query, setQuery]           = useState("");
   const [searching, setSearching]   = useState(false);
+  const [searchElapsed, setSearchElapsed] = useState(0); // 搜索已耗秒数
+  const searchTimerRef              = useRef(null);
   const [searchResult, setResult]   = useState(null);   // { keyword, rooms, total, data_source }
   const [selectedIds, setSelected]  = useState([]);
   const [comparing, setComparing]   = useState(false);
@@ -24,6 +26,19 @@ export default function LiveDiscoverPage({
   const [budget, setBudget]         = useState("");
   const [need, setNeed]             = useState("");
   const [error, setError]           = useState("");
+
+  // 搜索计时器：每 200ms 更新已耗时
+  useEffect(() => {
+    if (searching) {
+      setSearchElapsed(0);
+      searchTimerRef.current = setInterval(() => {
+        setSearchElapsed((s) => s + 0.2);
+      }, 200);
+    } else {
+      clearInterval(searchTimerRef.current);
+    }
+    return () => clearInterval(searchTimerRef.current);
+  }, [searching]);
 
   const rooms = searchResult?.rooms || [];
 
@@ -113,10 +128,7 @@ export default function LiveDiscoverPage({
         </div>
 
         {searching && (
-          <div style={{ marginTop: 10, fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span>
-            正在抓取抖音直播间数据（首次可能需要 20-40 秒，请耐心等待…）
-          </div>
+          <SearchProgress elapsed={searchElapsed} />
         )}
 
         {searchResult && !searching && (
@@ -174,8 +186,28 @@ export default function LiveDiscoverPage({
         </Panel>
       )}
 
+      {/* Comparison loading */}
+      {comparing && (
+        <div style={{
+          background: "var(--bg-secondary)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: "18px 16px",
+          display: "flex", flexDirection: "column", gap: 10,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 20, animation: "searchSpin 1.5s linear infinite", display: "inline-block" }}>🤖</span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>AI 正在对比分析直播间…</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                调用大模型评估价格、品质、信任度等维度，通常需要 5~15 秒
+              </div>
+            </div>
+          </div>
+          <CompareDotsBar />
+        </div>
+      )}
+
       {/* Comparison result */}
-      {comparison && (
+      {comparison && !comparing && (
         <ComparisonResult comparison={comparison} keyword={query} selectedRooms={selectedRooms} />
       )}
     </div>
@@ -261,10 +293,10 @@ function LiveStreamCard({ room, rank, selected, onToggle, onEnter }) {
       {/* Info */}
       <div style={{ padding: "10px 12px", flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, wordBreak: "break-all" }}>
-          {room.title || "直播中"}
+          {room.room_title || room.title || "直播中"}
         </div>
         <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          🎙️ {room.streamer_name}
+          🎙️ {room.anchor_name || room.streamer_name || "主播"}
           {room.viewer_count > 0 && (
             <span style={{ marginLeft: 8 }}>👥 {fmtViewers(room.viewer_count)}</span>
           )}
@@ -319,39 +351,53 @@ function ComparisonResult({ comparison, keyword, selectedRooms }) {
   const { p0, p1, p2, engine, evidence_stats } = comparison || {};
 
   const verdictMap = {
-    BUY:  { c: "var(--fact)",  t: "综合推荐购买" },
-    WAIT: { c: "var(--hype)",  t: "建议先观望" },
-    SKIP: { c: "var(--trap)",  t: "不建议购买" },
+    BUY:  { c: "var(--fact)",  t: "综合推荐购买", icon: "✅" },
+    WAIT: { c: "var(--hype)",  t: "建议先观望",   icon: "⏳" },
+    SKIP: { c: "var(--trap)",  t: "不建议购买",   icon: "❌" },
   };
   const vm = verdictMap[(p0?.verdict || "WAIT")] || verdictMap.WAIT;
+  const engineLabel = engine === "llm" ? "🤖 AI 分析" : "📐 规则引擎";
 
   return (
     <Panel
       title="跨直播间对比分析"
-      subtitle={`关键词：${keyword} · 引擎：${engine || "llm"}`}
+      subtitle={`关键词：${keyword} · ${engineLabel}`}
     >
       {/* P0 Verdict */}
       {p0 && (
         <div style={{ display: "grid", gridTemplateColumns: "220px 1fr 1fr", gap: 10, marginBottom: 10 }}>
           <div style={{
             border: `1.5px solid ${vm.c}`, borderRadius: 8, padding: 12,
-            background: "var(--bg-tertiary)", display: "flex", flexDirection: "column", gap: 4,
+            background: "var(--bg-tertiary)", display: "flex", flexDirection: "column", gap: 6,
           }}>
             <div style={{ fontSize: 11, color: "var(--text-muted)" }}>综合结论</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: vm.c }}>{vm.t}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: vm.c }}>
+              {vm.icon} {vm.t}
+            </div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
               置信度 {Math.round((p0.confidence || 0.5) * 100)}%
             </div>
+            {evidence_stats && (
+              <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, lineHeight: 1.6 }}>
+                话术分析 {evidence_stats.utterance_count ?? 0} 条<br/>
+                弹幕分析 {evidence_stats.chat_count ?? 0} 条
+              </div>
+            )}
           </div>
           <BulletBox title="推荐理由" items={p0.why_buy || []} />
           <BulletBox title="谨慎因素" items={p0.why_not_buy || []} danger />
+        </div>
+      )}
+      {!p0 && (
+        <div style={{ padding: 20, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
+          ⚠ 未收到结构化分析结果，请检查后端日志
         </div>
       )}
 
       {/* P1 Comparison Table */}
       {p1?.compare_dimensions?.length > 0 && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>直播间垂类对比</div>
+          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>直播间维度对比</div>
           <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
@@ -410,6 +456,146 @@ function ComparisonResult({ comparison, keyword, selectedRooms }) {
         </div>
       )}
     </Panel>
+  );
+}
+
+/* ══ SearchProgress ══════════════════════════════════════ */
+const SEARCH_STAGES = [
+  { icon: "🚀", label: "启动无头浏览器",     start: 0,  end: 5  },
+  { icon: "🌐", label: "打开抖音搜索页面",   start: 5,  end: 15 },
+  { icon: "📡", label: "截获直播间 API 数据", start: 15, end: 28 },
+  { icon: "🤖", label: "AI 评估直播间质量",  start: 28, end: 38 },
+  { icon: "✨", label: "整理并排序结果",     start: 38, end: 45 },
+];
+const SEARCH_TOTAL = 45; // 预估总耗时（秒）
+
+function SearchProgress({ elapsed = 0 }) {
+  // 进度 0~95%（保留 5% 给最终完成）
+  const pct = Math.min(95, Math.round((elapsed / SEARCH_TOTAL) * 100));
+  const activeStageIdx = SEARCH_STAGES.findIndex(
+    (s) => elapsed >= s.start && elapsed < s.end
+  );
+  const currentStage = activeStageIdx >= 0 ? activeStageIdx : SEARCH_STAGES.length - 1;
+  const remainSec = Math.max(0, Math.round(SEARCH_TOTAL - elapsed));
+
+  return (
+    <div style={{
+      marginTop: 12, padding: "14px 16px",
+      background: "var(--bg-tertiary)",
+      border: "1px solid var(--border)",
+      borderRadius: 10,
+    }}>
+      {/* 顶部：标题 + 已耗时 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ animation: "searchSpin 1.2s linear infinite", display: "inline-block", fontSize: 14 }}>⏳</span>
+          正在抓取抖音直播间数据
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          已耗时 {Math.floor(elapsed)}s
+          {remainSec > 0 && <span style={{ marginLeft: 4 }}>· 预计还需 ~{remainSec}s</span>}
+        </div>
+      </div>
+
+      {/* 进度条 */}
+      <div style={{
+        height: 6, background: "var(--border)", borderRadius: 3, marginBottom: 12, overflow: "hidden",
+      }}>
+        <div style={{
+          height: "100%",
+          width: `${pct}%`,
+          borderRadius: 3,
+          background: "linear-gradient(90deg, var(--accent), var(--fact))",
+          transition: "width 0.3s ease",
+          boxShadow: "0 0 8px rgba(88,166,255,0.5)",
+        }} />
+      </div>
+
+      {/* 阶段步骤 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        {SEARCH_STAGES.map((stage, i) => {
+          const done    = elapsed >= stage.end;
+          const active  = i === currentStage && !done;
+          const pending = i > currentStage;
+          return (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 8,
+              opacity: pending ? 0.35 : 1,
+              transition: "opacity 0.3s",
+            }}>
+              {/* 状态图标 */}
+              <div style={{
+                width: 18, height: 18, borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, flexShrink: 0,
+                background: done
+                  ? "rgba(63,185,80,0.15)"
+                  : active
+                    ? "rgba(88,166,255,0.15)"
+                    : "var(--border)",
+                border: `1.5px solid ${done ? "var(--fact)" : active ? "var(--accent)" : "var(--border)"}`,
+              }}>
+                {done ? "✓" : active
+                  ? <span style={{ animation: "searchPulse 1s ease-in-out infinite", display: "inline-block", fontSize: 8 }}>●</span>
+                  : "○"}
+              </div>
+              {/* 阶段图标 + 文字 */}
+              <span style={{ fontSize: 11 }}>{stage.icon}</span>
+              <span style={{
+                fontSize: 12,
+                color: done ? "var(--fact)" : active ? "var(--text-primary)" : "var(--text-muted)",
+                fontWeight: active ? 600 : 400,
+              }}>
+                {stage.label}
+              </span>
+              {active && (
+                <span style={{ fontSize: 10, color: "var(--accent)", marginLeft: "auto" }}>
+                  进行中…
+                </span>
+              )}
+              {done && (
+                <span style={{ fontSize: 10, color: "var(--fact)", marginLeft: "auto" }}>
+                  完成
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ marginTop: 8, fontSize: 10, color: "var(--text-muted)", lineHeight: 1.6 }}>
+        💡 首次搜索需启动无头浏览器，约 20~45 秒；缓存命中时仅需 1~2 秒
+      </div>
+
+      {/* 内联动画样式 */}
+      <style>{`
+        @keyframes searchSpin  { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        @keyframes searchPulse { 0%,100% { opacity:1; transform:scale(1) } 50% { opacity:0.4; transform:scale(0.7) } }
+      `}</style>
+    </div>
+  );
+}
+
+/* ══ CompareDotsBar ══════════════════════════════════════ */
+function CompareDotsBar() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <div key={i} style={{
+          width: i % 2 === 0 ? 8 : 5,
+          height: i % 2 === 0 ? 8 : 5,
+          borderRadius: "50%",
+          background: "var(--accent)",
+          animation: `compareDot 1.2s ease-in-out ${i * 0.12}s infinite`,
+        }} />
+      ))}
+      <style>{`
+        @keyframes compareDot {
+          0%, 80%, 100% { transform: scale(0.4); opacity: 0.3; }
+          40% { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+    </div>
   );
 }
 

@@ -1186,51 +1186,157 @@ async def compare_streams(request: CompareStreamsRequest):
     """
     跨直播间商品对比分析（LLM 评估）
     输入: 关键词 + 选中的直播间列表
-    返回: { suite_name, p1, p2, conclusion, evidence_stats, llm_analysis }
+    返回: { p0, p1, p2, engine, keyword, evidence_stats }
+      p0: 综合结论 { verdict, confidence, why_buy, why_not_buy }
+      p1: 维度对比表 { compare_dimensions, products, ranked }
+      p2: 行动建议 { ask_anchor_questions, alternatives, buy_timing, action_plan }
     """
     keyword = request.keyword.strip()
     rooms = request.rooms
-    
+    user_profile = request.user_profile or {}
+
     if not keyword or len(keyword) < 2:
         raise HTTPException(status_code=400, detail="关键词无效")
     if len(rooms) < 2:
         raise HTTPException(status_code=400, detail="至少需要 2 个直播间进行对比")
-    
-    # 简化版对比分析
-    p1_room = rooms[0]
-    p2_room = rooms[1] if len(rooms) > 1 else rooms[0]
-    
+
+    compare_dims = ["价格", "品质", "信任度", "物流", "性价比"]
+
+    # ─── LLM 生成 ───────────────────────────────────────────────
+    if client_async and LLM_API_KEY:
+        rooms_desc = "\n".join(
+            f"- 直播间{i+1}（{r.room_id}）：主播={r.anchor_name or '未知'}，"
+            f"标题={r.room_title or '未知'}，观看人数={r.viewer_count or 0}，"
+            f"推荐分={r.recommendation_score or 0.5:.2f}"
+            for i, r in enumerate(rooms)
+        )
+        user_str = ""
+        if user_profile.get("budget"):
+            user_str += f"\n用户预算：{user_profile['budget']}"
+        if user_profile.get("core_need"):
+            user_str += f"\n用户核心需求：{user_profile['core_need']}"
+
+        room_names = [r.anchor_name or r.room_id for r in rooms]
+        dims_str = str(compare_dims)
+
+        prompt = f"""你是直播电商消费顾问，请对以下直播间进行"{keyword}"商品的综合对比分析。
+
+【直播间列表】
+{rooms_desc}{user_str}
+
+请严格返回以下 JSON 格式（不要任何额外文字）：
+{{
+  "p0": {{
+    "verdict": "BUY",
+    "confidence": 0.78,
+    "why_buy": ["推荐理由1（结合具体直播间）", "推荐理由2", "推荐理由3"],
+    "why_not_buy": ["谨慎因素1", "谨慎因素2"]
+  }},
+  "p1": {{
+    "compare_dimensions": {dims_str},
+    "products": [
+      {{
+        "name": "{room_names[0] if room_names else '直播间1'}",
+        "scores": {{"价格": 0.75, "品质": 0.80, "信任度": 0.70, "物流": 0.85, "性价比": 0.78}},
+        "overall": 0.78
+      }}
+    ],
+    "ranked": {str(room_names)}
+  }},
+  "p2": {{
+    "ask_anchor_questions": ["问题1（针对{keyword}）", "问题2", "问题3"],
+    "alternatives": ["替代方案1", "替代方案2"],
+    "buy_timing": "建议在XX情况下下单",
+    "action_plan": ["行动步骤1", "行动步骤2", "行动步骤3"]
+  }}
+}}
+
+verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(rooms)} 个直播间；scores 各维度值为 0~1 的小数。"""
+
+        try:
+            resp = await client_async.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": "你是直播电商消费顾问，只返回合法 JSON，不要 markdown 代码块。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+                max_tokens=1400,
+            )
+            raw = resp.choices[0].message.content or "{}"
+            # 去除可能的 markdown 代码块
+            if "```json" in raw:
+                raw = raw.split("```json")[1].split("```")[0]
+            elif "```" in raw:
+                raw = raw.split("```")[1].split("```")[0]
+            result = json.loads(raw.strip())
+            result["engine"] = "llm"
+            result["keyword"] = keyword
+            result["evidence_stats"] = {"utterance_count": 0, "chat_count": 0}
+            return result
+        except Exception as e:
+            print(f"[compare] LLM 生成失败: {e}，降级到规则引擎")
+
+    # ─── 规则引擎兜底 ─────────────────────────────────────────
+    def _room_score(room, dim):
+        base = float(room.recommendation_score or 0.5)
+        dim_bias = {"价格": -0.05, "品质": 0.06, "信任度": 0.0, "物流": 0.03, "性价比": -0.02}
+        popularity_bonus = 0.08 if (room.viewer_count or 0) > 1000 else 0.0
+        return round(min(1.0, max(0.0, base + dim_bias.get(dim, 0) + popularity_bonus)), 2)
+
+    products = [
+        {
+            "name": r.anchor_name or r.room_id,
+            "scores": {d: _room_score(r, d) for d in compare_dims},
+            "overall": round(float(r.recommendation_score or 0.5), 2),
+        }
+        for r in rooms
+    ]
+    ranked_products = sorted(products, key=lambda x: x["overall"], reverse=True)
+    top_room = ranked_products[0]["name"]
+    top_score = ranked_products[0]["overall"]
+
+    verdict = "BUY" if top_score >= 0.7 else ("WAIT" if top_score >= 0.5 else "SKIP")
+
     return {
-        "suite_name": "full-suite",
+        "engine": "rule",
         "keyword": keyword,
+        "p0": {
+            "verdict": verdict,
+            "confidence": round(top_score, 2),
+            "why_buy": [
+                f"{top_room} 综合推荐分最高（{round(top_score*100)}分）",
+                f"观看人数 {rooms[0].viewer_count} 人，直播间热度较高" if rooms[0].viewer_count else f"关键词 [{keyword}] 匹配度高",
+                "建议进入直播间后开启 StreamGuard 监控获取实时话术分析",
+            ],
+            "why_not_buy": [
+                "当前分析仅基于标题和观看人数，缺乏实时话术数据",
+                "建议开启监控模式获取更全面的风险评估",
+            ],
+        },
         "p1": {
-            "room_id": p1_room.room_id,
-            "anchor_name": p1_room.anchor_name or "主播A",
-            "tier": "Premium",
-            "product_description": f"{keyword} 精选品",
-            "price_range": "¥38-58",
-            "delivery_promise": "48 小时送达",
-            "authenticity_signal": "原产地直供认证",
+            "compare_dimensions": compare_dims,
+            "products": products,
+            "ranked": [p["name"] for p in ranked_products],
         },
         "p2": {
-            "room_id": p2_room.room_id,
-            "anchor_name": p2_room.anchor_name or "主播B",
-            "tier": "Standard",
-            "product_description": f"{keyword} 常规版",
-            "price_range": "¥28-48",
-            "delivery_promise": "3-5 天送达",
-            "authenticity_signal": "第三方检测报告",
+            "ask_anchor_questions": [
+                f"这款{keyword}的产地和生产日期是什么？",
+                "是否有质量检测报告或官方认证？",
+                "退换货政策和售后保障具体是什么？",
+            ],
+            "alternatives": [
+                f'在电商平台搜索"{keyword} 旗舰店"对比价格',
+                "建议查看近期用户评价后再决定购买",
+            ],
+            "buy_timing": f"建议在主播给出额外优惠（折扣码/赠品）时下单，避免在限时倒计时压力下冲动消费",
+            "action_plan": [
+                "先加入购物车不付款，观察价格是否持续变动",
+                "点击【进入直播间】并开启 StreamGuard 实时监控",
+                f"对比 {len(rooms)} 个直播间的话术风险后再做决定",
+            ],
         },
-        "conclusion": f"综合对比：主播A({p1_room.anchor_name or 'A'})商品更优，价格溢价 20%，但承诺更强",
-        "evidence_stats": {
-            "utterance_count": 0,
-            "chat_count": 0,
-        },
-        "llm_analysis": {
-            "p1_advantages": ["质量认证完整", "物流速度快", "原产地背书"],
-            "p2_advantages": ["价格更实惠", "评价量更大"],
-            "recommendation": "如果预算允许，选 P1；追求性价比选 P2",
-        },
+        "evidence_stats": {"utterance_count": 0, "chat_count": 0},
     }
 
 

@@ -8,7 +8,7 @@ const SOURCES = [
 export default function DataSourceSelector({ onSelect, onConnect }) {
   const [selected, setSelected] = useState(null);
   const [roomInput, setRoomInput] = useState("");
-  const [wsBase, setWsBase] = useState("ws://localhost:8012");
+  const [wsBase, setWsBase] = useState("ws://localhost:8011");
   const [probeLoading, setProbeLoading] = useState(false);
   const [probeData, setProbeData]   = useState(null);   // null | { reachable, url, live_hint, error? }
 
@@ -22,7 +22,7 @@ export default function DataSourceSelector({ onSelect, onConnect }) {
     setProbeLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const httpBase = (wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
+        const httpBase = (wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
         const res = await fetch(`${httpBase}/douyin/room-info/${roomId}`);
         const data = res.ok ? await res.json() : { error: `HTTP ${res.status}` };
         setProbeData(data);
@@ -38,8 +38,8 @@ export default function DataSourceSelector({ onSelect, onConnect }) {
   const handleConnect = () => {
     if (!canConnect) return;
     const config = selected === "douyin"
-      ? { roomId: roomId.trim(), wsBase: wsBase.trim() || "ws://localhost:8012" }
-      : { wsBase: wsBase.trim() || "ws://localhost:8012" };
+      ? { roomId: roomId.trim(), wsBase: wsBase.trim() || "ws://localhost:8011" }
+      : { wsBase: wsBase.trim() || "ws://localhost:8011" };
     onSelect(selected, config);
     onConnect?.(selected, config);
   };

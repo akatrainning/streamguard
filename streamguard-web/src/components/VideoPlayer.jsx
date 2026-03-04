@@ -16,7 +16,7 @@ function extractRoomId(input = "") {
   return d ? d[1] : "";
 }
 
-export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localhost:8012" }) {
+export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localhost:8011" }) {
   const roomId = extractRoomId(roomIdRaw || "");
   const videoRef = useRef(null);
   const [loading, setLoading] = useState(false);

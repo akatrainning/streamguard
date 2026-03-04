@@ -14,6 +14,7 @@ import DataSourceSelector from "./components/DataSourceSelector";
 import CommandCenter from "./components/CommandCenter";
 import LiveVideoPlayer from "./components/LiveVideoPlayer";
 import SessionReportModal from "./components/SessionReportModal";
+import SwitchRoomModal from "./components/SwitchRoomModal";
 import HistoryPage from "./pages/HistoryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import RulesPage from "./pages/RulesPage";
@@ -31,12 +32,15 @@ export default function App() {
   const [sessionSnapshot, setSessionSnapshot] = useState(null); // 非 null 时展示报告
   const sessionStartRef = useRef(null); // 记录连接成功时间
   const feedRef = useRef(null);
+  // 切换直播间确认弹窗
+  const [pendingRoomId, setPendingRoomId] = useState(null); // 弹窗中显示用
+  const pendingRoomIdRef = useRef(null);                    // handleReportClose 读取用
 
   const simulated = useSimulatedStream();
   const realStream = useRealStream({
     mode: dataSource === "douyin" ? "douyin" : "mock",
     roomId: sourceConfig.roomId,
-    wsBase: sourceConfig.wsBase || "ws://localhost:8012",
+    wsBase: sourceConfig.wsBase || "ws://localhost:8011",
     enabled: dataSource === "douyin",
   });
 
@@ -66,7 +70,7 @@ export default function App() {
     mediaUrl,
   } = streamData || {};
 
-  const apiBase = (sourceConfig.wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
+  const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
 
   /** 点击"结束监控"：冻结快照 → 断开连接 → 弹出报告 */
   const handleEndSession = useCallback(() => {
@@ -85,14 +89,27 @@ export default function App() {
     realStream.disconnect?.();
   }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, realStream]);
 
-  /** 报告关闭 → 完全重置，回到数据源选择 */
+  /** 报告关闭 → 若有待切换房间则跳转，否则回到数据源选择 */
   const handleReportClose = useCallback(() => {
     setSessionSnapshot(null);
     reset();
     sessionStartRef.current = null;
-    setDataSource(null);
-    setSourceConfig({});
-    setPage("dashboard");
+    const nextRoom = pendingRoomIdRef.current;
+    if (nextRoom) {
+      pendingRoomIdRef.current = null;
+      setPendingRoomId(null);
+      setDataSource("douyin");
+      setSourceConfig((prev) => ({
+        ...prev,
+        roomId: nextRoom,
+        wsBase: prev.wsBase || "ws://localhost:8011",
+      }));
+      setPage("dashboard");
+    } else {
+      setDataSource(null);
+      setSourceConfig({});
+      setPage("dashboard");
+    }
   }, [reset]);
 
   const jumpToUtterance = useCallback((uid) => {
@@ -111,15 +128,50 @@ export default function App() {
   }, []);
 
   // Called from LiveDiscoverPage when user clicks "进入直播间"
-  const handleConnectRoom = useCallback((roomId) => {
+  /** 实际执行切换：清空旧数据 → 断开旧连接 → 连新房间 */
+  const doSwitchRoom = useCallback((roomId) => {
+    reset();
+    realStream.disconnect?.();
+    sessionStartRef.current = null;
+    setPendingRoomId(null);
+    pendingRoomIdRef.current = null;
     setDataSource("douyin");
     setSourceConfig((prev) => ({
       ...prev,
       roomId,
-      wsBase: prev.wsBase || "ws://localhost:8012",
+      wsBase: prev.wsBase || "ws://localhost:8011",
     }));
     setPage("dashboard");
-  }, []);
+  }, [reset, realStream]);
+
+  /** 从发现页点击"进入直播间"：有监控数据时弹确认框，否则直接切换 */
+  const handleConnectRoom = useCallback((roomId) => {
+    const hasData = utterances.length > 0 || chatMessages.length > 0;
+    const isSameRoom = sourceConfig.roomId === roomId;
+    if (hasData && dataSource === "douyin" && !isSameRoom) {
+      pendingRoomIdRef.current = roomId;
+      setPendingRoomId(roomId);
+    } else {
+      doSwitchRoom(roomId);
+    }
+  }, [utterances.length, chatMessages.length, dataSource, sourceConfig.roomId, doSwitchRoom]);
+
+  /** 保存报告后切换：先冻结快照弹报告弹窗，报告关闭后 handleReportClose 再跳转 */
+  const handleSaveAndSwitch = useCallback(() => {
+    setSessionSnapshot({
+      utterances: [...utterances],
+      chatMessages: [...chatMessages],
+      stats: { ...sessionStats },
+      rationalityIndex,
+      riskData: [...riskData],
+      roomId: sourceConfig.roomId || null,
+      startTime: sessionStartRef.current,
+      endTime: Date.now(),
+    });
+    realStream.disconnect?.();
+    // 关闭确认弹窗，pendingRoomIdRef 保留新 roomId 供 handleReportClose 使用
+    setPendingRoomId(null);
+  }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, realStream]);
 
   if (entryStep === "welcome") {
     return <WelcomePage onEnter={() => setEntryStep("app")} />;
@@ -177,7 +229,7 @@ export default function App() {
           {sourceConfig.roomId && (
             <VideoPlayer
               roomId={sourceConfig.roomId}
-              wsBase={sourceConfig.wsBase || "http://localhost:8012"}
+              wsBase={sourceConfig.wsBase || "http://localhost:8011"}
             />
           )}
 
@@ -263,6 +315,22 @@ export default function App() {
           snapshot={sessionSnapshot}
           apiBase={apiBase}
           onClose={handleReportClose}
+        />
+      )}
+
+      {/* 切换直播间确认弹窗 */}
+      {pendingRoomId && !sessionSnapshot && (
+        <SwitchRoomModal
+          fromRoomId={sourceConfig.roomId}
+          toRoomId={pendingRoomId}
+          stats={sessionStats}
+          startTime={sessionStartRef.current}
+          onSaveAndSwitch={handleSaveAndSwitch}
+          onDirectSwitch={() => doSwitchRoom(pendingRoomId)}
+          onCancel={() => {
+            setPendingRoomId(null);
+            pendingRoomIdRef.current = null;
+          }}
         />
       )}
     </div>

@@ -419,10 +419,14 @@ def _search_via_selenium(keyword: str, max_results: int, timeout_sec: int = 30) 
         # ==================================================================
         # 阶段 1：初始化浏览器（uc 优先 → 标准 selenium 回退）
         # ==================================================================
+        # 默认无头模式（不弹出浏览器窗口），可通过环境变量 DOUYIN_SHOW_BROWSER=1 关闭以便调试
+        _show_browser = os.environ.get("DOUYIN_SHOW_BROWSER", "0").strip() in ("1", "true", "yes")
+        _headless = not _show_browser
+
         try:
             import undetected_chromedriver as uc
             chrome_ver = _get_chrome_major_version()
-            print(f"[search-selenium] 尝试 undetected-chromedriver, Chrome v{chrome_ver}")
+            print(f"[search-selenium] 尝试 undetected-chromedriver, Chrome v{chrome_ver}, headless={_headless}")
 
             uc_opts = uc.ChromeOptions()
             uc_opts.add_argument("--no-sandbox")
@@ -430,8 +434,10 @@ def _search_via_selenium(keyword: str, max_results: int, timeout_sec: int = 30) 
             uc_opts.add_argument("--mute-audio")
             uc_opts.add_argument("--window-size=1280,900")
             uc_opts.add_argument("--log-level=3")
+            if _headless:
+                uc_opts.add_argument("--disable-gpu")
 
-            uc_kwargs = dict(options=uc_opts, headless=False, use_subprocess=True)
+            uc_kwargs = dict(options=uc_opts, headless=_headless, use_subprocess=True)
             if chrome_ver > 0:
                 uc_kwargs["version_main"] = chrome_ver
 
@@ -467,9 +473,9 @@ def _search_via_selenium(keyword: str, max_results: int, timeout_sec: int = 30) 
             print(f"[search-selenium] 标准 selenium, driver={chromedriver_path}")
 
             opts = Options()
-            # headless 模式控制
-            if os.environ.get("DOUYIN_HEADLESS", "").strip() in ("1", "true", "yes"):
-                opts.add_argument("--headless")
+            # 无头模式（默认开启，DOUYIN_SHOW_BROWSER=1 时关闭）
+            if _headless:
+                opts.add_argument("--headless=new")
                 opts.add_argument("--disable-gpu")
             else:
                 opts.add_argument("--start-minimized")
