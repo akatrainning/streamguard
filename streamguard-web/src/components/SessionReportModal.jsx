@@ -191,7 +191,6 @@ function doExportJson(snapshot, aiAdvice) {
 
 // ─── 主组件 ──────────────────────────────────────────────────────
 export default function SessionReportModal({ snapshot, apiBase, onClose, onDismiss }) {
-  console.log("[SessionReportModal] 组件被渲染！snapshot:", snapshot);
   const [aiAdvice, setAiAdvice]     = useState(null);
   const [aiSummary, setAiSummary]   = useState("");
   const [aiLoading, setAiLoading]   = useState(true);

@@ -1,4 +1,4 @@
-﻿import { useRef, useCallback, useState, useMemo } from "react";
+﻿import { useRef, useCallback, useState, useMemo, useEffect } from "react";
 import "./App.css";
 import { useSimulatedStream } from "./hooks/useSimulatedStream";
 import { useRealStream } from "./hooks/useRealStream";
@@ -21,6 +21,7 @@ import RulesPage from "./pages/RulesPage";
 import ConsumerAdvisorPage from "./pages/ConsumerAdvisorPage";
 import LiveDiscoverPage from "./pages/LiveDiscoverPage";
 import WelcomePage from "./pages/WelcomePage";
+import { buildHistoryEntry, saveSession } from "./utils/historyStorage";
 
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
@@ -30,8 +31,10 @@ export default function App() {
   const [entryStep, setEntryStep] = useState("welcome");
   const [showSourceSelector, setShowSourceSelector] = useState(false);
   // 蝏???詨?嗆?
-  const [sessionSnapshot, setSessionSnapshot] = useState(null); // ??null ?嗅?蝷箸??
-  const sessionStartRef = useRef(null); // 霈啣?餈???園
+  const [sessionSnapshot, setSessionSnapshot] = useState(null); // ??null ????????
+  const [showReportModal, setShowReportModal] = useState(false);
+  const sessionStartRef = useRef(null); // ????????????
+  const endingRef = useRef(false);
   const feedRef = useRef(null);
   // ??湔?渡＆霈文撕蝒?
   const [pendingRoomId, setPendingRoomId] = useState(null); // 撘寧?銝剜蝷箇
@@ -72,10 +75,23 @@ export default function App() {
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
 
+  useEffect(() => {
+    if (!sessionSnapshot) {
+      setShowReportModal(false);
+      endingRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => setShowReportModal(true), 100);
+    return () => clearTimeout(timer);
+  }, [sessionSnapshot]);
+
+
   /** ?孵"蝏??"嚗蝏翰?????剖?餈 ??撘孵?亙? */
   const handleEndSession = useCallback(() => {
-    // ?餌?敶??唳敹怎
-    setSessionSnapshot({
+    if (endingRef.current) return;
+    endingRef.current = true;
+
+    const snap = {
       utterances: [...utterances],
       chatMessages: [...chatMessages],
       stats: { ...sessionStats },
@@ -84,41 +100,57 @@ export default function App() {
       roomId: sourceConfig.roomId || null,
       startTime: sessionStartRef.current,
       endTime: Date.now(),
-    });
-    // ?剖? WebSocket嚗?甇Ｚ?券?餈?
+      viewerCount,
+    };
+
+    try {
+      const entry = buildHistoryEntry(snap, viewerCount || 0);
+      saveSession(entry, snap, apiBase);
+      console.log("[history] session saved:", entry.id);
+    } catch (e) {
+      console.error("[history] save failed:", e);
+    }
+
+    setSessionSnapshot(snap);
     realStream.disconnect?.();
-  }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, realStream]);
+  }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, viewerCount, apiBase, realStream]);
 
   /** ?亙??喲 ???交?敺??Ｘ?游?頝唾蓮嚗???唳?格?? */
   const handleReportClose = useCallback(() => {
+    setShowReportModal(false);
     setSessionSnapshot(null);
     reset();
     sessionStartRef.current = null;
+
     const nextRoom = pendingRoomIdRef.current;
     if (nextRoom) {
       pendingRoomIdRef.current = null;
       setPendingRoomId(null);
-      setDataSource("douyin");
       setSourceConfig((prev) => ({
         ...prev,
         roomId: nextRoom,
         wsBase: prev.wsBase || "ws://localhost:8011",
       }));
       setPage("dashboard");
-    } else {
-      setDataSource(null);
-      setSourceConfig({});
-      setPage("dashboard");
+      setTimeout(() => realStream.reconnectNow?.(), 0);
+      return;
     }
-  }, [reset]);
+
+    if (dataSource === "douyin" && sourceConfig.roomId) {
+      setTimeout(() => realStream.reconnectNow?.(), 0);
+    }
+  }, [reset, dataSource, sourceConfig.roomId, realStream]);
 
   // Close report modal only, then resume live connection when possible.
   const handleReportDismiss = useCallback(() => {
+    setShowReportModal(false);
     setSessionSnapshot(null);
+    reset();
+    sessionStartRef.current = null;
     if (dataSource === "douyin" && sourceConfig.roomId) {
-      realStream.reconnectNow?.();
+      setTimeout(() => realStream.reconnectNow?.(), 0);
     }
-  }, [dataSource, sourceConfig.roomId, realStream]);
+  }, [reset, dataSource, sourceConfig.roomId, realStream]);
 
   const jumpToUtterance = useCallback((uid) => {
     if (page !== "dashboard") setPage("dashboard");
@@ -212,7 +244,7 @@ export default function App() {
         viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
         isPaused={isPaused} setIsPaused={setIsPaused}
         onReset={reset} onExport={handleExport}
-        onEnd={dataSource !== "mock" ? handleEndSession : undefined}
+        onEnd={handleEndSession}
         sessionStats={sessionStats}
         currentSource={dataSource}
         onSwitchSource={() => setShowSourceSelector(true)}
@@ -498,8 +530,8 @@ export default function App() {
         </div>
       )}
 
-      {/* 隡??餌??亙?撘寧?嚗????批?撅內嚗?/}
-      {sessionSnapshot && (
+      {/* Session Report Modal - delayed display to avoid Chrome crash */}
+      {showReportModal && sessionSnapshot && (
         <SessionReportModal
           snapshot={sessionSnapshot}
           apiBase={apiBase}
@@ -527,4 +559,6 @@ export default function App() {
     </div>
   );
 }
+
+
 
