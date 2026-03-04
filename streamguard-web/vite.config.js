@@ -19,12 +19,20 @@ export default defineConfig({
     proxy: {
       // forward API calls to the backend during development
       "/douyin": {
-        target: "http://localhost:8000",
+        target: "http://localhost:8011",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://localhost:8000",
+        target: "ws://localhost:8011",
         ws: true,
+      },
+      "/consumer": {
+        target: "http://localhost:8011",
+        changeOrigin: true,
+      },
+      "/session": {
+        target: "http://localhost:8011",
+        changeOrigin: true,
       },
     },
   },

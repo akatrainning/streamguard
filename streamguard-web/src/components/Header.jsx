@@ -46,8 +46,8 @@ export default function Header({
               animation: !connectionStatus.connected && !connectionStatus.error ? "blink 1s infinite" : "none",
             }} />
             {connectionStatus.connected
-              ? `\u5df2\u8fde\u63a5 ${connectionStatus.roomId}`
-              : connectionStatus.error ? "\u8fde\u63a5\u5931\u8d25" : "\u8fde\u63a5\u4e2d\u2026"}
+              ? `已连接 ${connectionStatus.roomId}`
+              : connectionStatus.error ? "连接失败" : "连接中…"}
           </div>
         )}
 
@@ -55,19 +55,19 @@ export default function Header({
         <div style={{ display: "flex", gap: 14, marginLeft: "auto", alignItems: "center", fontSize: 12, color: "var(--text-secondary)" }}>
           <span>{"\u{1f441}"} {viewerCount.toLocaleString()}</span>
           <span>{"\u{1f4ac}"} {utteranceCount}</span>
-          <Stat color="var(--fact)" value={sessionStats.fact || 0} label="\u4e8b\u5b9e" />
-          <Stat color="var(--hype)" value={sessionStats.hype || 0} label="\u5938\u5927" />
-          <Stat color="var(--trap)" value={sessionStats.trap || 0} label="\u9677\u9631" />
+          <Stat color="var(--fact)" value={sessionStats.fact || 0} label="事实" />
+          <Stat color="var(--hype)" value={sessionStats.hype || 0} label="夸大" />
+          <Stat color="var(--trap)" value={sessionStats.trap || 0} label="陷阱" />
           {trapRate > 0 && (
             <span style={{
               fontWeight: 600,
               color: trapRate >= 30 ? "var(--trap)" : trapRate >= 15 ? "var(--hype)" : "var(--fact)",
             }}>
-              {"\u98ce\u9669"} {trapRate}%
+              风险 {trapRate}%
             </span>
           )}
           {isPaused && (
-            <span style={{ color: "var(--hype)", fontWeight: 600 }}>{"\u23f8"} \u5df2\u6682\u505c</span>
+            <span style={{ color: "var(--hype)", fontWeight: 600 }}>⏸ 已暂停</span>
           )}
         </div>
 
@@ -75,14 +75,14 @@ export default function Header({
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
           {currentSource && (
             <Btn onClick={onSwitchSource}>
-              {currentSource === "mock" ? "\u6a21\u62df" : "\u6296\u97f3"} \u25be
+              {currentSource === "mock" ? "模拟" : "抖音"} ⋮
             </Btn>
           )}
           <Btn onClick={() => setIsPaused(p => !p)}>
-            {isPaused ? "\u25b6 \u7ee7\u7eed" : "\u23f8 \u6682\u505c"}
+            {isPaused ? "▶ 继续" : "⏸ 暂停"}
           </Btn>
-          <Btn onClick={onReset}>{"\u91cd\u7f6e"}</Btn>
-          <Btn onClick={onExport}>{"\u5bfc\u51fa"}</Btn>
+          <Btn onClick={onReset}>重置</Btn>
+          <Btn onClick={onExport}>导出</Btn>
           {onEnd && (
             <Btn onClick={onEnd} danger>
               ⏹ 结束监控

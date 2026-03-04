@@ -56,17 +56,18 @@ echo [3] Starting backend server...
 echo.
 
 echo ========================================
-echo Backend is starting at http://localhost:8000
+echo Backend is starting at http://localhost:8011
 echo ========================================
 echo.
 echo Available endpoints:
-echo   GET  http://localhost:8000/health
-echo   GET  http://localhost:8000/analyze?text=...
-echo   POST http://localhost:8000/transcribe
-echo   POST http://localhost:8000/analyze-with-transcript
-echo   WS   ws://localhost:8000/ws/stream
+echo   GET  http://localhost:8011/health
+echo   WS   ws://localhost:8011/ws/stream
+echo   WS   ws://localhost:8011/ws/douyin/{room_id}
+echo   GET  http://localhost:8011/consumer/search-live-streams?q=...
+echo   POST http://localhost:8011/consumer/compare-streams
+echo   POST http://localhost:8011/session/summary
 echo.
 echo To stop: Press Ctrl+C
 echo.
 
-python -m uvicorn app:app --reload --port 8000
+python -m uvicorn app:app --reload --host 0.0.0.0 --port 8011
