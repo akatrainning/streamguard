@@ -6,13 +6,21 @@ dist/
 wheels/
 *.egg-info
 
-# Model cache (large files, do not commit)
+# Model cache / large binary files (do not commit)
 whisper_cache/
 streamguard-backend/whisper_cache/
+streamguard-backend/whisper_base_model/
+streamguard-backend/*.zip
+streamguard-backend/*.bin
+streamguard-backend/*.pt
 
 # Chrome user profile (Douyin login session, auto-generated, do not commit)
 streamguard-backend/chrome_profile_douyin/
 streamguard-backend/chrome_profile/
+
+# Runtime / test artefacts
+streamguard-backend/douyin_cookies.json
+streamguard-backend/test_*.py
 
 .ipynb_checkpoints/
 
