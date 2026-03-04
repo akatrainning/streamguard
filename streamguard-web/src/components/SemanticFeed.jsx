@@ -53,6 +53,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
     <div style={{
       background: "var(--bg-secondary)", border: "1px solid var(--border)",
       borderRadius: 10, overflow: "hidden", flex: 1,
+      display: "flex", flexDirection: "column", minHeight: 0,
     }}>
       {/* Header */}
       <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
@@ -102,7 +103,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
       </div>
 
       {/* Utterance list */}
-      <div ref={scrollRef} style={{ height: 340, overflowY: "auto", padding: "6px 12px" }}>
+      <div ref={scrollRef} style={{ flex: 1, minHeight: 220, overflowY: "auto", padding: "6px 12px" }}>
         {filtered.map(item => {
           const cfg = TYPE_CFG[item.type];
           const isOpen = expandedId === (item.uid || item.id);

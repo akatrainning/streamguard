@@ -1,4 +1,5 @@
 import { useRef, useCallback, useState, useMemo } from "react";
+import "./App.css";
 import { useSimulatedStream } from "./hooks/useSimulatedStream";
 import { useRealStream } from "./hooks/useRealStream";
 import Header from "./components/Header";
@@ -185,7 +186,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", paddingBottom: 32 }}>
+    <div className="app-shell">
       <Header
         page={page} setPage={setPage}
         viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
@@ -203,8 +204,9 @@ export default function App() {
         } : null}
       />
 
+      <main className="app-main">
       {page === "dashboard" && (
-        <div style={{ maxWidth: 1500, margin: "0 auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="dashboard-page">
           <CommandCenter
             dataSource={dataSource}
             sourceConfig={sourceConfig}
@@ -223,17 +225,10 @@ export default function App() {
             onReconnect={() => realStream.reconnectNow?.()}
           />
 
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: dataSource === "douyin"
-              ? "minmax(420px, 1.2fr) minmax(360px, 1fr) minmax(420px, 1.6fr)"
-              : "minmax(420px, 1.2fr) minmax(520px, 1.8fr)",
-            gap: 14,
-            alignItems: "start",
-          }}>
+          <div className={`dashboard-grid ${dataSource === "douyin" ? "dashboard-grid-live" : "dashboard-grid-mock"}`}>
             {/* 列 1（仅抖音模式）：保留可正常播放的大视频，并拉伸到与右侧两列对齐 */}
             {dataSource === "douyin" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, alignSelf: "stretch" }}>
+              <div className="dashboard-col dashboard-col-video">
                 {sourceConfig.roomId ? (
                   <VideoPlayer
                     roomId={sourceConfig.roomId}
@@ -245,6 +240,10 @@ export default function App() {
                     border: "1px solid var(--border)",
                     borderRadius: 10,
                     overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    flex: 1,
+                    minHeight: 0,
                   }}>
                     <div style={{
                       padding: "10px 14px",
@@ -258,7 +257,8 @@ export default function App() {
                     </div>
                     <div style={{
                       background: "#000",
-                      aspectRatio: "16/9",
+                      flex: 1,
+                      minHeight: 260,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -272,13 +272,13 @@ export default function App() {
               </div>
             )}
             {/* 列 2：弹幕实时流 + 语义分析 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div className="dashboard-col dashboard-col-feed">
               <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
               <SemanticFeed ref={feedRef} utterances={utterances} />
             </div>
             {/* 列 3：图表 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="dashboard-col dashboard-col-analytics">
+              <div className="dashboard-top-cards">
                 <RationalityGauge value={rationalityIndex} utterances={utterances} />
                 <RiskRadar data={riskData} />
               </div>
@@ -306,6 +306,7 @@ export default function App() {
       )}
       {page === "analytics" && <AnalyticsPage />}
       {page === "rules" && <RulesPage />}
+      </main>
 
       <AlertBanner alerts={alerts} onDismiss={() => {}} onJumpTo={jumpToUtterance} />
 
@@ -355,8 +356,7 @@ export default function App() {
       )}
       {/* 粘性页脚 */}
       <footer style={{
-        position: "fixed",
-        bottom: 0, left: 0, right: 0,
+        position: "relative",
         height: 32,
         background: "rgba(10,10,18,0.92)",
         backdropFilter: "blur(8px)",
@@ -365,7 +365,7 @@ export default function App() {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 20px",
-        zIndex: 900,
+        zIndex: 1,
         flexShrink: 0,
       }}>
         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
