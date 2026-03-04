@@ -185,7 +185,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh" }}>
+    <div style={{ minHeight: "100vh", paddingBottom: 32 }}>
       <Header
         page={page} setPage={setPage}
         viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
@@ -353,6 +353,36 @@ export default function App() {
           }}
         />
       )}
+      {/* 粘性页脚 */}
+      <footer style={{
+        position: "fixed",
+        bottom: 0, left: 0, right: 0,
+        height: 32,
+        background: "rgba(10,10,18,0.92)",
+        backdropFilter: "blur(8px)",
+        borderTop: "1px solid var(--border)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 20px",
+        zIndex: 900,
+        flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          🛡️ <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>StreamGuard</span>
+          &nbsp;· 直播合规监测平台
+        </span>
+        <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>
+          {dataSource === "douyin" && sourceConfig.roomId
+            ? `🔴 LIVE · 房间号 ${sourceConfig.roomId}`
+            : dataSource === "mock"
+            ? "🟡 模拟数据模式"
+            : "⚪ 未连接"}
+        </span>
+        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+          © 2026 StreamGuard · All rights reserved
+        </span>
+      </footer>
     </div>
   );
 }
