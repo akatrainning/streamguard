@@ -1,4 +1,76 @@
-﻿
+.app-shell {
+  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-page {
+  flex: 1;
+  min-height: 0;
+  padding: 14px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.dashboard-grid-live {
+  grid-template-columns: minmax(360px, 1.2fr) minmax(340px, 1fr) minmax(420px, 1.6fr);
+}
+
+.dashboard-grid-mock {
+  grid-template-columns: minmax(420px, 1.2fr) minmax(520px, 1.8fr);
+}
+
+.dashboard-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dashboard-col-video,
+.dashboard-col-feed,
+.dashboard-col-analytics {
+  height: 100%;
+}
+
+.dashboard-col-feed > * {
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-col-analytics > :last-child {
+  flex: 1;
+  min-height: 0;
+}
+
+.dashboard-top-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.dashboard-top-cards > * {
+  min-height: 0;
+}
+
 .sg-app,
 .sg-page-shell {
   position: relative;
@@ -6,37 +78,36 @@
 
 .sg-workspace {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
-  gap: 20px;
-  max-width: 1820px;
-  margin: 0 auto;
-  padding: 16px 16px 42px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sg-sidebar {
-  position: sticky;
-  top: 14px;
-  align-self: start;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 2px 0;
-  box-shadow: none;
+  background: rgba(10, 14, 26, 0.7);
+  border-right: 1px solid var(--border);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .sg-sidebar-title {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 10px;
-  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  font-weight: 800;
   padding: 0 8px;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.5px;
 }
 
 .sg-sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  flex: 1;
 }
 
 .sg-side-link {
@@ -46,9 +117,9 @@
   width: 100%;
   text-align: left;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
-  padding: 8px 10px 8px 12px;
+  padding: 10px 10px 10px 14px;
   color: #b1bfd2;
   cursor: pointer;
   box-shadow: none !important;
@@ -90,13 +161,15 @@
 
 .sg-side-label {
   display: block;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 600;
   line-height: 1.2;
 }
 
 .sg-main {
   min-width: 0;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .sg-dashboard-head {
@@ -185,8 +258,7 @@
 
 .sg-dashboard {
   gap: 18px !important;
-  max-width: 1580px !important;
-  padding: 20px 20px 12px !important;
+  padding: 20px 24px !important;
 }
 
 .sg-dashboard > div {
@@ -234,36 +306,4 @@
   background: linear-gradient(180deg, rgba(9, 14, 22, 0.92), rgba(9, 14, 22, 0.98)) !important;
   border-top-color: #2b3d56 !important;
   backdrop-filter: blur(14px);
-}
-
-@media (max-width: 1400px) {
-  .sg-dashboard {
-    max-width: 100% !important;
-    padding: 16px 14px 10px !important;
-    gap: 14px !important;
-  }
-
-  .sg-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .sg-sidebar {
-    position: relative;
-    top: 0;
-  }
-
-  .sg-sidebar-nav {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-  }
-
-  .sg-side-link {
-    justify-content: flex-start;
-  }
-
-  .sg-dashboard-head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }

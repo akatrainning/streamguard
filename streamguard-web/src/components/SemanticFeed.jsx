@@ -22,7 +22,6 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
   useImperativeHandle(ref, () => ({
     highlightItem(uid) {
       setFilter("all");
-      setSrcFilter("all");
       setExpandedId(uid);
       setHighlightedId(uid);
       setTimeout(() => {
@@ -208,14 +207,10 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
         {!filtered.length && (
           <div style={{ textAlign: "center", padding: 44, color: "var(--text-muted)", fontSize: 13 }}>
             <div style={{ fontSize: 24, marginBottom: 8 }}>
-              {srcFilter === "audio" ? "🎤" : srcFilter === "chat" ? "💬" : "🔍"}
+              {"🎤"}
             </div>
             <div>
-              {srcFilter === "audio"
-                ? "暂无主播话术转写…"
-                : srcFilter === "chat"
-                ? "暂无观众质疑弹幕…"
-                : "等待话术分析数据…"}
+              {"暂无主播话术转写…"}
             </div>
             <div style={{ fontSize: 11, marginTop: 6, color: "var(--text-muted)", opacity: 0.75 }}>
               {srcFilter === "audio"

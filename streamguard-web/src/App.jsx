@@ -197,7 +197,7 @@ export default function App() {
   };
 
   return (
-    <div className="sg-app" style={{ minHeight: "100vh", paddingBottom: 32 }}>
+    <div className="app-shell sg-app">
       <Header
         page={page} setPage={setPage}
         viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
@@ -239,7 +239,7 @@ export default function App() {
 
         <main className="sg-main">
       {page === "dashboard" && (
-        <div className="sg-dashboard" style={{ maxWidth: 1560, margin: "0 auto", padding: "20px 20px 12px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="sg-dashboard" style={{ padding: "20px 24px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
           <div className="sg-dashboard-head">
             <div className="sg-dashboard-title">实时总览</div>
             <div className="sg-dashboard-tabs">
@@ -328,9 +328,11 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
-                <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
-                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
+                <div style={{ flexShrink: 0, maxHeight: 320, overflow: "hidden" }}>
+                  <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 380 }}>
                   <SemanticFeed ref={feedRef} utterances={utterances} />
                 </div>
               </div>
@@ -419,35 +421,6 @@ export default function App() {
         />
       )}
       {/* 蝎折△??*/}
-      <footer className="sg-footer" style={{
-        position: "fixed",
-        bottom: 0, left: 0, right: 0,
-        height: 32,
-        background: "rgba(10,10,18,0.92)",
-        backdropFilter: "blur(8px)",
-        borderTop: "1px solid var(--border)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 20px",
-        zIndex: 900,
-        flexShrink: 0,
-      }}>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          平台：<span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>StreamGuard</span>
-          &nbsp;| 直播语义风险监测
-        </span>
-        <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "monospace" }}>
-          {dataSource === "douyin" && sourceConfig.roomId
-            ? `LIVE | 房间 ${sourceConfig.roomId}`
-            : dataSource === "mock"
-            ? "模拟数据流"
-            : "未连接"}
-        </span>
-        <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-          © 2026 StreamGuard
-        </span>
-      </footer>
     </div>
   );
 }
