@@ -259,19 +259,47 @@ export default function CommandCenter({
 
       {/* Status log */}
       <div style={{ borderTop: "1px solid var(--border)", padding: "10px 12px" }}>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>连接日志</div>
-        <div style={{
-          maxHeight: 88, overflowY: "auto",
-          background: "var(--bg-tertiary)", borderRadius: 6,
-          border: "1px solid var(--border)", padding: "6px 8px",
+        <details style={{
+          background: "var(--bg-tertiary)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          overflow: "hidden",
         }}>
-          {(connection.statusLog || []).slice(0, 8).map((line, i) => (
-            <div key={i} className="mono" style={{ fontSize: 10, color: "var(--text-secondary)", marginBottom: 2 }}>{line}</div>
-          ))}
-          {(!connection.statusLog || connection.statusLog.length === 0) && (
-            <div className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>-- no logs --</div>
-          )}
-        </div>
+          <summary style={{
+            cursor: "pointer",
+            listStyle: "none",
+            padding: "10px 12px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            userSelect: "none",
+            fontSize: 11,
+            color: "var(--text-muted)",
+          }}>
+            <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>连接日志</span>
+            <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>
+              {(connection.statusLog || []).length} 条 · 点击展开
+            </span>
+          </summary>
+
+          <div style={{ borderTop: "1px solid var(--border)", padding: "8px 10px" }}>
+            <div style={{
+              maxHeight: 160,
+              overflowY: "auto",
+              background: "rgba(0,0,0,0.15)",
+              borderRadius: 6,
+              border: "1px solid rgba(255,255,255,0.06)",
+              padding: "6px 8px",
+            }}>
+              {(connection.statusLog || []).slice(0, 30).map((line, i) => (
+                <div key={i} className="mono" style={{ fontSize: 10, color: "var(--text-secondary)", marginBottom: 2 }}>{line}</div>
+              ))}
+              {(!connection.statusLog || connection.statusLog.length === 0) && (
+                <div className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>-- no logs --</div>
+              )}
+            </div>
+          </div>
+        </details>
       </div>
 
     </div>
