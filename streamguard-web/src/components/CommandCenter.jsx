@@ -1,5 +1,7 @@
 ﻿import { useMemo } from "react";
 
+import { useEffect, useRef } from "react";
+
 export default function CommandCenter({
   dataSource,
   sourceConfig,
@@ -10,6 +12,8 @@ export default function CommandCenter({
   recentLimits,
   onReconnect,
 }) {
+  const logScrollRef = useRef(null);
+  const didInitScrollRef = useRef(false);
   const totalMsgs = messageTotals?.total ?? (utterances.length + chatMessages.length);
   const totalUtterances = messageTotals?.utterances ?? utterances.length;
   const totalChats = messageTotals?.chats ?? chatMessages.length;
@@ -20,6 +24,27 @@ export default function CommandCenter({
     if (!connection?.lastMessageAt) return "--";
     return new Date(connection.lastMessageAt).toLocaleTimeString("zh-CN", { hour12: false });
   }, [connection?.lastMessageAt]);
+
+  // statusLog is stored newest-first; render oldest-first so the fixed-height panel
+  // reads naturally top-to-bottom and can anchor to the bottom when short.
+  const logLines = useMemo(() => {
+    return (connection.statusLog || []).slice(0, 30).slice().reverse();
+  }, [connection.statusLog]);
+
+  // Auto-scroll to bottom (terminal-style). If user scrolls up, don't yank.
+  useEffect(() => {
+    const el = logScrollRef.current;
+    if (!el) return;
+
+    if (!didInitScrollRef.current) {
+      didInitScrollRef.current = true;
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distanceToBottom < 24) el.scrollTop = el.scrollHeight;
+  }, [connection.statusLog]);
 
   const exportSnapshot = () => {
     const payload = {
@@ -68,6 +93,10 @@ export default function CommandCenter({
       borderRadius: 12,
       overflow: "hidden",
       boxShadow: "0 12px 28px rgba(4,9,16,0.24)",
+      height: "100%",
+      minHeight: 0,
+      display: "flex",
+      flexDirection: "column",
     }}>
       <div style={{
         padding: "14px 16px",
@@ -83,7 +112,7 @@ export default function CommandCenter({
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: 14, flex: "0 0 auto" }}>
         <Card title="连接诊断">
           <KV k="数据源" v={dataSource || "--"} />
           <KV k="房间" v={sourceConfig?.roomId || "--"} mono />
@@ -106,48 +135,61 @@ export default function CommandCenter({
         </Card>
       </div>
 
-      <div style={{ borderTop: "1px solid #2b3f5c", padding: "10px 12px" }}>
-        <details style={{
+      <div style={{ borderTop: "1px solid #2b3f5c", padding: "10px 12px", flex: 1, minHeight: 0, display: "flex" }}>
+        <div style={{
           background: "rgba(18,30,46,0.9)",
           border: "1px solid #2f4666",
           borderRadius: 8,
           overflow: "hidden",
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
         }}>
-          <summary style={{
-            cursor: "pointer",
-            listStyle: "none",
+          <div style={{
             padding: "10px 12px",
             display: "flex",
             justifyContent: "space-between",
-            alignItems: "center",
-            userSelect: "none",
+            alignItems: "baseline",
+            gap: 10,
             fontSize: 12,
             color: "var(--text-muted)",
           }}>
-            <span style={{ fontWeight: 700, color: "var(--text-secondary)" }}>连接日志</span>
-            <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
-              {(connection.statusLog || []).length} 条，点击展开
+            <span style={{ fontWeight: 800, color: "var(--text-secondary)" }}>连接日志</span>
+            <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              {(connection.statusLog || []).length} 条
             </span>
-          </summary>
+          </div>
 
-          <div style={{ borderTop: "1px solid #2f4666", padding: "8px 10px" }}>
+          <div style={{ borderTop: "1px solid #2f4666", padding: "8px 10px", flex: 1, minHeight: 0 }}>
             <div style={{
-              maxHeight: 180,
+              height: "100%",
               overflowY: "auto",
               background: "rgba(0,0,0,0.16)",
               borderRadius: 6,
               border: "1px solid rgba(255,255,255,0.08)",
               padding: "6px 8px",
-            }}>
-              {(connection.statusLog || []).slice(0, 30).map((line, i) => (
-                <div key={i} className="mono" style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 2 }}>{line}</div>
+              display: "flex",
+              flexDirection: "column",
+              rowGap: 2,
+            }} ref={logScrollRef}>
+              {logLines.map((line, i) => (
+                <div
+                  key={i}
+                  className="mono"
+                  style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.35 }}
+                >
+                  {line}
+                </div>
               ))}
               {(!connection.statusLog || connection.statusLog.length === 0) && (
-                <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>-- no logs --</div>
+                <div className="mono" style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.35 }}>
+                  -- no logs --
+                </div>
               )}
             </div>
           </div>
-        </details>
+        </div>
       </div>
     </div>
   );

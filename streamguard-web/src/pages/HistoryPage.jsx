@@ -18,7 +18,7 @@ const sl = (s) => s >= 75 ? "合规" : s >= 50 ? "注意" : "高危";
 
 function Chip({ icon, value }) {
   return (
-    <span style={{ display:"flex", alignItems:"center", gap:"3px", fontSize:"10px", color:"rgba(228,240,255,0.35)" }}>
+    <span style={{ display:"flex", alignItems:"center", gap:"3px", fontSize:"10px", color:"var(--text-muted)" }}>
       <span>{icon}</span><span>{value}</span>
     </span>
   );
@@ -56,7 +56,7 @@ export default function HistoryPage() {
     <div style={{ padding:"24px", maxWidth:"1100px", margin:"0 auto" }}>
       <div style={{ marginBottom:"20px" }}>
         <h1 style={{ fontSize:"20px", fontWeight:700, color:"#00FFE0", margin:0, letterSpacing:"1px" }}>历史档案</h1>
-        <div style={{ fontSize:"12px", color:"rgba(228,240,255,0.4)", marginTop:"4px" }}>
+        <div style={{ fontSize:"12px", color:"var(--text-secondary)", marginTop:"4px" }}>
           共 {SESSIONS.length} 场直播记录 · 覆盖最近 7 日
         </div>
       </div>
@@ -70,7 +70,7 @@ export default function HistoryPage() {
               background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,255,224,0.15)",
               color:"rgba(228,240,255,0.8)", fontSize:"12px", outline:"none", fontFamily:"Inter,sans-serif" }}/>
           <span style={{ position:"absolute", left:"10px", top:"50%", transform:"translateY(-50%)",
-            fontSize:"12px", color:"rgba(228,240,255,0.3)", pointerEvents:"none" }}>🔍</span>
+            fontSize:"12px", color:"var(--text-muted)", pointerEvents:"none" }}>🔍</span>
         </div>
         {[
           { key:"all", label:"全部", count: SESSIONS.length },
@@ -82,7 +82,7 @@ export default function HistoryPage() {
             fontSize:"11px", fontWeight:600, fontFamily:"Inter,sans-serif",
             background: filter===f.key ? "rgba(0,255,224,0.1)" : "rgba(255,255,255,0.03)",
             border:`1px solid ${filter===f.key ? "rgba(0,255,224,0.35)" : "rgba(255,255,255,0.08)"}`,
-            color: filter===f.key ? "#00FFE0" : "rgba(228,240,255,0.4)", transition:"all 0.2s",
+            color: filter===f.key ? "#00FFE0" : "var(--text-secondary)", transition:"all 0.2s",
           }}>{f.label} ({f.count})</button>
         ))}
       </div>
@@ -118,7 +118,7 @@ export default function HistoryPage() {
                   <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"4px" }}>
                     <span style={{ fontSize:"13px", fontWeight:600, color:"rgba(228,240,255,0.9)",
                       overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{s.product}</span>
-                    <span style={{ fontSize:"10px", color:"rgba(228,240,255,0.35)", flexShrink:0 }}>{s.brand}</span>
+                    <span style={{ fontSize:"10px", color:"var(--text-muted)", flexShrink:0 }}>{s.brand}</span>
                   </div>
                   <div style={{ display:"flex", gap:"14px", flexWrap:"wrap" }}>
                     <Chip icon="📅" value={s.date}/>
@@ -149,11 +149,11 @@ export default function HistoryPage() {
                     <div style={{ borderTop:"1px solid rgba(0,255,224,0.07)", padding:"16px 18px",
                       display:"grid", gridTemplateColumns:"1fr 1fr", gap:"20px" }}>
                       <div>
-                        <div style={{ fontSize:"10px", letterSpacing:"2px", color:"rgba(228,240,255,0.3)", marginBottom:"10px" }}>话术类型分布</div>
+                        <div style={{ fontSize:"10px", letterSpacing:"2px", color:"var(--text-muted)", marginBottom:"10px" }}>话术类型分布</div>
                         <ResponsiveContainer width="100%" height={140}>
                           <BarChart data={barData} margin={{ top:5, right:10, bottom:5, left:-10 }}>
-                            <XAxis dataKey="name" tick={{ fill:"rgba(228,240,255,0.4)", fontSize:10 }} tickLine={false} axisLine={false}/>
-                            <YAxis tick={{ fill:"rgba(228,240,255,0.3)", fontSize:9 }} tickLine={false} axisLine={false}/>
+                            <XAxis dataKey="name" tick={{ fill:"var(--text-secondary)", fontSize:10 }} tickLine={false} axisLine={false}/>
+                            <YAxis tick={{ fill:"var(--text-muted)", fontSize:9 }} tickLine={false} axisLine={false}/>
                             <Tooltip contentStyle={{ background:"rgba(2,8,16,0.92)", border:"1px solid rgba(0,255,224,0.2)", borderRadius:"8px", fontSize:"11px" }}/>
                             <Bar dataKey="value" radius={[4,4,0,0]}>
                               {barData.map((e,i) => <Cell key={i} fill={e.color} fillOpacity={0.8}/>)}
@@ -162,7 +162,7 @@ export default function HistoryPage() {
                         </ResponsiveContainer>
                       </div>
                       <div>
-                        <div style={{ fontSize:"10px", letterSpacing:"2px", color:"rgba(228,240,255,0.3)", marginBottom:"10px" }}>会话统计</div>
+                        <div style={{ fontSize:"10px", letterSpacing:"2px", color:"var(--text-muted)", marginBottom:"10px" }}>会话统计</div>
                         <div style={{ display:"flex", flexDirection:"column", gap:"8px" }}>
                           <StatRow label="陷阱话术占比" value={((s.trap/s.total)*100).toFixed(1) + "%"} color="#FF3366"/>
                           <StatRow label="夸大话术占比" value={((s.hype/s.total)*100).toFixed(1) + "%"} color="#FFD700"/>

@@ -21,9 +21,10 @@
   --trap: #e35b5b;
   --trap-bg: rgba(227, 91, 91, 0.12);
   --trap-border: rgba(227, 91, 91, 0.3);
-  --text-primary: #e8eef8;
-  --text-secondary: #a9b9cd;
-  --text-muted: #6e8098;
+  --text-primary: #f1f6ff;
+  /* Higher contrast for readability */
+  --text-secondary: #d0ddf0;
+  --text-muted: #aabbd2;
   --neon-cyan: #3f8cff;
   --neon-green: #2fb47a;
   --neon-blue: #3f8cff;
@@ -65,7 +66,7 @@ body {
 input, select, button { font-family: inherit; }
 
 input, select, textarea {
-  font-size: 14px;
+  font-size: 16px;
 }
 
 button {
