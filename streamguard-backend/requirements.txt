@@ -11,4 +11,5 @@ selenium
 webdriver-manager
 imageio-ffmpeg
 faster-whisper
+onnxruntime
 openai-whisper
