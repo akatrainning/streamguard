@@ -13,7 +13,7 @@ const BASE_RISK = [
 export function useSimulatedStream() {
   const [utterances, setUtterances] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
-  const [rationalityIndex, setRationalityIndex] = useState(78);
+  const [rationalityIndex, setRationalityIndex] = useState(0);
   const [riskData, setRiskData] = useState(BASE_RISK);
   const [alerts, setAlerts] = useState([]);
   const [viewerCount, setViewerCount] = useState(12480);
@@ -32,7 +32,7 @@ export function useSimulatedStream() {
   const reset = useCallback(() => {
     uIdx.current = 0; cIdx.current = 0; alertId.current = 0;
     utteranceIdCounter.current = 0; chatIdCounter.current = 0;
-    setUtterances([]); setChatMessages([]); setRationalityIndex(78);
+    setUtterances([]); setChatMessages([]); setRationalityIndex(0);
     setRiskData(BASE_RISK); setAlerts([]); setViewerCount(12480);
     setShowGate(false); setIsPaused(false);
     setSessionStats({ total:0, trap:0, hype:0, fact:0 });

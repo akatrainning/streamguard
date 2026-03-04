@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 
-// 设计参考：现代化、类 Linear/Vercel 的冷峻极简风格，告别廉价 AI 感
-// 动态虚化抖音直播背景，消费者友好的标题文案
 
 // 动态虚化直播背景拼接
 const DynamicBlurredBackground = () => {
@@ -152,7 +150,7 @@ export default function DataSourceSelector({ onSelect, onConnect }) {
       {/* 内容层 */}
       <div style={{ position: "relative", zIndex: 1 }}>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>直播风险管家</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em" }}>直播语义鉴别系统</div>
           <div style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>
             实时守护每一场直播，让您的消费安全无忧
           </div>

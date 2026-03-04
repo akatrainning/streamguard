@@ -96,11 +96,6 @@ export default function Header({
         </div>
 
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          {currentSource && (
-            <Btn onClick={onSwitchSource}>
-              {currentSource === "mock" ? "模拟" : "抖音"} \u25be
-            </Btn>
-          )}
           <Btn onClick={() => setIsPaused((p) => !p)}>
             {isPaused ? "\u25b6 继续" : "\u23f8 暂停"}
           </Btn>

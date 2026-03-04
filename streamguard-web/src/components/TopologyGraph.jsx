@@ -154,7 +154,7 @@ export default function TopologyGraph({ utterances = [] }) {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 15, fontWeight: 700 }}>语义漂移拓扑图</span>
-          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>← 旧  新 →</span>
+          {/* <span style={{ fontSize: 11, color: "var(--text-muted)" }}>← 旧  新 →</span> */}
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <TogBtn active={showDrift} color={TC.hype} onClick={() => setShowDrift((p) => !p)}>
