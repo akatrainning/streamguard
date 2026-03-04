@@ -1,16 +1,16 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 
-const TC = { fact: "#3fb950", hype: "#d29922", trap: "#f85149" };
+const TC = { fact: "#2fb47a", hype: "#d79b30", trap: "#e35b5b" };
 const TL = { fact: "FACT", hype: "HYPE", trap: "TRAP" };
 const LANE_Y = { fact: 0.22, hype: 0.52, trap: 0.82 };
 
 const DRIFT_REASON = {
-  "fact-hype": "\u6838\u5b9e\u5185\u5bb9\u8f6c\u4e3a\u50ac\u4fc3\u8bdd\u672f",
-  "hype-fact": "\u60c5\u7eea\u62c9\u52a8\u540e\u5207\u56de\u4e8b\u5b9e",
-  "fact-trap": "\u4ee5\u4e8b\u5b9e\u94fa\u57ab\u690d\u5165\u9677\u9631",
-  "trap-fact": "\u9677\u9631\u540e\u7528\u4e8b\u5b9e\u964d\u4f4e\u6212\u5907",
-  "hype-trap": "\u50ac\u4fc3\u8bdd\u672f\u5347\u7ea7\u4e3a\u9677\u9631",
-  "trap-hype": "\u9677\u9631\u4f34\u968f\u50ac\u8d2d\u5f3a\u5316",
+  "fact-hype": "核实内容转为促销话术",
+  "hype-fact": "情绪拉动后切回事实",
+  "fact-trap": "以事实铺垫植入陷阱",
+  "trap-fact": "陷阱后用事实降低戒备",
+  "hype-trap": "催促话术升级为陷阱",
+  "trap-hype": "陷阱伴随促购强化",
 };
 
 export default function TopologyGraph({ utterances = [] }) {
@@ -20,29 +20,32 @@ export default function TopologyGraph({ utterances = [] }) {
   const [windowSize, setWindowSize] = useState(12);
   const [sortKey, setSortKey] = useState("driftMagnitude");
 
-  const W = 900, H = 240;
-  const PAD_X = 48, PAD_RIGHT = 28;
+  const W = 900;
+  const H = 240;
+  const PAD_X = 48;
+  const PAD_RIGHT = 28;
 
   const nodes = useMemo(() => {
     const items = utterances.slice(0, 16).reverse();
     const n = items.length;
     const step = n > 1 ? (W - PAD_X - PAD_RIGHT) / (n - 1) : 0;
     return items.map((u, i) => ({ ...u, nx: PAD_X + i * step, ny: LANE_Y[u.type] * H, idx: i }));
-  }, [utterances.length]);
+  }, [utterances]);
 
   const edges = useMemo(() => nodes.slice(1).map((to, i) => {
     const from = nodes[i];
     return {
-      from, to,
+      from,
+      to,
       isDrift: from.type !== to.type,
       isTrap: from.type === "trap" || to.type === "trap",
       key: `${from.type}-${to.type}`,
     };
   }), [nodes]);
 
-  const visEdges = onlyTrap ? edges.filter(e => e.isTrap) : edges;
+  const visEdges = onlyTrap ? edges.filter((e) => e.isTrap) : edges;
   const visNodes = onlyTrap
-    ? nodes.filter(n => n.type === "trap" || edges.some(e => e.isTrap && (e.from.idx === n.idx || e.to.idx === n.idx)))
+    ? nodes.filter((n) => n.type === "trap" || edges.some((e) => e.isTrap && (e.from.idx === n.idx || e.to.idx === n.idx)))
     : nodes;
 
   function edgePath(e) {
@@ -55,11 +58,11 @@ export default function TopologyGraph({ utterances = [] }) {
   function edgeColor(e) {
     if (e.isTrap) return TC.trap;
     if (showDrift && e.isDrift) return TC.hype;
-    return "#30363d";
+    return "#304865";
   }
 
-  const driftCount = edges.filter(e => e.isDrift).length;
-  const trapCount = edges.filter(e => e.isTrap).length;
+  const driftCount = edges.filter((e) => e.isDrift).length;
+  const trapCount = edges.filter((e) => e.isTrap).length;
 
   const stats = useMemo(() => {
     const total = nodes.length;
@@ -68,10 +71,10 @@ export default function TopologyGraph({ utterances = [] }) {
       return acc;
     }, { fact: 0, hype: 0, trap: 0 });
     const avgScore = total
-      ? Math.round(nodes.reduce((s, n) => s + (n.score || 0), 0) / total * 100)
+      ? Math.round((nodes.reduce((s, n) => s + (n.score || 0), 0) / total) * 100)
       : 0;
     const driftNodes = new Set();
-    edges.forEach(e => {
+    edges.forEach((e) => {
       if (e.isDrift) {
         driftNodes.add(e.from.idx);
         driftNodes.add(e.to.idx);
@@ -84,14 +87,14 @@ export default function TopologyGraph({ utterances = [] }) {
       const start = Math.max(0, end - size);
       const inRange = new Set();
       for (let i = start; i < end; i += 1) inRange.add(i);
-      const wEdges = edges.filter(e => inRange.has(e.from.idx) && inRange.has(e.to.idx));
-      const wDrift = wEdges.filter(e => e.isDrift).length;
-      const wTrap = wEdges.filter(e => e.isTrap).length;
+      const wEdges = edges.filter((e) => inRange.has(e.from.idx) && inRange.has(e.to.idx));
+      const wDrift = wEdges.filter((e) => e.isDrift).length;
+      const wTrap = wEdges.filter((e) => e.isTrap).length;
       const edgeCount = wEdges.length || 1;
       return {
         driftRate: wDrift / edgeCount,
         trapRate: wTrap / edgeCount,
-        edgeCount: wEdges.length
+        edgeCount: wEdges.length,
       };
     };
 
@@ -112,8 +115,8 @@ export default function TopologyGraph({ utterances = [] }) {
 
   const ranking = useMemo(() => {
     const items = nodes.map((node, idx) => {
-      const driftEdges = edges.filter(e => e.isDrift && (e.from.idx === node.idx || e.to.idx === node.idx)).length;
-      const trapEdges = edges.filter(e => e.isTrap && (e.from.idx === node.idx || e.to.idx === node.idx)).length;
+      const driftEdges = edges.filter((e) => e.isDrift && (e.from.idx === node.idx || e.to.idx === node.idx)).length;
+      const trapEdges = edges.filter((e) => e.isTrap && (e.from.idx === node.idx || e.to.idx === node.idx)).length;
       const prev = nodes[idx - 1];
       const confDrop = prev ? Math.max(0, (prev.score || 0) - (node.score || 0)) : 0;
       return {
@@ -132,31 +135,35 @@ export default function TopologyGraph({ utterances = [] }) {
 
   return (
     <div style={{
-      background: "var(--bg-secondary)", border: "1px solid var(--border)",
-      borderRadius: 10, overflow: "hidden", minHeight: 320, height: "100%",
-      display: "flex", flexDirection: "column",
+      background: "linear-gradient(180deg, rgba(18,29,45,0.94), rgba(15,24,37,0.95))",
+      border: "1px solid #2b3f5c",
+      borderRadius: 14,
+      overflow: "hidden",
+      minHeight: 320,
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+      boxShadow: "0 12px 28px rgba(4,9,16,0.24)",
     }}>
-      {/* Header */}
       <div style={{
-        padding: "12px 16px", borderBottom: "1px solid var(--border)",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "14px 18px",
+        borderBottom: "1px solid #2b3f5c",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>
-            {"\u8bed\u4e49\u6f02\u79fb\u62d3\u6251\u56fe"}
-          </span>
-          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-            {"\u2190 \u65e7  \u65b0 \u2192"}
-          </span>
+          <span style={{ fontSize: 15, fontWeight: 700 }}>语义漂移拓扑图</span>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>← 旧  新 →</span>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <TogBtn active={showDrift} color={TC.hype} onClick={() => setShowDrift(p => !p)}>
-            {"\u8de8\u7c7b\u9ad8\u4eae"}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <TogBtn active={showDrift} color={TC.hype} onClick={() => setShowDrift((p) => !p)}>
+            跨类高亮
           </TogBtn>
-          <TogBtn active={onlyTrap} color={TC.trap} onClick={() => setOnlyTrap(p => !p)}>
-            {"\u4ec5\u9677\u9631"}
+          <TogBtn active={onlyTrap} color={TC.trap} onClick={() => setOnlyTrap((p) => !p)}>
+            仅陷阱
           </TogBtn>
-          <span style={{ width: 1, height: 14, background: "var(--border)", margin: "0 4px" }} />
+          <span style={{ width: 1, height: 14, background: "#2b3f5c", margin: "0 4px" }} />
           {Object.entries(TC).map(([t, c]) => (
             <div key={t} style={{ display: "flex", alignItems: "center", gap: 3 }}>
               <div style={{ width: 8, height: 8, borderRadius: 2, background: c }} />
@@ -166,253 +173,259 @@ export default function TopologyGraph({ utterances = [] }) {
         </div>
       </div>
 
-      {/* Body */}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-      {/* SVG */}
-      <div style={{ position: "relative" }}>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
-          <defs>
-            {Object.entries(TC).map(([t, c]) => (
-              <marker key={t} id={`arr-${t}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
-                <polygon points="0 0, 7 3.5, 0 7" fill={c} opacity="0.7" />
-              </marker>
-            ))}
-          </defs>
+        <div style={{ position: "relative" }}>
+          <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
+            <defs>
+              {Object.entries(TC).map(([t, c]) => (
+                <marker key={t} id={`arr-${t}`} markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                  <polygon points="0 0, 7 3.5, 0 7" fill={c} opacity="0.7" />
+                </marker>
+              ))}
+            </defs>
 
-          {/* Lane backgrounds */}
-          {Object.entries(LANE_Y).map(([type, ly]) => (
-            <g key={type}>
-              <rect x={0} y={ly * H - 30} width={W} height={60} fill={TC[type]} fillOpacity={0.03} />
-              <line x1={0} y1={ly * H - 30} x2={W} y2={ly * H - 30} stroke={TC[type]} strokeOpacity={0.08} />
-              <text x={12} y={ly * H + 4} fill={TC[type]} fillOpacity={0.4} fontSize={9} fontWeight={600}
-                fontFamily="Consolas,monospace">{TL[type]}</text>
-            </g>
-          ))}
-
-          {/* Edges */}
-          {visEdges.map((e, i) => (
-            <path key={i} d={edgePath(e)} stroke={edgeColor(e)}
-              strokeWidth={e.isTrap ? 2 : 1.2}
-              strokeDasharray={e.isTrap ? "6 3" : "none"}
-              fill="none" markerEnd={`url(#arr-${e.to.type})`} />
-          ))}
-
-          {/* Nodes */}
-          {visNodes.map(node => {
-            const c = TC[node.type];
-            const isActive = activeNode?.idx === node.idx;
-            const r = 12;
-            return (
-              <g key={node.idx} style={{ cursor: "pointer" }}
-                onClick={() => setActiveNode(isActive ? null : node)}>
-                {isActive && (
-                  <circle cx={node.nx} cy={node.ny} r={r + 4}
-                    fill="none" stroke={c} strokeWidth={1.5} opacity={0.6} />
-                )}
-                <circle cx={node.nx} cy={node.ny} r={r}
-                  fill={isActive ? `${c}44` : `${c}22`}
-                  stroke={c} strokeWidth={isActive ? 2 : 1.2} />
-                <text x={node.nx} y={node.ny + 1} textAnchor="middle" dominantBaseline="middle"
-                  fill={c} fontSize={8} fontWeight={600} fontFamily="Consolas,monospace">
-                  {TL[node.type]}
-                </text>
-                <text x={node.nx} y={node.ny - r - 4} textAnchor="middle"
-                  fill={c} fillOpacity={0.6} fontSize={8} fontFamily="Consolas,monospace">
-                  {Math.round((node.score || 0) * 100)}
+            {Object.entries(LANE_Y).map(([type, ly]) => (
+              <g key={type}>
+                <rect x={0} y={ly * H - 30} width={W} height={60} fill={TC[type]} fillOpacity={0.03} />
+                <line x1={0} y1={ly * H - 30} x2={W} y2={ly * H - 30} stroke={TC[type]} strokeOpacity={0.08} />
+                <text x={12} y={ly * H + 4} fill={TC[type]} fillOpacity={0.45} fontSize={9} fontWeight={700} fontFamily="Consolas,monospace">
+                  {TL[type]}
                 </text>
               </g>
-            );
-          })}
-        </svg>
-
-        {/* Node detail popover */}
-        {activeNode && (
-          <div style={{
-            position: "absolute", top: 10, right: 10, width: 240,
-            background: "var(--bg-tertiary)", border: `1px solid ${TC[activeNode.type]}55`,
-            borderRadius: 8, padding: 12, zIndex: 10,
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: TC[activeNode.type] }}>
-                {TL[activeNode.type]} #{activeNode.idx + 1}
-              </span>
-              <button onClick={() => setActiveNode(null)} style={{
-                background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer",
-              }}>{"\u2715"}</button>
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 8 }}>
-              {activeNode.text}
-            </div>
-            <div className="mono" style={{ fontSize: 11, color: TC[activeNode.type] }}>
-              Score: {Math.round((activeNode.score || 0) * 100)}
-            </div>
-            {/* Drift reasons */}
-            {edges
-              .filter(e => (e.from.idx === activeNode.idx || e.to.idx === activeNode.idx) && e.isDrift)
-              .slice(0, 2)
-              .map((e, i) => (
-                <div key={i} style={{
-                  fontSize: 10, color: TC.hype, marginTop: 4,
-                  padding: "4px 6px", background: "rgba(210,153,34,0.08)",
-                  border: "1px solid rgba(210,153,34,0.2)", borderRadius: 4,
-                }}>
-                  {"\u21c4"} {DRIFT_REASON[e.key] || "\u8bed\u4e49\u7c7b\u578b\u8f6c\u53d8"}
-                </div>
-              ))}
-            {activeNode.timestamp && (
-              <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-                {activeNode.timestamp}
-              </div>
-            )}
-          </div>
-        )}
-
-        {!nodes.length && (
-          <div style={{
-            position: "absolute", inset: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--text-muted)", fontSize: 12,
-          }}>
-            {"\u7b49\u5f85\u6570\u636e\u2026"}
-          </div>
-        )}
-      </div>
-
-      {/* Footer stats */}
-
-      {/* Summary + Risk ranking */}
-      <div style={{
-        marginTop: 8,
-        background: "var(--bg-tertiary)",
-        borderTop: "1px solid var(--border)",
-        padding: "10px 12px 12px",
-        display: "grid",
-        gridTemplateColumns: "1fr 1.4fr",
-        gap: 12,
-        fontSize: 11,
-        color: "var(--text-secondary)"
-      }}>
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600 }}>全局概览</span>
-            <div style={{ display: "flex", gap: 6 }}>
-              {[6, 12, 16].map(n => (
-                <TogBtn key={n} active={windowSize === n} color="var(--accent)" onClick={() => setWindowSize(n)}>
-                  最近{n}
-                </TogBtn>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <MetricCard label="节点总量" value={stats.total} />
-            <MetricCard label="跨类节点" value={stats.driftNodeCount} accent={TC.hype} />
-            <MetricCard label="陷阱边" value={trapCount} accent={TC.trap} />
-            <MetricCard label="平均置信度" value={`${stats.avgScore}%`} accent={TC.fact} />
-          </div>
-
-          <div style={{ marginTop: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>FACT / HYPE / TRAP 比例</span>
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                漂移趋势
-                <span style={{ marginLeft: 6, color: stats.driftDelta == null ? "var(--text-muted)" : (stats.driftDelta >= 0 ? TC.hype : TC.fact) }}>
-                  {stats.driftDelta == null ? "—" : `${stats.driftDelta > 0 ? "+" : ""}${stats.driftDelta}%`}
-                </span>
-              </span>
-            </div>
-            <div style={{
-              height: 10,
-              borderRadius: 6,
-              overflow: "hidden",
-              display: "flex",
-              background: "var(--bg-secondary)",
-              border: "1px solid var(--border)"
-            }}>
-              <RatioSeg color={TC.fact} value={stats.counts.fact} total={stats.total} />
-              <RatioSeg color={TC.hype} value={stats.counts.hype} total={stats.total} />
-              <RatioSeg color={TC.trap} value={stats.counts.trap} total={stats.total} />
-            </div>
-          </div>
-        </div>
-
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 10 }}>
-            <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0 }}>风险优先级</span>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-              {[
-                { key: "driftMagnitude", label: "漂移幅度" },
-                { key: "crossClassStrength", label: "跨类强度" },
-                { key: "trapDensity", label: "陷阱边密度" },
-                { key: "confDrop", label: "置信度下降" },
-                { key: "recent", label: "最近新增" },
-              ].map(opt => (
-                <TogBtn key={opt.key} active={sortKey === opt.key} color={TC.hype} onClick={() => setSortKey(opt.key)}>
-                  {opt.label}
-                </TogBtn>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {ranking.map(({ node }) => (
-              <div key={node.idx} style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
-                alignItems: "center",
-                padding: "6px 8px",
-                borderRadius: 6,
-                background: "var(--bg-secondary)",
-                border: `1px solid ${TC[node.type]}33`
-              }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ color: TC[node.type], fontWeight: 600, fontSize: 11 }}>
-                      {TL[node.type]} #{node.idx + 1}
-                    </span>
-                    <span className="mono" style={{ color: TC[node.type] }}>
-                      {Math.round((node.score || 0) * 100)}%
-                    </span>
-                    {node.timestamp && (
-                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{node.timestamp}</span>
-                    )}
-                  </div>
-                  <div style={{ marginTop: 2, fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {node.text}
-                  </div>
-                </div>
-                <button onClick={() => setActiveNode(node)} style={{
-                  marginLeft: 8,
-                  padding: "3px 8px",
-                  borderRadius: 4,
-                  background: "transparent",
-                  border: `1px solid ${TC[node.type]}55`,
-                  color: TC[node.type],
-                  cursor: "pointer",
-                  fontSize: 10
-                }}>
-                  定位拓扑
-                </button>
-              </div>
             ))}
-            {!ranking.length && (
-              <div style={{ padding: "10px 8px", color: "var(--text-muted)" }}>暂无异常漂移节点</div>
-            )}
+
+            {visEdges.map((e, i) => (
+              <path key={i} d={edgePath(e)} stroke={edgeColor(e)}
+                strokeWidth={e.isTrap ? 2 : 1.2}
+                strokeDasharray={e.isTrap ? "6 3" : "none"}
+                fill="none" markerEnd={`url(#arr-${e.to.type})`} />
+            ))}
+
+            {visNodes.map((node) => {
+              const c = TC[node.type];
+              const isActive = activeNode?.idx === node.idx;
+              const r = 12;
+              return (
+                <g key={node.idx} style={{ cursor: "pointer" }} onClick={() => setActiveNode(isActive ? null : node)}>
+                  {isActive && (
+                    <circle cx={node.nx} cy={node.ny} r={r + 4} fill="none" stroke={c} strokeWidth={1.5} opacity={0.65} />
+                  )}
+                  <circle cx={node.nx} cy={node.ny} r={r} fill={isActive ? `${c}44` : `${c}22`} stroke={c} strokeWidth={isActive ? 2 : 1.2} />
+                  <text x={node.nx} y={node.ny + 1} textAnchor="middle" dominantBaseline="middle" fill={c} fontSize={8} fontWeight={700} fontFamily="Consolas,monospace">
+                    {TL[node.type]}
+                  </text>
+                  <text x={node.nx} y={node.ny - r - 4} textAnchor="middle" fill={c} fillOpacity={0.6} fontSize={8} fontFamily="Consolas,monospace">
+                    {Math.round((node.score || 0) * 100)}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+
+          {activeNode && (
+            <div style={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              width: 280,
+              background: "linear-gradient(180deg, rgba(24,37,56,0.94), rgba(19,30,45,0.96))",
+              border: `1px solid ${TC[activeNode.type]}66`,
+              borderRadius: 8,
+              padding: 13,
+              zIndex: 10,
+              boxShadow: "0 14px 26px rgba(0,0,0,0.25)",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: TC[activeNode.type] }}>
+                  {TL[activeNode.type]} #{activeNode.idx + 1}
+                </span>
+                <button onClick={() => setActiveNode(null)} style={{
+                  background: "none",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                }}>{"\u2715"}</button>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55, marginBottom: 8 }}>
+                {activeNode.text}
+              </div>
+              <div className="mono" style={{ fontSize: 12, color: TC[activeNode.type] }}>
+                Score: {Math.round((activeNode.score || 0) * 100)}
+              </div>
+              {edges
+                .filter((e) => (e.from.idx === activeNode.idx || e.to.idx === activeNode.idx) && e.isDrift)
+                .slice(0, 2)
+                .map((e, i) => (
+                  <div key={i} style={{
+                    fontSize: 11,
+                    color: TC.hype,
+                    marginTop: 5,
+                    padding: "4px 6px",
+                    background: "rgba(215,155,48,0.1)",
+                    border: "1px solid rgba(215,155,48,0.3)",
+                    borderRadius: 4,
+                  }}>
+                    {"\u21c4"} {DRIFT_REASON[e.key] || "语义类型转变"}
+                  </div>
+                ))}
+              {activeNode.timestamp && (
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                  {activeNode.timestamp}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!nodes.length && (
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--text-muted)",
+              fontSize: 13,
+            }}>
+              等待数据…
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          marginTop: 8,
+          background: "linear-gradient(180deg, rgba(22,35,52,0.88), rgba(18,29,44,0.92))",
+          borderTop: "1px solid #2b3f5c",
+          padding: "12px 14px 14px",
+          display: "grid",
+          gridTemplateColumns: "1fr 1.4fr",
+          gap: 12,
+          fontSize: 12,
+          color: "var(--text-secondary)",
+        }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 14, color: "var(--text-primary)", fontWeight: 700 }}>统计概览</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[6, 12, 16].map((n) => (
+                  <TogBtn key={n} active={windowSize === n} color="var(--accent)" onClick={() => setWindowSize(n)}>
+                    近{n}
+                  </TogBtn>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <MetricCard label="样本节点" value={stats.total} />
+              <MetricCard label="漂移节点" value={stats.driftNodeCount} accent={TC.hype} />
+              <MetricCard label="陷阱边" value={trapCount} accent={TC.trap} />
+              <MetricCard label="平均置信" value={`${stats.avgScore}%`} accent={TC.fact} />
+            </div>
+
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>FACT / HYPE / TRAP 占比</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  漂移变化
+                  <span style={{ marginLeft: 6, color: stats.driftDelta == null ? "var(--text-muted)" : (stats.driftDelta >= 0 ? TC.hype : TC.fact) }}>
+                    {stats.driftDelta == null ? "--" : `${stats.driftDelta > 0 ? "+" : ""}${stats.driftDelta}%`}
+                  </span>
+                </span>
+              </div>
+              <div style={{
+                height: 10,
+                borderRadius: 6,
+                overflow: "hidden",
+                display: "flex",
+                background: "var(--bg-secondary)",
+                border: "1px solid var(--border)",
+              }}>
+                <RatioSeg color={TC.fact} value={stats.counts.fact} total={stats.total} />
+                <RatioSeg color={TC.hype} value={stats.counts.hype} total={stats.total} />
+                <RatioSeg color={TC.trap} value={stats.counts.trap} total={stats.total} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 10 }}>
+              <span style={{ fontSize: 14, color: "var(--text-primary)", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>高风险节点排行</span>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                {[
+                  { key: "driftMagnitude", label: "漂移强度" },
+                  { key: "crossClassStrength", label: "跨类次数" },
+                  { key: "trapDensity", label: "陷阱密度" },
+                  { key: "confDrop", label: "置信下降" },
+                  { key: "recent", label: "时间靠近" },
+                ].map((opt) => (
+                  <TogBtn key={opt.key} active={sortKey === opt.key} color={TC.hype} onClick={() => setSortKey(opt.key)}>
+                    {opt.label}
+                  </TogBtn>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {ranking.map(({ node }) => (
+                <div key={node.idx} style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
+                  alignItems: "center",
+                    padding: "8px 10px",
+                  borderRadius: 7,
+                  background: "rgba(11,19,30,0.44)",
+                  border: `1px solid ${TC[node.type]}44`,
+                }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <span style={{ color: TC[node.type], fontWeight: 700, fontSize: 12 }}>
+                        {TL[node.type]} #{node.idx + 1}
+                      </span>
+                      <span className="mono" style={{ color: TC[node.type] }}>
+                        {Math.round((node.score || 0) * 100)}%
+                      </span>
+                      {node.timestamp && (
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{node.timestamp}</span>
+                      )}
+                    </div>
+                    <div style={{ marginTop: 2, fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {node.text}
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveNode(node)} style={{
+                    marginLeft: 8,
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    background: "transparent",
+                    border: `1px solid ${TC[node.type]}66`,
+                    color: TC[node.type],
+                    cursor: "pointer",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}>
+                    定位
+                  </button>
+                </div>
+              ))}
+              {!ranking.length && (
+            <div style={{ padding: "10px 8px", color: "var(--text-muted)", fontSize: 12 }}>暂无可分析节点</div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div style={{
-        padding: "8px 16px", borderTop: "1px solid var(--border)",
-        display: "flex", gap: 16, fontSize: 11, color: "var(--text-muted)",
-      }}>
-        <span>{"\u8282\u70b9"} <span className="mono" style={{ color: "var(--accent)" }}>{visNodes.length}</span></span>
-        <span>{"\u8de8\u7c7b"} <span className="mono" style={{ color: TC.hype }}>{driftCount}</span></span>
-        <span>{"\u9677\u9631\u8fb9"} <span className="mono" style={{ color: TC.trap }}>{trapCount}</span></span>
-        <span style={{ marginLeft: "auto", fontSize: 10 }}>
-          {"\u70b9\u51fb\u699c\u5355\u53ef\u5b9a\u4f4d\u62d3\u6251\u8282\u70b9"}
-        </span>
-      </div>
+        <div style={{
+          padding: "10px 16px",
+          borderTop: "1px solid #2b3f5c",
+          display: "flex",
+          gap: 16,
+          fontSize: 12,
+          color: "var(--text-muted)",
+        }}>
+          <span>节点 <span className="mono" style={{ color: "var(--accent)" }}>{visNodes.length}</span></span>
+          <span>跨类 <span className="mono" style={{ color: TC.hype }}>{driftCount}</span></span>
+          <span>陷阱边 <span className="mono" style={{ color: TC.trap }}>{trapCount}</span></span>
+          <span style={{ marginLeft: "auto", fontSize: 11 }}>点击榜单可定位拓扑节点</span>
+        </div>
       </div>
     </div>
   );
@@ -421,9 +434,13 @@ export default function TopologyGraph({ utterances = [] }) {
 function TogBtn({ active, color, onClick, children }) {
   return (
     <button onClick={onClick} style={{
-      padding: "3px 8px", borderRadius: 4, cursor: "pointer", fontSize: 10, fontWeight: 500,
+      padding: "5px 10px",
+      borderRadius: 999,
+      cursor: "pointer",
+      fontSize: 11,
+      fontWeight: 600,
       background: active ? `${color}22` : "transparent",
-      border: `1px solid ${active ? color + "55" : "var(--border)"}`,
+      border: `1px solid ${active ? `${color}66` : "#304865"}`,
       color: active ? color : "var(--text-muted)",
     }}>
       {children}
@@ -434,22 +451,22 @@ function TogBtn({ active, color, onClick, children }) {
 function MetricCard({ label, value, accent = "var(--accent)" }) {
   return (
     <div style={{
-      padding: "8px 10px",
-      borderRadius: 6,
-      background: "var(--bg-secondary)",
-      border: "1px solid var(--border)",
+      padding: "9px 11px",
+      borderRadius: 7,
+      background: "rgba(11,19,30,0.44)",
+      border: "1px solid #304865",
       display: "flex",
       justifyContent: "space-between",
       alignItems: "center",
-      gap: 8
+      gap: 8,
     }}>
-      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{label}</span>
-      <span className="mono" style={{ fontSize: 12, color: accent }}>{value}</span>
+      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
+      <span className="mono" style={{ fontSize: 13, color: accent }}>{value}</span>
     </div>
   );
 }
 
 function RatioSeg({ color, value, total }) {
   const pct = total ? (value / total) * 100 : 0;
-  return <div style={{ width: `${pct}%`, background: color, opacity: 0.5 }} />;
+  return <div style={{ width: `${pct}%`, background: color, opacity: 0.6 }} />;
 }

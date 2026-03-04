@@ -6,18 +6,17 @@ const TYPE_CFG = {
   trap: { label: "TRAP", color: "var(--trap)", bg: "var(--trap-bg)", border: "var(--trap-border)" },
 };
 
-// 来源标签配置：告诉消费者"这条分析从哪来"
 const SOURCE_CFG = {
-  audio:   { icon: "🎤", label: "主播话术", color: "#0096FF", bg: "rgba(0,150,255,0.12)", border: "rgba(0,150,255,0.3)" },
-  chat:    { icon: "💬", label: "观众质疑", color: "#FFA500", bg: "rgba(255,165,0,0.12)",  border: "rgba(255,165,0,0.3)"  },
-  default: { icon: "📋", label: "分析",     color: "var(--text-muted)", bg: "transparent", border: "transparent" },
+  audio: { icon: "🎤", label: "主播话术", color: "#3f8cff", bg: "rgba(63,140,255,0.14)", border: "rgba(63,140,255,0.35)" },
+  chat: { icon: "💬", label: "观众质疑", color: "#d79b30", bg: "rgba(215,155,48,0.14)", border: "rgba(215,155,48,0.35)" },
+  default: { icon: "📋", label: "分析", color: "var(--text-muted)", bg: "transparent", border: "transparent" },
 };
 
 const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) {
   const [expandedId, setExpandedId] = useState(null);
   const [highlightedId, setHighlightedId] = useState(null);
   const [filter, setFilter] = useState("all");
-  const [srcFilter, setSrcFilter] = useState("audio"); // "all" | "audio" | "chat"
+  const [srcFilter, setSrcFilter] = useState("audio");
   const scrollRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -34,131 +33,122 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
     },
   }));
 
-  // 先按来源过滤，再按类型过滤
-  const srcFiltered = srcFilter === "all" ? utterances : utterances.filter(u => u.source === srcFilter);
-  const filtered = filter === "all" ? srcFiltered : srcFiltered.filter(u => u.type === filter);
+  const srcFiltered = srcFilter === "all" ? utterances : utterances.filter((u) => u.source === srcFilter);
+  const filtered = filter === "all" ? srcFiltered : srcFiltered.filter((u) => u.type === filter);
 
-  // 在当前来源过滤基础上统计类型数量
   const counts = {
-    fact: srcFiltered.filter(u => u.type === "fact").length,
-    hype: srcFiltered.filter(u => u.type === "hype").length,
-    trap: srcFiltered.filter(u => u.type === "trap").length,
+    fact: srcFiltered.filter((u) => u.type === "fact").length,
+    hype: srcFiltered.filter((u) => u.type === "hype").length,
+    trap: srcFiltered.filter((u) => u.type === "trap").length,
   };
   const srcCounts = {
-    audio: utterances.filter(u => u.source === "audio").length,
-    chat:  utterances.filter(u => u.source === "chat").length,
+    audio: utterances.filter((u) => u.source === "audio").length,
+    chat: utterances.filter((u) => u.source === "chat").length,
   };
 
   return (
     <div style={{
-      background: "var(--bg-secondary)", border: "1px solid var(--border)",
-      borderRadius: 10, overflow: "hidden", flex: 1,
+      background: "linear-gradient(180deg, rgba(18,29,45,0.94), rgba(15,24,37,0.95))",
+      border: "1px solid #2b3f5c",
+      borderRadius: 12,
+      overflow: "hidden",
+      flex: 1,
+      boxShadow: "0 12px 28px rgba(4,9,16,0.24)",
     }}>
-      {/* Header */}
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ padding: "14px 18px", borderBottom: "1px solid #2b3f5c" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>话术风险分析</span>
-          <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 0.2 }}>话术风险分析</span>
+          <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>
             {utterances.length} 条
           </span>
         </div>
 
-        {/* 来源切换行 */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
           {[
-            { key: "all",   label: "🔍 全部",    count: utterances.length, color: "var(--accent)" },
-            { key: "audio", label: "🎤 主播话术", count: srcCounts.audio,   color: "#0096FF" },
-            { key: "chat",  label: "💬 观众质疑", count: srcCounts.chat,    color: "#FFA500" },
-          ].map(tab => (
-            <button key={tab.key} onClick={() => { setSrcFilter(tab.key); setFilter("all"); }} style={{
-              padding: "3px 10px", borderRadius: 4, cursor: "pointer", fontSize: 11, fontWeight: 500,
-              background: srcFilter === tab.key ? "var(--bg-tertiary)" : "transparent",
-              border: srcFilter === tab.key ? `1px solid ${tab.color}` : "1px solid transparent",
-              color: srcFilter === tab.key ? tab.color : "var(--text-muted)",
-            }}>
+            { key: "all", label: "🔍 全部", count: utterances.length, color: "var(--accent)" },
+            { key: "audio", label: "🎤 主播话术", count: srcCounts.audio, color: "#3f8cff" },
+            { key: "chat", label: "💬 观众质疑", count: srcCounts.chat, color: "#d79b30" },
+          ].map((tab) => (
+            <button key={tab.key} onClick={() => { setSrcFilter(tab.key); setFilter("all"); }} style={tabBtnStyle(srcFilter === tab.key, tab.color)}>
               {tab.label}{tab.count > 0 ? ` (${tab.count})` : ""}
             </button>
           ))}
         </div>
 
-        {/* 风险类型过滤行 */}
-        <div style={{ display: "flex", gap: 4 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[
-            { key: "all",  label: "全部", count: srcFiltered.length, color: "var(--accent)" },
+            { key: "all", label: "全部", count: srcFiltered.length, color: "var(--accent)" },
             { key: "fact", label: "FACT", count: counts.fact, color: "var(--fact)" },
             { key: "hype", label: "HYPE", count: counts.hype, color: "var(--hype)" },
             { key: "trap", label: "TRAP", count: counts.trap, color: "var(--trap)" },
-          ].map(tab => (
-            <button key={tab.key} onClick={() => setFilter(tab.key)} style={{
-              padding: "3px 10px", borderRadius: 4, cursor: "pointer", fontSize: 11, fontWeight: 500,
-              background: filter === tab.key ? "var(--bg-tertiary)" : "transparent",
-              border: filter === tab.key ? "1px solid var(--border)" : "1px solid transparent",
-              color: filter === tab.key ? tab.color : "var(--text-muted)",
-            }}>
+          ].map((tab) => (
+            <button key={tab.key} onClick={() => setFilter(tab.key)} style={tabBtnStyle(filter === tab.key, tab.color)}>
               {tab.label}{tab.count > 0 ? ` (${tab.count})` : ""}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Utterance list */}
-      <div ref={scrollRef} style={{ height: 340, overflowY: "auto", padding: "6px 12px" }}>
-        {filtered.map(item => {
+      <div ref={scrollRef} style={{ height: 380, overflowY: "auto", padding: "10px 14px" }}>
+        {filtered.map((item) => {
           const cfg = TYPE_CFG[item.type];
-          const isOpen = expandedId === (item.uid || item.id);
+          const id = item.uid || item.id;
+          const isOpen = expandedId === id;
           return (
-            <div key={item.uid || item.id} data-uid={item.uid || item.id}
-              style={{
-                marginBottom: 6, borderRadius: 6,
-                outline: highlightedId === (item.uid || item.id) ? "2px solid var(--accent)" : "none",
+            <div key={id} data-uid={id} style={{
+              marginBottom: 8,
+              borderRadius: 8,
+              outline: highlightedId === id ? "2px solid var(--accent)" : "none",
+              outlineOffset: 1,
+            }}>
+              <div onClick={() => setExpandedId(isOpen ? null : id)} style={{
+                padding: "12px 14px",
+                borderRadius: isOpen ? "8px 8px 0 0" : 8,
+                cursor: "pointer",
+                background: "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))",
+                borderLeft: `3px solid ${cfg.color}`,
+                border: `1px solid ${cfg.border}`,
               }}>
-              {/* Main row */}
-              <div
-                onClick={() => setExpandedId(isOpen ? null : (item.uid || item.id))}
-                style={{
-                  padding: "8px 10px", borderRadius: isOpen ? "6px 6px 0 0" : 6,
-                  cursor: "pointer", background: cfg.bg,
-                  borderLeft: `3px solid ${cfg.color}`,
-                  border: `1px solid ${cfg.border}`,
-                }}>
-                <div style={{ fontSize: 12, color: "var(--text-primary)", lineHeight: 1.5, marginBottom: 4 }}>
+                <div style={{ fontSize: 13, color: "var(--text-primary)", lineHeight: 1.6, marginBottom: 7 }}>
                   {item.display_text}
                 </div>
                 {Array.isArray(item.keywords) && item.keywords.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 7 }}>
                     {item.keywords.slice(0, 5).map((kw, i) => (
                       <span key={`${kw}-${i}`} style={{
-                        fontSize: 10,
-                        padding: "1px 6px",
+                        fontSize: 11,
+                        padding: "3px 8px",
                         borderRadius: 999,
-                        border: "1px solid var(--border)",
+                        border: "1px solid #304865",
                         color: "var(--text-secondary)",
-                        background: "var(--bg-tertiary)",
+                        background: "rgba(29,45,66,0.8)",
                       }}>
                         #{kw}
                       </span>
                     ))}
                   </div>
                 )}
-                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 11 }}>
-                  <span style={{ fontWeight: 600, color: cfg.color }}>{cfg.label}</span>
-                  {/* 来源徽章：消费者能清楚知道分析来自主播话术还是观众质疑 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12 }}>
+                  <span style={{ fontWeight: 700, color: cfg.color }}>{cfg.label}</span>
                   {(() => {
                     const src = SOURCE_CFG[item.source] || SOURCE_CFG.default;
                     if (!item.source) return null;
                     return (
                       <span style={{
-                        fontSize: 9, padding: "1px 5px", borderRadius: 4,
-                        background: src.bg, color: src.color, border: `1px solid ${src.border}`,
-                        fontWeight: 500,
+                        fontSize: 10,
+                        padding: "2px 6px",
+                        borderRadius: 4,
+                        background: src.bg,
+                        color: src.color,
+                        border: `1px solid ${src.border}`,
+                        fontWeight: 600,
                       }}>
                         {src.icon} {src.label}
                       </span>
                     );
                   })()}
-                  {/* Score bar */}
-                  <div style={{ width: 60, height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, position: "relative" }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(item.score || 0) * 100}%`, background: cfg.color, borderRadius: 2 }} />
+                  <div style={{ width: 76, height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 4, position: "relative" }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${(item.score || 0) * 100}%`, background: cfg.color, borderRadius: 4 }} />
                   </div>
                   <span className="mono" style={{ color: "var(--text-muted)" }}>{item.score?.toFixed(2)}</span>
                   <span style={{ color: "var(--text-muted)", marginLeft: "auto" }}>{item.timestamp}</span>
@@ -166,21 +156,22 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                 </div>
               </div>
 
-              {/* Expanded detail */}
               {isOpen && (
                 <div style={{
-                  margin: 0, padding: "10px 12px",
-                  background: "var(--bg-tertiary)",
-                  border: `1px solid ${cfg.border}`, borderTop: "none",
-                  borderRadius: "0 0 6px 6px",
+                  margin: 0,
+                  padding: "12px 14px",
+                  background: "linear-gradient(180deg, rgba(24,37,56,0.8), rgba(20,32,48,0.9))",
+                  border: `1px solid ${cfg.border}`,
+                  borderTop: "none",
+                  borderRadius: "0 0 8px 8px",
                 }}>
                   {!!(item.violations && item.violations.length) && (
                     <>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
                         模型识别风险点
                       </div>
                       {item.violations.slice(0, 5).map((v, i) => (
-                        <div key={i} style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 3, paddingLeft: 10, position: "relative" }}>
+                        <div key={i} style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 4, paddingLeft: 10, position: "relative" }}>
                           <span style={{ position: "absolute", left: 0, color: cfg.color }}>{"\u2022"}</span>{v}
                         </div>
                       ))}
@@ -189,22 +180,21 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
 
                   {!!item.suggestion && (
                     <div style={{ marginTop: 8, padding: "8px 10px", background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 6 }}>
-                      <div style={{ fontSize: 10, color: cfg.color, fontWeight: 600, marginBottom: 4 }}>
+                      <div style={{ fontSize: 10, color: cfg.color, fontWeight: 700, marginBottom: 4 }}>
                         优化建议
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55 }}>
                         {item.suggestion}
                       </div>
                     </div>
                   )}
 
-                  {/* 原始语音转写（仅 display_text 与原文不同时展示） */}
                   {item.display_text && item.display_text !== item.text && (
                     <div style={{ marginTop: 8, padding: "7px 10px", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 6 }}>
                       <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, marginBottom: 3 }}>
                         🎙 原始转写
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5, fontStyle: "italic" }}>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.55, fontStyle: "italic" }}>
                         {item.text}
                       </div>
                     </div>
@@ -214,8 +204,9 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
             </div>
           );
         })}
+
         {!filtered.length && (
-          <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)", fontSize: 12 }}>
+          <div style={{ textAlign: "center", padding: 44, color: "var(--text-muted)", fontSize: 13 }}>
             <div style={{ fontSize: 24, marginBottom: 8 }}>
               {srcFilter === "audio" ? "🎤" : srcFilter === "chat" ? "💬" : "🔍"}
             </div>
@@ -226,7 +217,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                 ? "暂无观众质疑弹幕…"
                 : "等待话术分析数据…"}
             </div>
-            <div style={{ fontSize: 10, marginTop: 6, color: "var(--text-muted)", opacity: 0.7 }}>
+            <div style={{ fontSize: 11, marginTop: 6, color: "var(--text-muted)", opacity: 0.75 }}>
               {srcFilter === "audio"
                 ? "连接直播间后，音频将每15秒自动转写分析"
                 : srcFilter === "chat"
@@ -239,5 +230,18 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
     </div>
   );
 });
+
+function tabBtnStyle(active, color) {
+  return {
+    padding: "5px 11px",
+    borderRadius: 999,
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    background: active ? `${color}22` : "transparent",
+    border: `1px solid ${active ? `${color}66` : "#304865"}`,
+    color: active ? color : "var(--text-muted)",
+  };
+}
 
 export default SemanticFeed;

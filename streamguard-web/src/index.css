@@ -34,7 +34,7 @@
   --shadow-lg: 0 26px 58px rgba(3, 7, 14, 0.34);
 }
 
-html { font-size: 14px; }
+html { font-size: 15px; }
 
 body {
   font-family: "Manrope", "Noto Sans SC", sans-serif;
@@ -43,9 +43,10 @@ body {
     radial-gradient(900px 700px at 0% 100%, rgba(98, 167, 255, 0.1), transparent 60%),
     linear-gradient(180deg, #09111c 0%, #0a101a 42%, #090f19 100%);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.58;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: 0.1px;
 }
 
 #root { min-height: 100vh; }
@@ -57,11 +58,15 @@ body {
 
 .mono { font-family: "JetBrains Mono", Consolas, 'Courier New', monospace; }
 
-.section-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.section-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
 input, select, button { font-family: inherit; }
+
+input, select, textarea {
+  font-size: 14px;
+}
 
 button {
   transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;

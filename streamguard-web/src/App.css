@@ -4,6 +4,166 @@
   position: relative;
 }
 
+.sg-workspace {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 20px;
+  max-width: 1820px;
+  margin: 0 auto;
+  padding: 16px 16px 42px;
+}
+
+.sg-sidebar {
+  position: sticky;
+  top: 14px;
+  align-self: start;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 2px 0;
+  box-shadow: none;
+}
+
+.sg-sidebar-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  font-weight: 700;
+  padding: 0 8px;
+  letter-spacing: 0.2px;
+}
+
+.sg-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sg-side-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  padding: 8px 10px 8px 12px;
+  color: #b1bfd2;
+  cursor: pointer;
+  box-shadow: none !important;
+  position: relative;
+}
+
+.sg-side-link.is-active {
+  background: rgba(63, 140, 255, 0.1);
+  color: #e7eef8;
+}
+
+.sg-side-link.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 2px;
+  background: #77afff;
+}
+
+.sg-side-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #d9e4f2;
+}
+
+.sg-side-icon {
+  width: 18px;
+  text-align: center;
+  color: #8fa5c0;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.sg-side-link.is-active .sg-side-icon {
+  color: #c8dcff;
+}
+
+.sg-side-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sg-main {
+  min-width: 0;
+}
+
+.sg-dashboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 2px 8px;
+  border-bottom: 1px solid #22344b;
+}
+
+.sg-dashboard-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.sg-dashboard-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.sg-dash-tab {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  box-shadow: none !important;
+}
+
+.sg-dash-tab.is-active {
+  color: var(--text-primary);
+  border-bottom-color: #78adff;
+}
+
+.sg-dash-tab:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sg-sidebar-card {
+  margin-top: 10px;
+  border-top: 1px solid #20324a;
+  padding: 10px 8px 4px;
+  background: transparent;
+}
+
+.sg-sidebar-card-title {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.sg-sidebar-card-body {
+  font-size: 11px;
+  color: #98a9bf;
+  line-height: 1.5;
+}
+
 .sg-app::before,
 .sg-page-shell::before {
   content: "";
@@ -24,11 +184,18 @@
 }
 
 .sg-dashboard {
-  gap: 14px !important;
+  gap: 18px !important;
+  max-width: 1580px !important;
+  padding: 20px 20px 12px !important;
 }
 
 .sg-dashboard > div {
   border-radius: 12px;
+}
+
+.sg-dashboard > div,
+.sg-dashboard > div > div {
+  box-shadow: var(--shadow-sm);
 }
 
 .sg-app button,
@@ -41,6 +208,9 @@
 .sg-app textarea {
   border-color: #2f4360 !important;
   background: linear-gradient(180deg, rgba(24, 37, 56, 0.9), rgba(21, 33, 49, 0.9)) !important;
+  min-height: 40px;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
 }
 
 .sg-app input:focus,
@@ -64,4 +234,36 @@
   background: linear-gradient(180deg, rgba(9, 14, 22, 0.92), rgba(9, 14, 22, 0.98)) !important;
   border-top-color: #2b3d56 !important;
   backdrop-filter: blur(14px);
+}
+
+@media (max-width: 1400px) {
+  .sg-dashboard {
+    max-width: 100% !important;
+    padding: 16px 14px 10px !important;
+    gap: 14px !important;
+  }
+
+  .sg-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .sg-sidebar {
+    position: relative;
+    top: 0;
+  }
+
+  .sg-sidebar-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .sg-side-link {
+    justify-content: flex-start;
+  }
+
+  .sg-dashboard-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
