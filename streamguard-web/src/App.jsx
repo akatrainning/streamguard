@@ -30,7 +30,7 @@ export default function App() {
   const [dashboardSection, setDashboardSection] = useState("ops");
   const [entryStep, setEntryStep] = useState("welcome");
   const [showSourceSelector, setShowSourceSelector] = useState(false);
-  // 蝏???詨?嗆?
+  // 蝥???詨?嗆?
   const [sessionSnapshot, setSessionSnapshot] = useState(null); // ??null ????????
   const [showReportModal, setShowReportModal] = useState(false);
   const sessionStartRef = useRef(null); // ????????????
@@ -48,7 +48,7 @@ export default function App() {
     enabled: dataSource === "douyin",
   });
 
-  // 霈啣?擐活餈?園嚗鈭??輯恣蝞?
+  // 需啣?擐活餈?園嚗鈭??輯恣蝞?
   const isConnected = realStream.connected;
   if (isConnected && !sessionStartRef.current) {
     sessionStartRef.current = Date.now();
@@ -115,7 +115,7 @@ export default function App() {
     realStream.disconnect?.();
   }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, viewerCount, apiBase, realStream]);
 
-  /** ?亙??喲 ???交?敺??Ｘ?游?頝唾蓮嚗???唳?格?? */
+  /** 报告关闭 → 若有待切换房间则跳转，否则回到数据源选择 */
   const handleReportClose = useCallback(() => {
     setShowReportModal(false);
     setSessionSnapshot(null);
@@ -124,22 +124,22 @@ export default function App() {
 
     const nextRoom = pendingRoomIdRef.current;
     if (nextRoom) {
+      // 连接新直播间：返回到输入界面，跳过欢迎动画
       pendingRoomIdRef.current = null;
       setPendingRoomId(null);
-      setSourceConfig((prev) => ({
-        ...prev,
-        roomId: nextRoom,
-        wsBase: prev.wsBase || "ws://localhost:8011",
-      }));
-      setPage("dashboard");
-      setTimeout(() => realStream.reconnectNow?.(), 0);
+      setDataSource(null);
+      setSourceConfig({});
+      setEntryStep("app");  // 跳过欢迎页
+      setPage("entry");
       return;
     }
 
-    if (dataSource === "douyin" && sourceConfig.roomId) {
-      setTimeout(() => realStream.reconnectNow?.(), 0);
-    }
-  }, [reset, dataSource, sourceConfig.roomId, realStream]);
+    // 没有待切换的房间，返回数据源选择界面
+    setDataSource(null);
+    setSourceConfig({});
+    setEntryStep("app");  // 跳过欢迎页
+    setPage("entry");
+  }, [reset]);
 
   // Close report modal only, then resume live connection when possible.
   const handleReportDismiss = useCallback(() => {
@@ -196,7 +196,7 @@ export default function App() {
     }
   }, [utterances.length, chatMessages.length, dataSource, sourceConfig.roomId, doSwitchRoom]);
 
-  /** 靽??亙????ｇ??蝏翰?批撕?亙?撘寧?嚗??剖? handleReportClose ?歲頧?*/
+  /** 靽??亙????ｇ??蝏翰?批撕?亙?撘寧?嚗endingRoomIdRef 靽???roomId 靥?handleReportClose 雿輻*/
   const handleSaveAndSwitch = useCallback(() => {
     setSessionSnapshot({
       utterances: [...utterances],
@@ -209,7 +209,7 @@ export default function App() {
       endTime: Date.now(),
     });
     realStream.disconnect?.();
-    // ?喲蝖株恕撘寧?嚗endingRoomIdRef 靽???roomId 靘?handleReportClose 雿輻
+    // ?喲蝖株恕撘寧?嚗endingRoomIdRef 靽???roomId 靥?handleReportClose 雿輻
     setPendingRoomId(null);
   }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, realStream]);
 
