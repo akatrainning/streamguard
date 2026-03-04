@@ -19,7 +19,7 @@ export function useRealStream({
 } = {}) {
   const [utterances,       setUtterances]       = useState([]);
   const [chatMessages,     setChatMessages]     = useState([]);
-  const [rationalityIndex, setRationalityIndex] = useState(78);
+  const [rationalityIndex, setRationalityIndex] = useState(0);
   const [riskData,         setRiskData]         = useState(BASE_RISK);
   const [alerts,           setAlerts]           = useState([]);
   const [viewerCount,      setViewerCount]      = useState(0);
@@ -259,7 +259,7 @@ export function useRealStream({
   const reset = useCallback(() => {
     setUtterances([]);
     setChatMessages([]);
-    setRationalityIndex(78);
+    setRationalityIndex();
     setRiskData(BASE_RISK);
     setAlerts([]);
     setViewerCount(0);

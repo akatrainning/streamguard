@@ -28,11 +28,12 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 try:
-    from douyin_search import search_douyin_live_rooms, clear_search_cache
+    from douyin_search import search_douyin_live_rooms, clear_search_cache, \
+        get_cookie_status, open_douyin_for_login, _save_douyin_cookies
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
-    print("[warn] douyin_search 模块未找到，搜索功能将使用兜底数据")
+    print("[warn] douyin_search module not found, search will use fallback data")
 
 app = FastAPI(title="StreamGuard Backend")
 
@@ -72,7 +73,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# LLM Configuration — 优先级: DeepSeek > OpenRouter > OpenAI
+
+@app.on_event("startup")
+async def _startup_cleanup():
+    """开机清理：杀掉上次崩溃遗留的 chromedriver.exe 进程，防止僵尸进程占用内存。
+    安全：chromedriver.exe 是自动化工具，不是用户浏览器，杀掉不影响用户。
+    """
+    try:
+        result = subprocess.run(
+            ['taskkill', '/F', '/IM', 'chromedriver.exe'],
+            capture_output=True, timeout=5
+        )
+        if result.returncode == 0:
+            print("[startup] 已清理遗留的 chromedriver 进程")
+    except Exception:
+        pass
+
+
+# LLM Configuration -- 优先级: DeepSeek > OpenRouter > OpenAI
 DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY    = os.getenv("OPENAI_API_KEY", "")
@@ -105,10 +123,13 @@ if OPENAI_AVAILABLE and LLM_API_KEY:
             kwargs["base_url"] = LLM_BASE_URL
         client_sync = OpenAI(**kwargs)
         client_async = AsyncOpenAI(**kwargs)
-    except Exception:
+        print(f"[LLM] OK provider={LLM_PROVIDER}, model={LLM_MODEL}, base={LLM_BASE_URL or '(openai default)'}")
+    except Exception as _e:
+        print(f"[LLM] FAIL init: {_e}")
         client_sync = None
         client_async = None
 else:
+    print(f"[LLM] SKIP no key (OPENAI_AVAILABLE={OPENAI_AVAILABLE}, LLM_API_KEY={'set' if LLM_API_KEY else 'empty'})")
     client_sync = None
     client_async = None
 
@@ -226,7 +247,7 @@ _SENTIMENT_LABEL = {"pos": "😊", "neg": "😠", "neutral": "😐"}
 
 def analyze_chat_light(text: str, recent_utterance: str = "") -> dict:
     """
-    轻量中文弹幕语义分析（纯规则，零延迟）。
+    轻量中文弹幕语义分析(纯规则，零延迟)。
     返回: sentiment / intent / flags / risk_score / correlation / label
     correlation: 与最近一条话术的语义关联 (support_claim / doubt_claim / unrelated)
     """
@@ -263,7 +284,7 @@ def analyze_chat_light(text: str, recent_utterance: str = "") -> dict:
     elif any(w in t for w in _CHAT_QUESTION):
         intent = "question"
 
-    # 刷屏检测（字符集非常小但文本较长）
+    # 刷屏检测(字符集非常小但文本较长)
     if len(set(t)) <= 3 and len(t) >= 6:
         flags.append("重复刷屏")
         intent = "ad_spam"
@@ -356,7 +377,7 @@ def analyze_audio_with_rules(text: str) -> dict:
     if utype == "trap":
         suggestion = "删除极限词和压迫式下单措辞，补充可核验证据与适用条件。"
     elif utype == "hype":
-        suggestion = "降低夸张表达，改为可验证数据描述（检测报告/对照结果）。"
+        suggestion = "降低夸张表达，改为可验证数据描述(检测报告/对照结果)。"
     else:
         suggestion = "整体表达较稳健，可继续补充证据来源提升可信度。"
 
@@ -387,8 +408,8 @@ def analyze_audio_semantics(text: str) -> dict:
 
 重点：
 1) 是否存在极限词、绝对化承诺、疗效/收益保证。
-2) 是否存在压迫式促单（倒计时、只剩最后、错过后悔）。
-3) 是否给出可核验依据（检测报告、编号、成分和范围条件）。
+2) 是否存在压迫式促单(倒计时、只剩最后、错过后悔)。
+3) 是否给出可核验依据(检测报告、编号、成分和范围条件)。
 
 严格返回 JSON：
 {
@@ -454,9 +475,9 @@ def _split_sentences_zh(text: str) -> list[str]:
     return [p.strip() for p in parts if p and p.strip()]
 
 
-# 媒体 URL 缓存：避免重复启动 Chrome （TTL = 15 分钟）
+# 媒体 URL 缓存：避免重复启动 Chrome (TTL = 15 分钟)
 _media_url_cache: dict[str, tuple[str, float]] = {}   # room_id -> (url, expire_ts)
-_MEDIA_URL_TTL = 900  # seconds（上次 5分钟，现在 15分钟）
+_MEDIA_URL_TTL = 900  # seconds(上次 5分钟，现在 15分钟)
 
 
 def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[str]:
@@ -493,7 +514,7 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     opts.add_argument("--js-flags=--max-old-space-size=256")
     opts.add_argument("--media-cache-size=1")
     opts.add_argument("--disk-cache-size=1")
-    # 屏蔽 Chrome 内部日志话音失败、GPU 驱动警告等噪音）
+    # 屏蔽 Chrome 内部日志话音失败、GPU 驱动警告等噪音)
     opts.add_argument("--log-level=3")
     opts.add_argument("--silent")
     opts.add_argument("--disable-logging")
@@ -503,6 +524,7 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
     driver = None
+    _service_pid = None
     candidates: list[str] = []
     try:
         import sys
@@ -515,6 +537,7 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
         except TypeError:
             service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=opts)
+        _service_pid = getattr(getattr(service, 'process', None), 'pid', None)
         driver.set_page_load_timeout(25)
         driver.execute_cdp_cmd("Network.enable", {})
 
@@ -566,14 +589,23 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
                 driver.quit()
         except Exception:
             pass
+        # 强杀进程树，确保 chrome.exe 子进程不残留
+        if _service_pid:
+            try:
+                subprocess.run(
+                    ['taskkill', '/F', '/T', '/PID', str(_service_pid)],
+                    capture_output=True, timeout=5
+                )
+            except Exception:
+                pass
 
 
 def _get_ffmpeg_bin() -> str:
     """
     自动获取 ffmpeg 路径。
     优先顺序：
-      1. imageio-ffmpeg 内置二进制（pip install imageio-ffmpeg，无需手动安装、无需配 PATH）
-      2. 系统 PATH 中的 ffmpeg（已手动安装的用户 fallback）
+      1. imageio-ffmpeg 内置二进制(pip install imageio-ffmpeg，无需手动安装、无需配 PATH)
+      2. 系统 PATH 中的 ffmpeg(已手动安装的用户 fallback)
     """
     try:
         import imageio_ffmpeg
@@ -587,7 +619,7 @@ def _get_ffmpeg_bin() -> str:
         return path
     raise RuntimeError(
         "ffmpeg 未找到。请运行: pip install imageio-ffmpeg  "
-        "（或手动安装系统 ffmpeg 并加入 PATH）"
+        "(或手动安装系统 ffmpeg 并加入 PATH)"
     )
 
 
@@ -626,7 +658,7 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
             return f.read()
 
 
-# faster-whisper 本地模型缓存（惰性初始化）
+# faster-whisper 本地模型缓存(惰性初始化)
 _fw_model = None
 _FW_MODEL_SIZE = os.getenv("LOCAL_WHISPER_MODEL", "base")  # tiny/base/small/medium
 # CPU 线程数：默认保留 2 核给系统，可通过环境变量覆盖
@@ -642,7 +674,7 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
     except ImportError:
         raise RuntimeError("faster-whisper 未安装")
     if _fw_model is None:
-        print(f"[ASR-local] 首次加载 faster-whisper 模型（model={_FW_MODEL_SIZE}, threads={_FW_CPU_THREADS}, beam={_FW_BEAM_SIZE}）...")
+        print(f"[ASR-local] 首次加载 faster-whisper 模型(model={_FW_MODEL_SIZE}, threads={_FW_CPU_THREADS}, beam={_FW_BEAM_SIZE})...")
         model_path = os.path.join(os.path.dirname(__file__), "whisper_base_model")
         if not os.path.isdir(model_path):
             model_path = _FW_MODEL_SIZE
@@ -661,7 +693,7 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
         segments, _ = _fw_model.transcribe(
             tmp_path,
             language="zh",
-            beam_size=_FW_BEAM_SIZE,        # 1=贪心解码（快 3-5x），5=束搜索（准但慢）
+            beam_size=_FW_BEAM_SIZE,        # 1=贪心解码(快 3-5x)，5=束搜索(准但慢)
             vad_filter=True,               # 跳过静音段，减少无效计算
             vad_parameters={"min_silence_duration_ms": 300},
         )
@@ -676,8 +708,8 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
 def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") -> str:
     """Transcribe Chinese audio bytes.
     Priority:
-      1. asr_client — OpenAI cloud Whisper (requires valid ASR_OPENAI_API_KEY)
-      2. faster-whisper — local, free, no API key needed
+      1. asr_client -- OpenAI cloud Whisper (requires valid ASR_OPENAI_API_KEY)
+      2. faster-whisper -- local, free, no API key needed
     """
     if asr_client:
         try:
@@ -697,7 +729,7 @@ def _transcribe_zh_audio_bytes(audio_bytes: bytes, filename: str = "audio.wav") 
 
 
 def _extract_keywords_simple(text: str) -> list:
-    """规则提取关键词（LLM不可用时的备用方案）"""
+    """规则提取关键词(LLM不可用时的备用方案)"""
     stop = set(
         "的了是在有和就也都而但这那个么什么吧呢哦啊嗯噢哈呀嘛"
         "我你他她它们我们你们他们一个这个那个一些"
@@ -728,11 +760,11 @@ async def _polish_transcript_async(raw_text: str) -> dict:
             "你是直播电商内容整理助手。将主播语音转写文本整理为通顺流畅的简体中文句子，并提取关键词。\n"
             "要求：\n"
             "1. 只使用简体中文，不得出现繁体字\n"
-            "2. 添加适当标点符号（逗号、句号、感叹号等），使句子通顺流畅\n"
+            "2. 添加适当标点符号(逗号、句号、感叹号等)，使句子通顺流畅\n"
             "3. 保留原意，不添加原文没有的内容\n"
-            "4. 修正明显的语音识别错误（同音字、断句错误）\n"
+            "4. 修正明显的语音识别错误(同音字、断句错误)\n"
             "5. 去掉多余语气词和重复内容\n"
-            "6. 提取 3-5 个核心关键词（产品名/功效/促销词等）\n"
+            "6. 提取 3-5 个核心关键词(产品名/功效/促销词等)\n"
             "输出纯 JSON：{\"polished\": \"整理后句子\", \"keywords\": [\"词1\", ...]}"
         )
         resp = await client_async.chat.completions.create(
@@ -850,19 +882,19 @@ class DouyinLiveSource:
 
     async def _audio_loop(self, callback):
         """
-        连续音频监听后台循环（流水线模式）：
+        连续音频监听后台循环(流水线模式)：
         自动发现直播媒体流 → 采集与转写并行流水线 → 每 ~8s 输出一条润色话术。
 
         流水线原理：
-          采集线程（capture_worker）持续采集 8s 音频片段放入队列；
-          转写线程（transcribe_worker）同步从队列取出并处理。
-          两者并行 → 有效延迟 ≈ 8s（窗口时长），而非串行的 20+s。
+          采集线程(capture_worker)持续采集 8s 音频片段放入队列；
+          转写线程(transcribe_worker)同步从队列取出并处理。
+          两者并行 → 有效延迟 ≈ 8s(窗口时长)，而非串行的 20+s。
 
         无需 API Key：优先 faster-whisper 本地模型。
         """
-        WINDOW_SECS = 8  # 采集窗口：8s 兼顾句子完整性与响应延迟（可调 5~10）
+        WINDOW_SECS = 8  # 采集窗口：8s 兼顾句子完整性与响应延迟(可调 5~10)
 
-        print(f"[audio-loop] 正在发现直播媒体流（房间: {self.room_id}）...")
+        print(f"[audio-loop] 正在发现直播媒体流(房间: {self.room_id})...")
         try:
             media_url = await asyncio.to_thread(_discover_douyin_media_url, self.room_id, 20)
         except Exception as e:
@@ -870,27 +902,27 @@ class DouyinLiveSource:
             return
 
         if not media_url:
-            print("[audio-loop] 未能找到可用媒体流，音频监听退出（直播间可能已下线或有反爬限制）")
+            print("[audio-loop] 未能找到可用媒体流，音频监听退出(直播间可能已下线或有反爬限制)")
             return
 
-        print(f"[audio-loop] ✓ 发现媒体流，开始流水线监听: {media_url[:80]}...")
+        print(f"[audio-loop] OK 发现媒体流，开始流水线监听: {media_url[:80]}...")
 
         # 采集队列：maxsize=2 防止转写慢时积压过多
         audio_queue: asyncio.Queue = asyncio.Queue(maxsize=2)
 
         # 采集间隔：每轮采集完成后额外等待，防止 CPU 持续满载
-        # 可通过环境变量调整，默认 2s（采集 8s + 等待 2s = 每 10s 一轮）
+        # 可通过环境变量调整，默认 2s(采集 8s + 等待 2s = 每 10s 一轮)
         CAPTURE_IDLE_SECS = float(os.getenv("AUDIO_CAPTURE_IDLE", "2"))
 
         async def capture_worker():
-            """持续采集音频片段并放入队列（不等转写完成）。"""
+            """持续采集音频片段并放入队列(不等转写完成)。"""
             error_count = 0
             while True:
                 try:
                     audio_bytes = await asyncio.to_thread(
                         _capture_audio_clip_bytes, media_url, WINDOW_SECS
                     )
-                    # 队列满时丢弃最旧片段（转写跟不上时避免内存堆积）
+                    # 队列满时丢弃最旧片段(转写跟不上时避免内存堆积)
                     if audio_queue.full():
                         try:
                             audio_queue.get_nowait()
@@ -907,7 +939,7 @@ class DouyinLiveSource:
                 except Exception as e:
                     error_count += 1
                     wait = min(3 * error_count, 15)
-                    print(f"[audio-loop] 采集错误（第{error_count}次）: {e}，等待 {wait}s 后重试")
+                    print(f"[audio-loop] 采集错误(第{error_count}次): {e}，等待 {wait}s 后重试")
                     await asyncio.sleep(wait)
 
         async def transcribe_worker():
@@ -932,14 +964,14 @@ class DouyinLiveSource:
                                 "event": "utterance",
                                 "id": int(time.time() * 1000),
                                 "text": raw,             # 原始转写
-                                "display_text": display, # LLM 润色后句子（主要展示）
+                                "display_text": display, # LLM 润色后句子(主要展示)
                                 "keywords": kws,
                                 "timestamp": time.strftime("%H:%M:%S"),
                                 "source": "audio",
                                 **analysis,
                             })
                             print(f"[audio-loop] 📝 原始: {raw[:50]}")
-                            print(f"[audio-loop] ✨ 润色: {display[:60]}{'...' if len(display) > 60 else ''}")
+                            print(f"[audio-loop] * 润色: {display[:60]}{'...' if len(display) > 60 else ''}")
                         else:
                             print("[audio-loop] 静默片段，跳过")
                     finally:
@@ -971,11 +1003,11 @@ class DouyinLiveSource:
             if evt.get("event") == "chat":
                 text = evt.get("text", "")
                 if text.strip():
-                    # 弹幕语义分析（将最近话术传入做关联分析）
+                    # 弹幕语义分析(将最近话术传入做关联分析)
                     chat_analysis = analyze_chat_light(text, recent_utterance=last_utterance_text)
                     await callback({**evt, **chat_analysis})
 
-                    # ★ 对高风险弹幕（质疑/投诉）同步生成 utterance 事件填充 SemanticFeed
+                    # ★ 对高风险弹幕(质疑/投诉)同步生成 utterance 事件填充 SemanticFeed
                     # 这解决了抖音模式下 SemanticFeed 始终空白的问题
                     if (chat_analysis.get("risk_score", 0) >= 0.5
                             or chat_analysis.get("intent") in ("doubt", "complaint")):
@@ -994,7 +1026,7 @@ class DouyinLiveSource:
             else:
                 await callback(evt)
 
-        # 后台启动连续音频监听（自动转写主播话术 → utterance 事件）
+        # 后台启动连续音频监听(自动转写主播话术 → utterance 事件)
         audio_task = asyncio.create_task(self._audio_loop(callback))
         try:
             await stream_douyin_cdp(self.room_id, _on_event)
@@ -1027,7 +1059,10 @@ async def ws_douyin_stream(websocket: WebSocket, room_id: str):
             await websocket.send_json({"event": "error", "message": str(exc)})
         except Exception:
             pass
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
     except Exception as exc:
         try:
             await websocket.send_json({"event": "error", "message": f"Douyin stream failed: {exc}"})
@@ -1041,7 +1076,7 @@ async def ws_douyin_stream(websocket: WebSocket, room_id: str):
 
 @app.get("/douyin/room-info/{room_id}")
 async def douyin_room_info(room_id: str):
-    """验证房间是否直播，并返回基本信息（前端数据源选择器使用）。"""
+    """验证房间是否直播，并返回基本信息(前端数据源选择器使用)。"""
     # 房间ID规范化
     room_id = room_id.strip()
     if not room_id or not re.match(r"^\d{6,24}$", room_id):
@@ -1191,13 +1226,52 @@ async def analyze_douyin_audio(room_id: str, seconds: int = 20):
 
 # ============= Consumer Discovery API =============
 
+# --- Douyin Cookie / Auth ---
+
+@app.get("/consumer/cookie-status")
+async def cookie_status():
+    """Check whether douyin cookies are available."""
+    if not SEARCH_AVAILABLE:
+        return {"exists": False, "count": 0, "message": "search module not available"}
+    return get_cookie_status()
+
+
+@app.post("/consumer/auth-douyin")
+async def auth_douyin(payload: dict = None):
+    """
+    Open a headed browser for user to complete captcha / login on douyin.
+    Cookies are saved automatically after success.
+    Body (optional): {"keyword": "..."}
+    """
+    if not SEARCH_AVAILABLE:
+        raise HTTPException(status_code=500, detail="search module not available")
+    keyword = (payload or {}).get("keyword", "")
+    result = await asyncio.to_thread(open_douyin_for_login, keyword)
+    return result
+
+
+@app.post("/consumer/upload-cookies")
+async def upload_cookies(payload: dict):
+    """
+    Upload cookies directly (from browser extension export).
+    Body: {"cookies": [...]}
+    """
+    if not SEARCH_AVAILABLE:
+        raise HTTPException(status_code=500, detail="search module not available")
+    cookies = payload.get("cookies", [])
+    if not cookies or not isinstance(cookies, list):
+        raise HTTPException(status_code=400, detail="cookies must be a non-empty array")
+    _save_douyin_cookies(cookies)
+    return {"success": True, "saved": len(cookies)}
+
+
 @app.get("/consumer/search-live-streams")
 async def search_live_streams(q: str, max_results: int = 12):
     """
-    搜索抖音直播间（按商品关键词）
-    Level 1: httpx 解析页面内嵌 JSON（快速，无需 Chrome）
+    搜索抖音直播间(按商品关键词)
+    Level 1: httpx 解析页面内嵌 JSON(快速，无需 Chrome)
     Level 2: Selenium + CDP Network.getResponseBody 截获 API 响应
-    Level 3: Selenium DOM href 扫描（最后兜底）
+    Level 3: Selenium DOM href 扫描(最后兜底)
     返回: { keyword, rooms: [...], total, data_source, search_note }
     """
     if not q or len(q.strip()) < 2:
@@ -1225,10 +1299,10 @@ async def search_live_streams(q: str, max_results: int = 12):
                     "rooms": rooms,
                     "total": len(rooms),
                     "data_source": data_source,
-                    "search_note": note,
-                    "cached": cached,
+                    # "search_note": note,
+                    # "cached": cached,
                 }
-            # 爬取返回空结果（可能触发了反爬验证），降级到兜底
+            # 爬取返回空结果(可能触发了反爬验证)，降级到兜底
             print(f"[search] 爬取结果为空，使用兜底数据")
         except Exception as e:
             print(f"[search] 爬取异常: {e}，使用兜底数据")
@@ -1259,7 +1333,7 @@ async def search_live_streams(q: str, max_results: int = 12):
         "rooms": rooms[:max_results],
         "total": len(rooms),
         "data_source": "fallback_mock",
-        "search_note": "抖音反爬验证触发，显示演示数据（可稍后重试）",
+        "search_note": "抖音反爬验证触发，显示演示数据(可稍后重试)",
         "cached": False,
     }
 
@@ -1267,7 +1341,7 @@ async def search_live_streams(q: str, max_results: int = 12):
 @app.post("/consumer/compare-streams")
 async def compare_streams(request: CompareStreamsRequest):
     """
-    跨直播间商品对比分析（LLM 评估）
+    跨直播间商品对比分析(LLM 评估)
     输入: 关键词 + 选中的直播间列表
     返回: { p0, p1, p2, engine, keyword, evidence_stats }
       p0: 综合结论 { verdict, confidence, why_buy, why_not_buy }
@@ -1288,7 +1362,7 @@ async def compare_streams(request: CompareStreamsRequest):
     # ─── LLM 生成 ───────────────────────────────────────────────
     if client_async and LLM_API_KEY:
         rooms_desc = "\n".join(
-            f"- 直播间{i+1}（{r.room_id}）：主播={r.anchor_name or '未知'}，"
+            f"- 直播间{i+1}({r.room_id})：主播={r.anchor_name or '未知'}，"
             f"标题={r.room_title or '未知'}，观看人数={r.viewer_count or 0}，"
             f"推荐分={r.recommendation_score or 0.5:.2f}"
             for i, r in enumerate(rooms)
@@ -1307,12 +1381,12 @@ async def compare_streams(request: CompareStreamsRequest):
 【直播间列表】
 {rooms_desc}{user_str}
 
-请严格返回以下 JSON 格式（不要任何额外文字）：
+请严格返回以下 JSON 格式(不要任何额外文字)：
 {{
   "p0": {{
     "verdict": "BUY",
     "confidence": 0.78,
-    "why_buy": ["推荐理由1（结合具体直播间）", "推荐理由2", "推荐理由3"],
+    "why_buy": ["推荐理由1(结合具体直播间)", "推荐理由2", "推荐理由3"],
     "why_not_buy": ["谨慎因素1", "谨慎因素2"]
   }},
   "p1": {{
@@ -1327,7 +1401,7 @@ async def compare_streams(request: CompareStreamsRequest):
     "ranked": {str(room_names)}
   }},
   "p2": {{
-    "ask_anchor_questions": ["问题1（针对{keyword}）", "问题2", "问题3"],
+    "ask_anchor_questions": ["问题1(针对{keyword})", "问题2", "问题3"],
     "alternatives": ["替代方案1", "替代方案2"],
     "buy_timing": "建议在XX情况下下单",
     "action_plan": ["行动步骤1", "行动步骤2", "行动步骤3"]
@@ -1388,7 +1462,7 @@ verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(
             "verdict": verdict,
             "confidence": round(top_score, 2),
             "why_buy": [
-                f"{top_room} 综合推荐分最高（{round(top_score*100)}分）",
+                f"{top_room} 综合推荐分最高({round(top_score*100)}分)",
                 f"观看人数 {rooms[0].viewer_count} 人，直播间热度较高" if rooms[0].viewer_count else f"关键词 [{keyword}] 匹配度高",
                 "建议进入直播间后开启 StreamGuard 监控获取实时话术分析",
             ],
@@ -1412,7 +1486,7 @@ verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(
                 f'在电商平台搜索"{keyword} 旗舰店"对比价格',
                 "建议查看近期用户评价后再决定购买",
             ],
-            "buy_timing": f"建议在主播给出额外优惠（折扣码/赠品）时下单，避免在限时倒计时压力下冲动消费",
+            "buy_timing": f"建议在主播给出额外优惠(折扣码/赠品)时下单，避免在限时倒计时压力下冲动消费",
             "action_plan": [
                 "先加入购物车不付款，观察价格是否持续变动",
                 "点击【进入直播间】并开启 StreamGuard 实时监控",
@@ -1426,12 +1500,279 @@ verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(
 @app.delete("/consumer/search-cache")
 async def clear_search_results_cache(q: str = None):
     """
-    清除搜索结果缓存（调试 / 强制刷新用）
+    清除搜索结果缓存(调试 / 强制刷新用)
     ?q=关键词  仅清除该词的缓存；不传则清除全部搜索缓存
     """
     if SEARCH_AVAILABLE:
         clear_search_cache(q)
     return {"cleared": True, "keyword": q or "all"}
+
+
+# ============= Consumer Product Search & Full-Suite API =============
+
+@app.get("/consumer/search-products")
+async def search_products(q: str):
+    """
+    按关键词搜索同类商品候选列表，供消费者决策中心 P1 对比使用。
+    优先 LLM 生成拟真商品数据；无 LLM 时返回规则兜底数据。
+    返回: { products: [{ id, name, brand, channel, price, spec, fit_for, known_risks }] }
+    """
+    keyword = (q or "").strip()
+    if not keyword or len(keyword) < 2:
+        raise HTTPException(status_code=400, detail="关键词太短，至少 2 个字")
+
+    # ── LLM 生成 ──────────────────────────────────────────────────────────
+    if client_async and LLM_API_KEY:
+        try:
+            prompt = f"""你是电商商品数据库。请为关键词「{keyword}」生成 4 个真实感的同类商品候选，
+适合消费者在直播间购物时横向对比。
+
+严格返回以下 JSON(不要任何额外文字或 markdown)：
+{{
+  "products": [
+    {{
+      "id": "p1",
+      "name": "商品全称(含品牌+型号)",
+      "brand": "品牌名",
+      "channel": "渠道(如：官方旗舰店/经销商/白牌)",
+      "price": "参考价格(如：¥199~¥249)",
+      "spec": "主要规格参数(30字以内)",
+      "fit_for": ["适合人群或场景1", "适合人群2"],
+      "known_risks": ["已知风险或注意事项1", "注意事项2"]
+    }}
+  ]
+}}
+
+要求：4 个商品覆盖不同价位段(低/中/中高/高)，品牌各不相同，数据真实合理。"""
+            resp = await client_async.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": "只返回合法 JSON，不要 markdown 代码块。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+                max_tokens=800,
+            )
+            raw = (resp.choices[0].message.content or "{}").strip()
+            if "```json" in raw:
+                raw = raw.split("```json")[1].split("```")[0]
+            elif "```" in raw:
+                raw = raw.split("```")[1].split("```")[0]
+            data = json.loads(raw.strip())
+            products = data.get("products", [])
+            if products:
+                print(f"[search-products] OK LLM returned {len(products)}  items ({LLM_PROVIDER}/{LLM_MODEL})")
+                return {"keyword": keyword, "products": products, "source": "llm"}
+        except Exception as e:
+            import traceback
+            print(f"[search-products] FAIL LLM ({type(e).__name__}): {e}")
+            print(traceback.format_exc()[:800])
+
+    # ── 规则兜底 ──────────────────────────────────────────────────────────
+    fallback = [
+        {
+            "id": f"p{i+1}",
+            "name": f"{keyword} 候选商品 {chr(65+i)}",
+            "brand": ["国际大牌", "国货新锐", "专业品牌", "性价比之选"][i % 4],
+            "channel": ["官方旗舰店", "品牌直播间", "经销商", "白牌自营"][i % 4],
+            "price": [f"¥{99+i*100}~¥{149+i*100}" for i in range(4)][i],
+            "spec": f"适用于{keyword}场景，标准规格参数",
+            "fit_for": ["大众人群", "注重品质用户"],
+            "known_risks": ["需核实产品资质", "建议索要检测报告"],
+        }
+        for i in range(4)
+    ]
+    return {"keyword": keyword, "products": fallback, "source": "rule"}
+
+
+@app.post("/consumer/full-suite")
+async def consumer_full_suite(payload: dict):
+    """
+    消费者 P0+P1+P2 综合分析(结合直播间话术证据)。
+    输入: { product_query, products, user_profile, stream_context }
+    返回: { engine, evidence_stats, p0, p1, p2 }
+      p0: { verdict, confidence, why_buy, why_not_buy, must_verify, consumer_summary }
+      p1: { compare_dimensions, products, ranked, analysis_notes }
+      p2: { ask_anchor_questions, alternatives, buy_timing, action_plan, risk_replay }
+    """
+    keyword     = (payload.get("product_query") or "").strip()
+    products    = payload.get("products") or []
+    user_profile = payload.get("user_profile") or {}
+    stream_ctx  = payload.get("stream_context") or {}
+
+    if not keyword:
+        raise HTTPException(status_code=400, detail="product_query 不能为空")
+
+    utterances  = stream_ctx.get("utterances", [])
+    chats       = stream_ctx.get("chats", [])
+    evidence_stats = {"utterance_count": len(utterances), "chat_count": len(chats)}
+
+    # 摘取风险话术样本(最多 10 条 trap/hype)供 LLM 分析
+    risk_utts = [u for u in utterances if u.get("type") in ("trap", "hype")][:10]
+    risk_text = "\n".join(f'- [{u["type"]}] {u.get("text","")[:60]}' for u in risk_utts)
+
+    compare_dims = ["价格透明度", "品质证据", "售后保障", "话术可信度", "综合性价比"]
+
+    # ── LLM 分析 ──────────────────────────────────────────────────────────
+    if client_async and LLM_API_KEY:
+        products_desc = "\n".join(
+            f"- 商品{i+1}「{p.get('name','未知')}」：品牌={p.get('brand','未知')}，"
+            f"渠道={p.get('channel','未知')}，价格={p.get('price','未知')}，"
+            f"规格={p.get('spec','未知')}"
+            for i, p in enumerate(products)
+        ) if products else "(用户未选择候选商品，请基于关键词作通用评估)"
+
+        user_str = ""
+        if user_profile.get("budget"):
+            user_str += f"\n用户预算：{user_profile['budget']}"
+        if user_profile.get("core_need"):
+            user_str += f"\n核心需求：{user_profile['core_need']}"
+
+        risk_section = f"\n\n【直播间风险话术样本(共{len(risk_utts)}条)】\n{risk_text}" if risk_utts else ""
+
+        product_names = [p.get("name", f"商品{i+1}") for i, p in enumerate(products)] or [keyword]
+        dims_str = str(compare_dims)
+        names_str = str(product_names)
+
+        prompt = f"""你是专业直播电商消费顾问，请基于以下信息给出购买决策分析。
+
+【搜索关键词】{keyword}{user_str}
+
+【候选商品】
+{products_desc}{risk_section}
+
+请严格返回以下 JSON(不要任何额外文字或 markdown 代码块)：
+{{
+  "p0": {{
+    "verdict": "BUY",
+    "confidence": 0.75,
+    "why_buy": ["理由1(具体结合商品/话术)", "理由2", "理由3"],
+    "why_not_buy": ["风险1", "风险2"],
+    "must_verify": ["必须核实的事项1", "必须核实的事项2"],
+    "consumer_summary": "给消费者的一段综合建议(60字以内)"
+  }},
+  "p1": {{
+    "compare_dimensions": {dims_str},
+    "products": [
+      {{
+        "name": "{product_names[0]}",
+        "scores": {{"价格透明度": 0.7, "品质证据": 0.75, "售后保障": 0.8, "话术可信度": 0.65, "综合性价比": 0.72}},
+        "overall": 0.72
+      }}
+    ],
+    "ranked": {names_str},
+    "analysis_notes": ["对比备注1", "对比备注2"]
+  }},
+  "p2": {{
+    "ask_anchor_questions": ["问题1(针对{keyword})", "问题2", "问题3"],
+    "alternatives": ["替代方案1", "替代方案2"],
+    "buy_timing": "具体建议在什么情况下下单(30字以内)",
+    "action_plan": ["步骤1", "步骤2", "步骤3"],
+    "risk_replay": [
+      {{"title": "风险点标题", "detail": "风险详情(结合话术样本)"}}
+    ]
+  }}
+}}
+
+verdict 只能是 BUY/WAIT/SKIP 之一；
+p1.products 必须包含所有 {max(1, len(products))}  items (无商品则用关键词作单品分析)；
+scores 各维度为 0~1 的小数；risk_replay 基于话术样本生成(无样本则生成通用风险提示)。"""
+
+        try:
+            resp = await client_async.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {"role": "system", "content": "只返回合法 JSON，不要 markdown 代码块。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=1600,
+            )
+            raw = (resp.choices[0].message.content or "{}").strip()
+            if "```json" in raw:
+                raw = raw.split("```json")[1].split("```")[0]
+            elif "```" in raw:
+                raw = raw.split("```")[1].split("```")[0]
+            result = json.loads(raw.strip())
+            result["engine"] = "llm"
+            result["evidence_stats"] = evidence_stats
+            # 确保 risk_replay 字段存在
+            if "p2" in result and "risk_replay" not in result["p2"]:
+                result["p2"]["risk_replay"] = []
+            return result
+        except Exception as e:
+            print(f"[full-suite] LLM 失败: {e}，降级到规则引擎")
+
+    # ── 规则引擎兜底 ──────────────────────────────────────────────────────
+    def _score(p, dim):
+        base = 0.65
+        price_str = str(p.get("price", ""))
+        if dim == "价格透明度":
+            return round(base + (0.1 if "¥" in price_str else -0.05), 2)
+        if dim == "品质证据":
+            return round(base + (0.1 if "旗舰" in str(p.get("channel","")) else 0.0), 2)
+        return round(base + random.uniform(-0.1, 0.1), 2)
+
+    rule_products = [
+        {
+            "name": p.get("name", f"商品{i+1}"),
+            "scores": {d: _score(p, d) for d in compare_dims},
+            "overall": round(sum(_score(p, d) for d in compare_dims) / len(compare_dims), 2),
+        }
+        for i, p in enumerate(products)
+    ] or [{"name": keyword, "scores": {d: 0.65 for d in compare_dims}, "overall": 0.65}]
+
+    top = max(rule_products, key=lambda x: x["overall"])
+    verdict = "BUY" if top["overall"] >= 0.70 else ("WAIT" if top["overall"] >= 0.55 else "SKIP")
+
+    return {
+        "engine": "rule",
+        "evidence_stats": evidence_stats,
+        "p0": {
+            "verdict": verdict,
+            "confidence": round(top["overall"], 2),
+            "why_buy": [
+                f"「{top['name']}」综合评分最高({round(top['overall']*100)}分)",
+                f"已接入 {len(utterances)} 条话术 + {len(chats)} 条弹幕证据",
+                f"关键词「{keyword}」在当前直播间有覆盖",
+            ],
+            "why_not_buy": [
+                "规则引擎兜底，建议配置 LLM API Key 获取更精准分析",
+                f"共发现 {len(risk_utts)} 条风险话术，请人工核验",
+            ],
+            "must_verify": [
+                f"核实「{keyword}」的产品资质和检测报告",
+                "确认退换货政策和实际到手价格",
+            ],
+            "consumer_summary": f"基于规则引擎分析，「{top['name']}」综合表现最佳，建议结合实时话术风险谨慎决策。",
+        },
+        "p1": {
+            "compare_dimensions": compare_dims,
+            "products": rule_products,
+            "ranked": [p["name"] for p in sorted(rule_products, key=lambda x: x["overall"], reverse=True)],
+            "analysis_notes": ["当前使用规则引擎兜底，配置 LLM 可获得更详细对比", "价格和品质数据来自商品描述字段"],
+        },
+        "p2": {
+            "ask_anchor_questions": [
+                f"这款{keyword}有没有质量检测报告或生产许可证号？",
+                "退换货政策是什么？出现质量问题如何处理？",
+                "现在的价格是活动价还是日常价？活动结束后价格会变吗？",
+            ],
+            "alternatives": [
+                f'在电商平台搜索「{keyword} 官方旗舰店」对比价格',
+                "先加购物车观察价格变动，避免冲动消费",
+            ],
+            "buy_timing": "建议主播给出额外赠品或折扣码时下单，避免在倒计时压力下冲动购买",
+            "action_plan": [
+                "截图记录当前价格和主播承诺内容",
+                "点击「进入直播间」并开启 StreamGuard 实时监控",
+                f"重点关注{keyword}的功效宣称是否有可验证依据",
+            ],
+            "risk_replay": [
+                {"title": f"话术风险(共{len(risk_utts)}条)", "detail": risk_text or "当前无风险话术样本，建议开启实时监控后重新分析。"}
+            ],
+        },
+    }
 
 
 @app.post("/session/summary")
@@ -1460,7 +1801,7 @@ async def session_summary(payload: dict):
         f"  [{u.get('type','?').upper()}] {u.get('text','')[:80]}"
         for u in top_risks
     )
-    # 取所有话术文本（转写内容摘要）
+    # 取所有话术文本(转写内容摘要)
     all_utterance_texts = "\n".join(
         f"  {u.get('text','')[:60]}" for u in utterances[:30]
     )
@@ -1494,24 +1835,24 @@ async def session_summary(payload: dict):
 - 直播间: {room_id}
 - 监控时长: {duration_str}
 - 主播话术总数: {total} 条
-- 理性指数: {ri} 分（满分100，越高越理性）
-- 事实型(FACT): {fact_n} 条 / 夸大型(HYPE): {hype_n} 条 / 陷阱型(TRAP): {trap_n} 条（陷阱占比 {trap_rate}%）
+- 理性指数: {ri} 分(满分100，越高越理性)
+- 事实型(FACT): {fact_n} 条 / 夸大型(HYPE): {hype_n} 条 / 陷阱型(TRAP): {trap_n} 条(陷阱占比 {trap_rate}%)
 
-【主播转写内容摘要（最近30条）】
-{all_utterance_texts if all_utterance_texts else '  （无转写内容）'}
+【主播转写内容摘要(最近30条)】
+{all_utterance_texts if all_utterance_texts else '  (无转写内容)'}
 
-【高风险话术（score最低的8条）】
-{top_risk_lines if top_risk_lines else '  （无明显高风险话术）'}
+【高风险话术(score最低的8条)】
+{top_risk_lines if top_risk_lines else '  (无明显高风险话术)'}
 
-【观众弹幕样本（最近30条）】
-{chat_sample if chat_sample else '  （无弹幕数据）'}
+【观众弹幕样本(最近30条)】
+{chat_sample if chat_sample else '  (无弹幕数据)'}
 
 请返回一个 JSON 对象，包含两个字段：
-1. "summary": 字符串，150字以内，综合主播话术和观众弹幕，描述本场直播的整体情况（主播卖了什么、观众反应如何、整体风险如何）
+1. "summary": 字符串，150字以内，综合主播话术和观众弹幕，描述本场直播的整体情况(主播卖了什么、观众反应如何、整体风险如何)
 2. "advice": JSON数组，4~6条建议，每条包含：
    - level: "high" | "medium" | "low" | "info"
-   - title: 建议标题（10字以内）
-   - body: 具体说明（50~100字，必须结合实际数据和弹幕内容，明确建议是给用户的）
+   - title: 建议标题(10字以内)
+   - body: 具体说明(50~100字，必须结合实际数据和弹幕内容，明确建议是给用户的)
 
 只返回 JSON 对象，不要有额外文字。"""
     try:
@@ -1542,7 +1883,7 @@ async def session_summary(payload: dict):
         return {"ai_advice": advice, "ai_summary": summary, "generated_by": "llm"}
     except Exception as e:
         return {
-            "ai_advice": [{"level": "info", "title": "AI分析暂不可用", "body": f"AI建议生成失败（{str(e)[:60]}），请查看本地统计数据。"}],
+            "ai_advice": [{"level": "info", "title": "AI分析暂不可用", "body": f"AI建议生成失败({str(e)[:60]})，请查看本地统计数据。"}],
             "generated_by": "fallback",
         }
 

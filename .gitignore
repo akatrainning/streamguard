@@ -10,6 +10,10 @@ wheels/
 whisper_cache/
 streamguard-backend/whisper_cache/
 
+# Chrome user profile (Douyin login session, auto-generated, do not commit)
+streamguard-backend/chrome_profile_douyin/
+streamguard-backend/chrome_profile/
+
 .ipynb_checkpoints/
 
 # venv

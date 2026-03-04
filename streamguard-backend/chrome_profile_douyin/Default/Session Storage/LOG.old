@@ -1,0 +1,5 @@
+2026/03/04-21:29:29.230 48f4 Reusing MANIFEST d:\学习资料\大创\2026\论文\MELON\agentdojo\streamguard-backend\chrome_profile_douyin\Default\Session Storage/MANIFEST-000001
+2026/03/04-21:29:29.264 48f4 Recovering log #3
+2026/03/04-21:29:29.265 48f4 (ignoring error) d:\学习资料\大创\2026\论文\MELON\agentdojo\streamguard-backend\chrome_profile_douyin\Default\Session Storage/000003.log: dropping 9554 bytes; Corruption: checksum mismatch
+2026/03/04-21:29:29.266 48f4 (ignoring error) d:\学习资料\大创\2026\论文\MELON\agentdojo\streamguard-backend\chrome_profile_douyin\Default\Session Storage/000003.log: dropping 901 bytes; Corruption: missing start of fragmented record(2)
+2026/03/04-21:29:29.276 48f4 Reusing old log d:\学习资料\大创\2026\论文\MELON\agentdojo\streamguard-backend\chrome_profile_douyin\Default\Session Storage/000003.log 

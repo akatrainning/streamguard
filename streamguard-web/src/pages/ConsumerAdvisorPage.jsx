@@ -116,7 +116,19 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
       </Section>
 
       {products.length > 0 && (
-        <Section title="P1：候选商品列表" subtitle="勾选后参与垂类对比分析（可多选）">
+        <Section
+          title="P1：候选商品列表"
+          subtitle={
+            <span>
+              勾选后参与垂类对比分析（可多选）
+              {searchResult?.source === "llm" ? (
+                <span style={{ marginLeft: 8, padding: "1px 7px", borderRadius: 8, fontSize: 10, background: "rgba(99,102,241,0.15)", color: "#818cf8", border: "1px solid rgba(99,102,241,0.3)" }}>✦ AI 生成</span>
+              ) : (
+                <span style={{ marginLeft: 8, padding: "1px 7px", borderRadius: 8, fontSize: 10, background: "rgba(239,68,68,0.1)", color: "#f87171", border: "1px solid rgba(239,68,68,0.25)" }}>⚠ 兜底数据（AI 不可用）</span>
+              )}
+            </span>
+          }
+        >
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8 }}>
             {products.map((p) => {
               const active = selectedIds.includes(p.id);
