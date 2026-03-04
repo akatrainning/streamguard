@@ -261,7 +261,7 @@ export default function App() {
 
       <div className="sg-workspace">
         <aside className="sg-sidebar">
-          <div className="sg-sidebar-title"></div>
+          {/* <div className="sg-sidebar-title"></div> */}
           <div className="sg-sidebar-nav">
             {NAV_TABS.map((tab) => (
               <button
