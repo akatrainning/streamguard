@@ -182,6 +182,8 @@ export default function App() {
       wsBase: prev.wsBase || "ws://localhost:8011",
     }));
     setPage("dashboard");
+    // 显式触发重连：与 handleReportClose 保持一致，避免纯靠 state 变化触发 useEffect 时的时序问题
+    setTimeout(() => realStream.reconnectNow?.(), 50);
   }, [reset, realStream]);
 
   /** 隞??圈△?孵"餈?湔??嚗???唳?嗅撕蝖株恕獢??血??湔? */

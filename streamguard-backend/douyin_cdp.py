@@ -13,7 +13,52 @@ import time
 import base64
 import threading
 import queue
+import subprocess
+import atexit
 from typing import Callable, Optional
+
+# ---------------------------------------------------------------------------
+# Global Chrome process tracker - 追踪所有我们启动的 chromedriver 进程树
+# 新连接启动前强制清理旧进程，防止 Chrome 僵尸进程积累
+# ---------------------------------------------------------------------------
+_tracked_service_pids: list = []
+_tracked_pids_lock = threading.Lock()
+
+
+def _kill_chrome_pid(pid: int):
+    """强制终止指定 PID 的进程及其所有子进程(Windows taskkill /T)。"""
+    try:
+        subprocess.run(
+            ['taskkill', '/F', '/T', '/PID', str(pid)],
+            capture_output=True, timeout=5
+        )
+    except Exception:
+        pass
+
+
+def _kill_all_tracked_chromes():
+    """杀掉所有追踪中的 Chrome/chromedriver 进程树。"""
+    with _tracked_pids_lock:
+        pids = _tracked_service_pids[:]
+        _tracked_service_pids.clear()
+    for pid in pids:
+        _kill_chrome_pid(pid)
+
+
+def _register_chrome_pid(pid: int):
+    with _tracked_pids_lock:
+        _tracked_service_pids.append(pid)
+
+
+def _unregister_chrome_pid(pid: int):
+    with _tracked_pids_lock:
+        try:
+            _tracked_service_pids.remove(pid)
+        except ValueError:
+            pass
+
+
+atexit.register(_kill_all_tracked_chromes)
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -200,9 +245,13 @@ class DouyinCDPScraper:
         # Enable performance logging for CDP WebSocket frames
         opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
+        _service_pid = None
         try:
-            service = Service(_get_chromedriver_path())
-            self.driver = webdriver.Chrome(service=service, options=opts)
+            _service = Service(_get_chromedriver_path())
+            self.driver = webdriver.Chrome(service=_service, options=opts)
+            _service_pid = getattr(getattr(_service, 'process', None), 'pid', None)
+            if _service_pid:
+                _register_chrome_pid(_service_pid)
             self.driver.set_page_load_timeout(20)
         except Exception as e:
             self.q.put({"event": "error", "message": f"Chrome start failed: {e}"})
@@ -311,14 +360,19 @@ class DouyinCDPScraper:
                     })
                     last_note_ts = now
 
-                time.sleep(0.2)  # 5Hz 轮询（原 10Hz），减少 CPU 占用
+                time.sleep(0.2)  # 5Hz 轮询(原 10Hz)，减少 CPU 占用
 
         except Exception as e:
             self.q.put({"event": "error", "message": f"CDP error: {e}"})
         finally:
             try:
                 if self.driver: self.driver.quit()
-            except: pass
+            except Exception:
+                pass
+            # 强制杀 chromedriver 进程树(确保 chrome.exe 子进程也被清理)
+            if _service_pid:
+                _unregister_chrome_pid(_service_pid)
+                _kill_chrome_pid(_service_pid)
 
     def _handle_binary(self, raw: bytes):
         ts = time.strftime("%H:%M:%S")
@@ -352,12 +406,13 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
     """Start Chrome scraper in thread, forward events via async callback.
 
     Retry strategy:
-    1) headless mode first (default)
-    2) if no data captured, retry once with headed mode (anti-bot fallback)
+    1) headless mode only (headed mode disabled - too resource intensive)
+    Chrome process cleanup is handled automatically via _tracked_service_pids.
     """
-    modes = [headless]
-    if headless:
-        modes.append(False)
+    # 启动新连接前先清理所有追踪中的旧 Chrome 进程，防止僵尸进程积累
+    _kill_all_tracked_chromes()
+
+    modes = [headless]  # 只尝试 headless，不再自动 fallback 到 headed(节省资源)
 
     last_error = None
     for idx, mode in enumerate(modes, start=1):
@@ -387,7 +442,7 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
                         last_error = evt.get("message")
                     await callback(evt)
 
-                await asyncio.sleep(0.1)  # 10Hz（原 20Hz）
+                await asyncio.sleep(0.1)  # 10Hz(原 20Hz)
 
             # Drain any remaining events after thread exits
             while True:
