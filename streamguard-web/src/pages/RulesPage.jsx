@@ -281,9 +281,11 @@ export default function RulesPage() {
         ))}
       </div>
 
-      {/* Grid */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"12px" }}>
-        {filtered.map((rule, idx) => {
+      {/* Grid — 两列独立瀑布流，展开互不影响 */}
+      <div style={{ display:"flex", gap:"12px", alignItems:"flex-start" }}>
+        {[0, 1].map(col => (
+          <div key={col} style={{ flex:1, display:"flex", flexDirection:"column", gap:"12px" }}>
+            {filtered.filter((_, i) => i % 2 === col).map((rule, idx) => {
           const rc = RC[rule.risk];
           const isOpen = expanded === rule.id;
           return (
@@ -358,6 +360,8 @@ export default function RulesPage() {
             </motion.div>
           );
         })}
+          </div>
+        ))}
       </div>
 
       {filtered.length === 0 && (
