@@ -8,7 +8,6 @@ const TYPE_CFG = {
 
 const SOURCE_CFG = {
   audio: { icon: "🎤", label: "主播话术", color: "#3f8cff", bg: "rgba(63,140,255,0.14)", border: "rgba(63,140,255,0.35)" },
-  chat: { icon: "💬", label: "观众质疑", color: "#d79b30", bg: "rgba(215,155,48,0.14)", border: "rgba(215,155,48,0.35)" },
   default: { icon: "📋", label: "分析", color: "var(--text-muted)", bg: "transparent", border: "transparent" },
 };
 
@@ -16,7 +15,6 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
   const [expandedId, setExpandedId] = useState(null);
   const [highlightedId, setHighlightedId] = useState(null);
   const [filter, setFilter] = useState("all");
-  const [srcFilter, setSrcFilter] = useState("audio");
   const scrollRef = useRef(null);
 
   useImperativeHandle(ref, () => ({
@@ -32,17 +30,14 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
     },
   }));
 
-  const srcFiltered = srcFilter === "all" ? utterances : utterances.filter((u) => u.source === srcFilter);
-  const filtered = filter === "all" ? srcFiltered : srcFiltered.filter((u) => u.type === filter);
+  // 仅展示主播话术风险分析（移除“观众质疑”模块）
+  const visibleUtterances = utterances.filter((u) => u?.source !== "chat");
+  const filtered = filter === "all" ? visibleUtterances : visibleUtterances.filter((u) => u.type === filter);
 
   const counts = {
-    fact: srcFiltered.filter((u) => u.type === "fact").length,
-    hype: srcFiltered.filter((u) => u.type === "hype").length,
-    trap: srcFiltered.filter((u) => u.type === "trap").length,
-  };
-  const srcCounts = {
-    audio: utterances.filter((u) => u.source === "audio").length,
-    chat: utterances.filter((u) => u.source === "chat").length,
+    fact: visibleUtterances.filter((u) => u.type === "fact").length,
+    hype: visibleUtterances.filter((u) => u.type === "hype").length,
+    trap: visibleUtterances.filter((u) => u.type === "trap").length,
   };
 
   return (
@@ -52,31 +47,22 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
       borderRadius: 12,
       overflow: "hidden",
       flex: 1,
+      minHeight: 0,
+      display: "flex",
+      flexDirection: "column",
       boxShadow: "0 12px 28px rgba(4,9,16,0.24)",
     }}>
       <div style={{ padding: "14px 18px", borderBottom: "1px solid #2b3f5c" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: 0.2 }}>话术风险分析</span>
           <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {utterances.length} 条
+            {visibleUtterances.length} 条
           </span>
-        </div>
-
-        <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-          {[
-            { key: "all", label: "🔍 全部", count: utterances.length, color: "var(--accent)" },
-            { key: "audio", label: "🎤 主播话术", count: srcCounts.audio, color: "#3f8cff" },
-            { key: "chat", label: "💬 观众质疑", count: srcCounts.chat, color: "#d79b30" },
-          ].map((tab) => (
-            <button key={tab.key} onClick={() => { setSrcFilter(tab.key); setFilter("all"); }} style={tabBtnStyle(srcFilter === tab.key, tab.color)}>
-              {tab.label}{tab.count > 0 ? ` (${tab.count})` : ""}
-            </button>
-          ))}
         </div>
 
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {[
-            { key: "all", label: "全部", count: srcFiltered.length, color: "var(--accent)" },
+            { key: "all", label: "全部", count: visibleUtterances.length, color: "var(--accent)" },
             { key: "fact", label: "FACT", count: counts.fact, color: "var(--fact)" },
             { key: "hype", label: "HYPE", count: counts.hype, color: "var(--hype)" },
             { key: "trap", label: "TRAP", count: counts.trap, color: "var(--trap)" },
@@ -88,7 +74,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
         </div>
       </div>
 
-      <div ref={scrollRef} style={{ height: 380, overflowY: "auto", padding: "10px 14px" }}>
+      <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "10px 14px" }}>
         {filtered.map((item) => {
           const cfg = TYPE_CFG[item.type];
           const id = item.uid || item.id;
@@ -213,11 +199,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
               {"暂无主播话术转写…"}
             </div>
             <div style={{ fontSize: 11, marginTop: 6, color: "var(--text-muted)", opacity: 0.75 }}>
-              {srcFilter === "audio"
-                ? "连接直播间后，音频将每15秒自动转写分析"
-                : srcFilter === "chat"
-                ? "包含实质质疑/投诉内容的弹幕将出现于此"
-                : "主播话术（音频转写）和观众质疑弹幕将自动出现"}
+              连接直播间后，音频将每15秒自动转写分析
             </div>
           </div>
         )}

@@ -187,6 +187,7 @@ export default function App() {
   }
 
   const activeTab = NAV_TABS.find((tab) => tab.id === page) || NAV_TABS[0];
+  const lockDashboardHeight = page === "dashboard" && dashboardSection === "stream";
   const NAV_ICONS = {
     dashboard: "▦",
     discover: "⌕",
@@ -239,7 +240,16 @@ export default function App() {
 
         <main className="sg-main">
       {page === "dashboard" && (
-        <div className="sg-dashboard" style={{ padding: "20px 24px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+        <div
+          className="sg-dashboard"
+          style={{
+            padding: "20px 24px 20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
+            ...(lockDashboardHeight ? { height: "100%", minHeight: 0, overflow: "hidden" } : null),
+          }}
+        >
           <div className="sg-dashboard-head">
             <div className="sg-dashboard-title">实时总览</div>
             <div className="sg-dashboard-tabs">
@@ -287,9 +297,12 @@ export default function App() {
                 : "minmax(520px, 1fr)",
               gap: 18,
               alignItems: "stretch",
+              flex: 1,
+              minHeight: 0,
+              overflow: "hidden",
             }}>
               {dataSource === "douyin" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
                   {sourceConfig.roomId ? (
                     <VideoPlayer
                       roomId={sourceConfig.roomId}
@@ -301,6 +314,9 @@ export default function App() {
                       border: "1px solid var(--border)",
                       borderRadius: 10,
                       overflow: "hidden",
+                      display: "flex",
+                      flexDirection: "column",
+                      height: "100%",
                     }}>
                       <div style={{
                         padding: "12px 16px",
@@ -314,7 +330,8 @@ export default function App() {
                       </div>
                       <div style={{
                         background: "#000",
-                        aspectRatio: "16/9",
+                        flex: 1,
+                        minHeight: 240,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -328,11 +345,11 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
-                <div style={{ flexShrink: 0, maxHeight: 320, overflow: "hidden" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
+                <div style={{ flex: "0 0 300px", minHeight: 0, overflow: "hidden" }}>
                   <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 380 }}>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
                   <SemanticFeed ref={feedRef} utterances={utterances} />
                 </div>
               </div>

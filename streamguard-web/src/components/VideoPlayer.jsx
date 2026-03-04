@@ -224,7 +224,7 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
         position: "relative",
         background: "#000",
         flex: 1,
-        minHeight: 260,
+        minHeight: 240,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
