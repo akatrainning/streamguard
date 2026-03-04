@@ -676,8 +676,8 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
     if _fw_model is None:
         print(f"[ASR-local] 首次加载 faster-whisper 模型(model={_FW_MODEL_SIZE}, threads={_FW_CPU_THREADS}, beam={_FW_BEAM_SIZE})...")
         model_path = os.path.join(os.path.dirname(__file__), "whisper_base_model")
-        if not os.path.isdir(model_path):
-            model_path = _FW_MODEL_SIZE
+        if not os.path.isfile(os.path.join(model_path, "model.bin")):
+            model_path = _FW_MODEL_SIZE  # 本地目录缺失 model.bin，回退到自动下载
         print(f"[ASR-local] 使用模型: {model_path}")
         _fw_model = WhisperModel(
             model_path,
