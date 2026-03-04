@@ -32,6 +32,7 @@ export default function RiskRadar({ data = [] }) {
     <div style={{
       background: "var(--bg-secondary)", border: "1px solid var(--border)",
       borderRadius: 10, overflow: "hidden",
+      display: "flex", flexDirection: "column", height: "100%",
     }}>
       {/* Header */}
       <div style={{
@@ -56,7 +57,7 @@ export default function RiskRadar({ data = [] }) {
       </div>
 
       {/* Chart */}
-      <div style={{ padding: "0 8px", minHeight: 220 }}>
+      <div style={{ padding: "0 8px", minHeight: 220, flex: 1 }}>
         {view === "radar" ? (
           <ResponsiveContainer width="100%" height={220}>
             <RadarChart data={data} margin={{ top: 10, right: 30, bottom: 10, left: 30 }}>

@@ -69,6 +69,7 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
     <div style={{
       background: "var(--bg-secondary)", border: "1px solid var(--border)",
       borderRadius: 10, overflow: "hidden",
+      display: "flex", flexDirection: "column", height: "100%", minHeight: 0,
     }}>
       {/* Header */}
       <div style={{
@@ -139,7 +140,7 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
       )}
 
       {/* 弹幕列表 */}
-      <div ref={chatRef} style={{ height: 260, overflowY: "auto", padding: "6px 14px" }}>
+      <div ref={chatRef} style={{ flex: 1, minHeight: 200, overflowY: "auto", padding: "6px 14px" }}>
         {chatMessages.length === 0 && (
           <div style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center", paddingTop: 36 }}>
             等待弹幕数据…

@@ -43,6 +43,7 @@ export default function RationalityGauge({ value = 78, utterances = [] }) {
     <div style={{
       background: "var(--bg-secondary)", border: "1px solid var(--border)",
       borderRadius: 10, overflow: "hidden",
+      display: "flex", flexDirection: "column", height: "100%",
     }}>
       {/* Header */}
       <div style={{
