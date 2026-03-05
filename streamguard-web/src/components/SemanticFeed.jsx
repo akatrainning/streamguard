@@ -184,6 +184,12 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                       </div>
                     </div>
                   )}
+
+                  {!item.violations?.length && !item.suggestion && !(item.display_text && item.display_text !== item.text) && (
+                    <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic", padding: "4px 0" }}>
+                      暂无详细分析数据
+                    </div>
+                  )}
                 </div>
               )}
             </div>
