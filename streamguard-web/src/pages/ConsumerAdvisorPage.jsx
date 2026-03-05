@@ -94,7 +94,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
 
   return (
     <div style={{ maxWidth: 1500, margin: "0 auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-      <Section title="消费者决策中心（P0+P1+P2）" subtitle="从‘值不值得买’出发：结论、对比、行动计划">
+      <Section title="消费者决策中心" subtitle="从‘值不值得买’出发：结论、对比、行动计划">
         <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr auto", gap: 8 }}>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索商品，例如：玻尿酸精华、破壁机、儿童学习桌"
             style={inputStyle} />
@@ -105,7 +105,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
 
         <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
           <button style={{ ...btnStyle, background: "var(--accent)", color: "#fff", border: "none" }} onClick={runFullSuite} disabled={analyzing}>
-            {analyzing ? "分析中..." : "开始 P0/P1/P2 综合分析"}
+            {analyzing ? "分析中..." : "开始综合分析"}
           </button>
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             已接入证据：话术 {utterances.length} 条 / 弹幕 {chatMessages.length} 条
