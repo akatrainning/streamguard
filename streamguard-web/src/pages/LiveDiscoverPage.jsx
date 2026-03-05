@@ -179,6 +179,9 @@ export default function LiveDiscoverPage({
     if (selectedRooms.length < 2) { setError("请至少勾选 2 个直播间进行对比"); return; }
     setError(""); setComparing(true); setComparison(null);
     try {
+      // 传入当前已监听到的话术与弹幕作为分析证据
+      const us = utterances.slice(0, 60).map(u => ({ text: u.text, type: u.type, score: u.score }));
+      const cs = chatMessages.slice(0, 100).map(c => ({ text: c.text, intent: c.intent, sentiment: c.sentiment }));
       const res = await fetch(`${apiBase}/consumer/compare-streams`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -186,6 +189,7 @@ export default function LiveDiscoverPage({
           keyword: query.trim(),
           rooms: selectedRooms,
           user_profile: {},
+          stream_context: { utterances: us, chats: cs },
         }),
       });
       const data = await res.json();
@@ -681,17 +685,15 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
           直播中
         </div>
 
-        {/* Viewer count */}
-        {room.viewer_count > 0 && (
-          <div style={{
-            position: "absolute", bottom: 9, left: 9,
-            background: "rgba(0,0,0,.5)", color: "var(--text-secondary)",
-            borderRadius: 20, padding: "2px 9px",
-            fontSize: 10, fontWeight: 500, backdropFilter: "blur(6px)",
-          }}>
-            {fmtViewers(room.viewer_count)} 观看
-          </div>
-        )}
+        {/* Viewer count — always show; use fmtViewers for formatting */}
+        <div style={{
+          position: "absolute", bottom: 9, left: 9,
+          background: "rgba(0,0,0,.5)", color: "var(--text-secondary)",
+          borderRadius: 20, padding: "2px 9px",
+          fontSize: 10, fontWeight: 500, backdropFilter: "blur(6px)",
+        }}>
+          {room.viewer_count > 0 ? `${fmtViewers(room.viewer_count)} 观看` : "热播中"}
+        </div>
       </div>
 
       {/* Info */}
@@ -816,9 +818,13 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
             <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>跨直播间对比分析</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
               关键词：{keyword} · {engineLabel}
-              {evidence_stats && (
-                <span style={{ marginLeft: 10 }}>
-                  话术 {evidence_stats.utterance_count ?? 0} 条 · 弹幕 {evidence_stats.chat_count ?? 0} 条
+              {evidence_stats && (evidence_stats.utterance_count > 0 || evidence_stats.chat_count > 0) ? (
+                <span style={{ marginLeft: 10, color: FACT }}>
+                  ✓ 话术 {evidence_stats.utterance_count} 条 · 弹幕 {evidence_stats.chat_count} 条已纳入分析
+                </span>
+              ) : (
+                <span style={{ marginLeft: 10, color: "var(--text-muted)" }}>
+                  基于直播间标题与推荐分分析（可先开启监控再对比以获得更精准结果）
                 </span>
               )}
             </div>

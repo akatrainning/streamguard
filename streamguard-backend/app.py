@@ -51,6 +51,7 @@ class CompareStreamsRequest(BaseModel):
     keyword: str
     rooms: List[RoomInfo]
     user_profile: Optional[dict] = None
+    stream_context: Optional[dict] = None   # { utterances: [...], chats: [...] }
 
 app.add_middleware(
     CORSMiddleware,
@@ -480,6 +481,20 @@ _media_url_cache: dict[str, tuple[str, float]] = {}   # room_id -> (url, expire_
 _MEDIA_URL_TTL = 900  # seconds(上次 5分钟，现在 15分钟)
 
 
+def _fix_chromedriver_permissions(driver_path: str):
+    """Fix chromedriver executable permissions on Windows."""
+    import os
+    import stat
+    if os.name == 'nt':  # Windows
+        try:
+            # Add execute permission for current user
+            current_perms = os.stat(driver_path).st_mode
+            os.chmod(driver_path, current_perms | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            print(f"[chromedriver] 权限已修复: {driver_path}")
+        except Exception as e:
+            print(f"[chromedriver] 权限修复失败: {e}")
+
+
 def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[str]:
     """Open Douyin room and detect candidate media URL (m3u8/flv) from CDP logs."""
     # 命中缓存：同一房间在 TTL 内直接返回上次发现的 URL
@@ -530,12 +545,16 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
         import sys
         # log_output 仅在较新版本的 selenium Service 中支持，兼容旧版
         try:
+            driver_path = ChromeDriverManager().install()
+            _fix_chromedriver_permissions(driver_path)
             service = Service(
-                ChromeDriverManager().install(),
+                driver_path,
                 log_output=subprocess.DEVNULL,
             )
         except TypeError:
-            service = Service(ChromeDriverManager().install())
+            driver_path = ChromeDriverManager().install()
+            _fix_chromedriver_permissions(driver_path)
+            service = Service(driver_path)
         driver = webdriver.Chrome(service=service, options=opts)
         _service_pid = getattr(getattr(service, 'process', None), 'pid', None)
         driver.set_page_load_timeout(25)
@@ -1350,11 +1369,24 @@ async def compare_streams(request: CompareStreamsRequest):
     keyword = request.keyword.strip()
     rooms = request.rooms
     user_profile = request.user_profile or {}
+    stream_ctx = request.stream_context or {}
 
     if not keyword or len(keyword) < 2:
         raise HTTPException(status_code=400, detail="关键词无效")
     if len(rooms) < 2:
         raise HTTPException(status_code=400, detail="至少需要 2 个直播间进行对比")
+
+    # 从 stream_context 提取真实话术与弹幕证据
+    utterances = stream_ctx.get("utterances", [])
+    chats = stream_ctx.get("chats", [])
+    evidence_stats = {"utterance_count": len(utterances), "chat_count": len(chats)}
+
+    # 摘取风险话术样本供 LLM 分析（最多 8 条 trap/hype）
+    risk_utts = [u for u in utterances if u.get("type") in ("trap", "hype")][:8]
+    risk_text = (
+        "\n\n【已监听到的高风险话术样本】\n"
+        + "\n".join(f'- [{u["type"]}] {u.get("text","")[:60]}' for u in risk_utts)
+    ) if risk_utts else ""
 
     compare_dims = ["价格", "品质", "信任度", "物流", "性价比"]
 
@@ -1362,8 +1394,9 @@ async def compare_streams(request: CompareStreamsRequest):
     if client_async and LLM_API_KEY:
         rooms_desc = "\n".join(
             f"- 直播间{i+1}({r.room_id})：主播={r.anchor_name or '未知'}，"
-            f"标题={r.room_title or '未知'}，观看人数={r.viewer_count or 0}，"
-            f"推荐分={r.recommendation_score or 0.5:.2f}"
+            f"标题={r.room_title or '未知'}"
+            + (f"，观看人数={r.viewer_count}" if r.viewer_count else "")
+            + f"，推荐分={r.recommendation_score or 0.5:.2f}"
             for i, r in enumerate(rooms)
         )
         user_str = ""
@@ -1378,15 +1411,15 @@ async def compare_streams(request: CompareStreamsRequest):
         prompt = f"""你是直播电商消费顾问，请对以下直播间进行"{keyword}"商品的综合对比分析。
 
 【直播间列表】
-{rooms_desc}{user_str}
+{rooms_desc}{user_str}{risk_text}
 
 请严格返回以下 JSON 格式(不要任何额外文字)：
 {{
   "p0": {{
     "verdict": "BUY",
     "confidence": 0.78,
-    "why_buy": ["推荐理由1(结合具体直播间)", "推荐理由2", "推荐理由3"],
-    "why_not_buy": ["谨慎因素1", "谨慎因素2"]
+    "why_buy": ["推荐理由1(结合具体直播间内容)", "推荐理由2", "推荐理由3"],
+    "why_not_buy": ["需核实的谨慎因素1(具体说明)", "谨慎因素2"]
   }},
   "p1": {{
     "compare_dimensions": {dims_str},
@@ -1400,14 +1433,14 @@ async def compare_streams(request: CompareStreamsRequest):
     "ranked": {str(room_names)}
   }},
   "p2": {{
-    "ask_anchor_questions": ["问题1(针对{keyword})", "问题2", "问题3"],
-    "alternatives": ["替代方案1", "替代方案2"],
-    "buy_timing": "建议在XX情况下下单",
+    "ask_anchor_questions": ["请问{keyword}的产地和生产日期？", "是否有质检报告或官方认证？", "退换货政策具体是什么？"],
+    "alternatives": ["替代方案1(具体渠道)", "替代方案2"],
+    "buy_timing": "建议在XX情况下下单，避免YY时冲动消费",
     "action_plan": ["行动步骤1", "行动步骤2", "行动步骤3"]
   }}
 }}
 
-verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(rooms)} 个直播间；scores 各维度值为 0~1 的小数。"""
+注意：verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(rooms)} 个直播间；scores 各维度值为 0~1 的小数；why_not_buy 必须基于真实可验证的因素，不得使用伪造数据或"人数为0"等虚假信息。"""
 
         try:
             resp = await client_async.chat.completions.create(
@@ -1428,7 +1461,7 @@ verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(
             result = json.loads(raw.strip())
             result["engine"] = "llm"
             result["keyword"] = keyword
-            result["evidence_stats"] = {"utterance_count": 0, "chat_count": 0}
+            result["evidence_stats"] = evidence_stats
             return result
         except Exception as e:
             print(f"[compare] LLM 生成失败: {e}，降级到规则引擎")
@@ -1462,12 +1495,12 @@ verdict 只能是 BUY/WAIT/SKIP 之一；products 数组必须包含所有 {len(
             "confidence": round(top_score, 2),
             "why_buy": [
                 f"{top_room} 综合推荐分最高({round(top_score*100)}分)",
-                f"观看人数 {rooms[0].viewer_count} 人，直播间热度较高" if rooms[0].viewer_count else f"关键词 [{keyword}] 匹配度高",
-                "建议进入直播间后开启 StreamGuard 监控获取实时话术分析",
+                f"关键词 [{keyword}] 匹配度高，主播话术风险评分相对低",
+                "建议进入直播间后开启 StreamGuard 实时监控，获取详细的话术分析与风险评估",
             ],
             "why_not_buy": [
-                "当前分析仅基于标题和观看人数，缺乏实时话术数据",
-                "建议开启监控模式获取更全面的风险评估",
+                "当前分析基于直播间基础信息，缺乏实时话术内容与用户评价数据",
+                "建议开启监控模式采集主播实时话术，获取更全面的风险评估",
             ],
         },
         "p1": {

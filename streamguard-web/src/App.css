@@ -102,12 +102,13 @@
 }
 
 .sg-sidebar-title {
-  font-size: 14px;
+  font-size: 17px;
   color: var(--text-primary);
   margin-bottom: 20px;
   font-weight: 800;
   padding: 0 8px;
   letter-spacing: 0.5px;
+  text-align: center;
 }
 
 .sg-sidebar-nav {
@@ -120,13 +121,14 @@
 .sg-side-link {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   width: 100%;
-  text-align: left;
+  text-align: center;
   border: none;
   border-radius: 8px;
   background: transparent;
-  padding: 10px 10px 10px 14px;
+  padding: 10px 12px;
   color: #b1bfd2;
   cursor: pointer;
   box-shadow: none !important;
@@ -168,7 +170,7 @@
 
 .sg-side-label {
   display: block;
-  font-size: 13.5px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -230,18 +232,20 @@
 }
 
 .sg-sidebar-card-title {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-muted);
   margin-bottom: 5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  text-align: center;
 }
 
 .sg-sidebar-card-body {
-  font-size: 11px;
+  font-size: 12px;
   color: #98a9bf;
   line-height: 1.5;
+  text-align: center;
 }
 
 .sg-app::before,
