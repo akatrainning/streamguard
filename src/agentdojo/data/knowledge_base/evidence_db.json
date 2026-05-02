@@ -1,0 +1,38 @@
+[
+  {
+    "evidence_id": "rule_price_001",
+    "source": "rule_db",
+    "title": "绝对化价格宣传风险",
+    "content": "涉及最低、第一、唯一等表述时，应具备充分、可核验的证明材料。",
+    "stance": "risk_supporting",
+    "score": 0.88,
+    "related_claim_types": ["price_claim"]
+  },
+  {
+    "evidence_id": "rule_scarcity_001",
+    "source": "rule_db",
+    "title": "稀缺促销风险",
+    "content": "库存有限、最后机会等表述需要真实库存数据支持。",
+    "stance": "risk_supporting",
+    "score": 0.85,
+    "related_claim_types": ["scarcity_claim"]
+  },
+  {
+    "evidence_id": "product_sku_mask_001",
+    "source": "product_fact",
+    "title": "口罩商品信息",
+    "content": "口罩价格：19.9元，库存：200件，资质：合格。",
+    "stance": "neutral",
+    "score": 0.9,
+    "related_claim_types": ["price_claim", "scarcity_claim"]
+  },
+  {
+    "evidence_id": "historical_case_001",
+    "source": "historical_case",
+    "title": "类似违规案例",
+    "content": "主播宣称'全网最低'但无比价证据，被判定虚假宣传。",
+    "stance": "risk_supporting",
+    "score": 0.92,
+    "related_claim_types": ["price_claim"]
+  }
+]

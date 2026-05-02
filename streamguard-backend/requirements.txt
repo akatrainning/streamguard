@@ -13,3 +13,7 @@ imageio-ffmpeg
 faster-whisper
 onnxruntime
 openai-whisper
+langchain
+faiss-cpu
+sentence-transformers
+pydantic

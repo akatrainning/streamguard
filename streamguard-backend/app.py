@@ -19,6 +19,17 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, H
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
+# Import RAG Pipeline
+try:
+    from rag_pipeline import RAGPipeline
+    from models import LiveSemanticEvent, RAGQuestion, Claim, ClaimType
+    rag_pipeline = RAGPipeline()
+    RAG_AVAILABLE = True
+except ImportError as e:
+    print(f"[RAG] Import failed: {e}; RAG features disabled")
+    RAG_AVAILABLE = False
+    rag_pipeline = None
+
 load_dotenv()
 
 try:
@@ -1047,6 +1058,29 @@ class DouyinLiveSource:
                         })
             elif evt.get("event") == "utterance":
                 last_utterance_text = evt.get("text", "")
+                # Integrate RAG analysis
+                if RAG_AVAILABLE and rag_pipeline:
+                    try:
+                        from models import LiveSemanticEvent, Modality
+                        rag_event = LiveSemanticEvent(
+                            event_id=f"live_{evt.get('id', int(time.time() * 1000))}",
+                            session_id=f"session_{self.room_id}",
+                            timestamp=time.time(),
+                            modality=Modality.ASR,
+                            source="douyin_live",
+                            raw_content=last_utterance_text,
+                            confidence=0.9
+                        )
+                        rag_result = await asyncio.to_thread(rag_pipeline.process_event, rag_event)
+                        # Add RAG results to the event
+                        evt["rag_claims"] = [claim.dict() if hasattr(claim, 'dict') else claim for claim in (rag_result.claim or [])]
+                        evt["rag_evidence"] = [ev.dict() if hasattr(ev, 'dict') else ev for ev in (rag_result.evidence or [])]
+                        evt["rag_verification"] = rag_result.verification.dict() if rag_result.verification and hasattr(rag_result.verification, 'dict') else rag_result.verification
+                        evt["rag_risk"] = rag_result.risk.dict() if rag_result.risk and hasattr(rag_result.risk, 'dict') else rag_result.risk
+                        evt["rag_report"] = rag_result.report.dict() if rag_result.report and hasattr(rag_result.report, 'dict') else rag_result.report
+                    except Exception as e:
+                        print(f"[RAG] analysis failed: {e}")
+                        evt["rag_error"] = str(e)
                 await callback(evt)
             else:
                 await callback(evt)
@@ -1573,4 +1607,76 @@ async def health():
         "asr_cloud_configured": bool(asr_client),
         "openai_configured": LLM_PROVIDER == "openai" and bool(LLM_API_KEY),
         "gpt4_available": LLM_PROVIDER == "openai" and OPENAI_AVAILABLE and bool(LLM_API_KEY),
+        "rag_available": RAG_AVAILABLE,
+        "rag_status": "initialized" if RAG_AVAILABLE and rag_pipeline else "failed",
     }
+
+
+# ============= RAG Endpoints =============
+
+@app.post("/rag/analyze")
+async def rag_analyze_event(event: LiveSemanticEvent):
+    """RAG-based analysis of a LiveSemanticEvent"""
+    if not RAG_AVAILABLE:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+
+    try:
+        result = rag_pipeline.process_event(event)
+        return result.dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG analysis failed: {str(e)}")
+
+
+@app.post("/v2/rag/ask")
+async def rag_ask_question(question: RAGQuestion):
+    """RAG QA for evidence-based answers"""
+    if not RAG_AVAILABLE:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+
+    try:
+        # Find the claim by claim_id (simplified, in real impl would query DB)
+        # For now, assume we have the claim from context
+        mock_claim = Claim(
+            claim_id=question.claim_id,
+            claim_type=[ClaimType.PRICE_CLAIM],
+            subject="商品",
+            predicate=["全网最低"],
+            value=["最低价"],
+            required_evidence=["price_comparison"],
+            confidence=0.9
+        )
+        mock_evidences = rag_pipeline.evidence_rag(mock_claim)
+
+        answer = rag_pipeline.rag_qa(question.question, mock_claim, mock_evidences)
+
+        return {
+            "question": question.question,
+            "answer": answer,
+            "claim_id": question.claim_id,
+            "evidence_count": len(mock_evidences)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG QA failed: {str(e)}")
+
+
+@app.post("/rag/review")
+async def rag_review_utterance(text: str):
+    """RAG-based review of a single utterance"""
+    if not RAG_AVAILABLE:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+
+    try:
+        from models import LiveSemanticEvent, Modality
+        event = LiveSemanticEvent(
+            event_id=f"review_{int(time.time() * 1000)}",
+            session_id="review_session",
+            timestamp=time.time(),
+            modality=Modality.TEXT,
+            source="manual_review",
+            raw_content=text,
+            confidence=0.9
+        )
+        result = rag_pipeline.process_event(event)
+        return result.dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG review failed: {str(e)}")
