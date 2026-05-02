@@ -1,0 +1,39 @@
+{
+  "nodes": [
+    {
+      "node_id": "rule_price_001",
+      "label": "绝对化价格宣传规则",
+      "content": "涉及最低、第一、唯一、全网最低等价格绝对化表述，需提供可核验的比价证明。",
+      "related_claim_types": ["price_claim"],
+      "score": 0.88
+    },
+    {
+      "node_id": "rule_scarcity_001",
+      "label": "稀缺促销规则",
+      "content": "只剩最后、库存有限、限时抢购等话术，需引用真实库存或活动规则。",
+      "related_claim_types": ["scarcity_claim"],
+      "score": 0.85
+    },
+    {
+      "node_id": "rule_combined_001",
+      "label": "价格与稀缺复合风险规则",
+      "content": "价格绝对化加稀缺促销组合时，违规风险进一步提高。",
+      "related_claim_types": ["price_claim", "scarcity_claim"],
+      "score": 0.92
+    }
+  ],
+  "edges": [
+    {
+      "from": "rule_price_001",
+      "to": "rule_combined_001",
+      "relation": "组合风险",
+      "weight": 0.9
+    },
+    {
+      "from": "rule_scarcity_001",
+      "to": "rule_combined_001",
+      "relation": "组合风险",
+      "weight": 0.9
+    }
+  ]
+}
