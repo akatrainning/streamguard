@@ -17,7 +17,8 @@ from typing import Callable, Optional
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
+
+from douyin_cdp import _get_chromedriver_path
 
 
 # ---------------------------------------------------------------------------
@@ -148,10 +149,11 @@ class DouyinSeleniumScraper:
         opts.add_experimental_option("useAutomationExtension", False)
 
         try:
-            service = Service(ChromeDriverManager().install())
+            driver_path = _get_chromedriver_path()
+            service = Service(driver_path)
             self.driver = webdriver.Chrome(service=service, options=opts)
         except Exception as e:
-            self.q.put({"event": "error", "message": f"Chrome startup failed: {e}"})
+            self.q.put({"event": "error", "message": f"Chrome startup failed (driver={locals().get('driver_path', 'unknown')}): {e}"})
             return
 
         try:

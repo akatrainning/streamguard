@@ -15,6 +15,9 @@ import threading
 import queue
 import subprocess
 import atexit
+import os
+import pathlib
+import stat
 from typing import Callable, Optional
 
 # ---------------------------------------------------------------------------
@@ -71,10 +74,57 @@ from webdriver_manager.chrome import ChromeDriverManager
 # ---------------------------------------------------------------------------
 _CHROMEDRIVER_PATH: Optional[str] = None
 
+def _fix_chromedriver_permissions(driver_path: str):
+    """Best-effort permission repair for webdriver binaries on Windows."""
+    if os.name != "nt" or not os.path.exists(driver_path):
+        return
+    try:
+        current_perms = os.stat(driver_path).st_mode
+        os.chmod(driver_path, current_perms | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    except Exception:
+        pass
+
+def _resolve_chromedriver_path(driver_path: str) -> str:
+    """Normalize webdriver-manager output to a runnable chromedriver.exe path."""
+    candidate = pathlib.Path(driver_path)
+    search_roots = []
+    if candidate.exists():
+        search_roots.append(candidate if candidate.is_dir() else candidate.parent)
+    search_roots.append(candidate.parent)
+    search_roots.append(candidate.parent.parent)
+
+    seen: set[str] = set()
+    for root in search_roots:
+        root_str = str(root)
+        if not root_str or root_str in seen or not root.exists():
+            continue
+        seen.add(root_str)
+        for hit in root.rglob("chromedriver.exe"):
+            if hit.is_file():
+                return str(hit)
+    return driver_path
+
+def _validate_chromedriver_path(driver_path: str) -> str:
+    """Ensure the resolved driver is executable before handing it to Selenium."""
+    resolved = _resolve_chromedriver_path(driver_path)
+    _fix_chromedriver_permissions(resolved)
+    try:
+        subprocess.run(
+            [resolved, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"chromedriver not runnable at {resolved}: {exc}") from exc
+    return resolved
+
 def _get_chromedriver_path() -> str:
     global _CHROMEDRIVER_PATH
     if _CHROMEDRIVER_PATH is None:
-        _CHROMEDRIVER_PATH = ChromeDriverManager().install()
+        raw_path = ChromeDriverManager().install()
+        _CHROMEDRIVER_PATH = _validate_chromedriver_path(raw_path)
     return _CHROMEDRIVER_PATH
 
 
