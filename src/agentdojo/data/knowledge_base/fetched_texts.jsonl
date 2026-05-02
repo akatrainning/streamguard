@@ -1,2 +1,6 @@
 {"text_id": "captured_text_001", "content": "主播说这个价格全网最低，只剩最后100单，用户容易误解价格和库存真实性。", "confidence": 0.92, "related_claim_types": ["price_claim", "scarcity_claim"]}
 {"text_id": "captured_text_002", "content": "页面显示库存仅剩5件，实际库存可能未同步到平台。", "confidence": 0.85, "related_claim_types": ["scarcity_claim"]}
+{"text_id": "captured_text_003", "content": "这个商品全网最低价，只剩最后10件！", "confidence": 0.9, "related_claim_types": ["price_claim", "scarcity_claim"]}
+{"text_id": "captured_text_004", "content": "这个商品全网最低价，只剩最后10件！", "confidence": 0.9, "related_claim_types": ["price_claim", "scarcity_claim"]}
+{"text_id": "captured_text_68709591", "content": "这个商品全网最低价，只剩最后50件！", "confidence": 0.83, "related_claim_types": ["price_claim", "scarcity_claim"]}
+{"text_id": "captured_text_677fb556", "content": "这个商品全网最低价，只剩最后50件！", "confidence": 0.83, "related_claim_types": ["price_claim", "scarcity_claim"]}

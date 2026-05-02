@@ -15,16 +15,7 @@ class RAGPipeline:
         self.evidence_db = self.load_evidence_db()
         self.fetched_texts = self.load_fetched_texts()
         self.rule_graph = self.load_rule_graph()
-        self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
-        # Fit vectorizer on combined texts for consistent vocabulary
-        all_text_contents = [case['current_utterance'] for case in self.claim_cases]
-        all_text_contents += [ev['content'] for ev in self.evidence_db]
-        all_text_contents += [ft['content'] for ft in self.fetched_texts]
-        all_text_contents += [node['content'] for node in self.rule_graph.get('nodes', [])]
-        self.vectorizer.fit(all_text_contents)
-        self.claim_matrix = self.vectorizer.transform([case['current_utterance'] for case in self.claim_cases])
-        self.evidence_matrix = self.vectorizer.transform([ev['content'] for ev in self.evidence_db])
-        self.fetched_texts_matrix = self.vectorizer.transform([ft['content'] for ft in self.fetched_texts])
+        self.rebuild_vector_spaces()
         # LLM not used for now, simplified
 
     def load_claim_cases(self) -> List[Dict]:
@@ -52,6 +43,42 @@ class RAGPipeline:
         path = os.path.join(os.path.dirname(__file__), '..', 'src', 'agentdojo', 'data', 'knowledge_base', 'rule_graph.json')
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
+
+    def _get_kb_path(self, filename: str) -> str:
+        return os.path.join(os.path.dirname(__file__), '..', 'src', 'agentdojo', 'data', 'knowledge_base', filename)
+
+    def rebuild_vector_spaces(self) -> None:
+        all_text_contents = [case['current_utterance'] for case in self.claim_cases]
+        all_text_contents += [ev['content'] for ev in self.evidence_db]
+        all_text_contents += [ft['content'] for ft in self.fetched_texts]
+        all_text_contents += [node['content'] for node in self.rule_graph.get('nodes', [])]
+
+        self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
+        self.vectorizer.fit(all_text_contents)
+        self.claim_matrix = self.vectorizer.transform([case['current_utterance'] for case in self.claim_cases])
+        self.evidence_matrix = self.vectorizer.transform([ev['content'] for ev in self.evidence_db])
+        self.fetched_texts_matrix = self.vectorizer.transform([ft['content'] for ft in self.fetched_texts])
+
+    def append_fetched_text(self, entry: Dict[str, Any], persist: bool = True) -> None:
+        if persist:
+            with open(self._get_kb_path('fetched_texts.jsonl'), 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        self.fetched_texts.append(entry)
+        self.rebuild_vector_spaces()
+
+    def append_claim_case(self, entry: Dict[str, Any], persist: bool = True) -> None:
+        if persist:
+            with open(self._get_kb_path('claim_cases.jsonl'), 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        self.claim_cases.append(entry)
+        self.rebuild_vector_spaces()
+
+    def refresh_from_files(self) -> None:
+        self.claim_cases = self.load_claim_cases()
+        self.evidence_db = self.load_evidence_db()
+        self.fetched_texts = self.load_fetched_texts()
+        self.rule_graph = self.load_rule_graph()
+        self.rebuild_vector_spaces()
 
     def rule_gate(self, event: LiveSemanticEvent) -> bool:
         # Simple rule gate: check for high-risk keywords
