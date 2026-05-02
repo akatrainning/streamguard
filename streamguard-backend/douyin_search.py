@@ -18,6 +18,21 @@ from typing import Optional
 
 import httpx
 
+
+def _looks_mojibake(text: str) -> bool:
+    """Heuristic check for common UTF-8/GBK mojibake fragments."""
+    if not text:
+        return False
+    return any(marker in text for marker in ("鐨", "鐩存", "鎾", "闂", "瑙", "鍙"))
+
+
+def _normalize_room_title(title: str, anchor_name: str = "") -> str:
+    """Return a readable fallback title when extracted text is garbled."""
+    clean = (title or "").strip()
+    if clean and not _looks_mojibake(clean):
+        return clean
+    return f"{anchor_name}的直播间" if anchor_name else "直播间"
+
 # ---------------------------------------------------------------------------
 # 常量
 # ---------------------------------------------------------------------------
@@ -129,6 +144,8 @@ def _parse_room_from_item(item: dict) -> Optional[dict]:
         or item.get("custom_verify")   # 认证描述(如"水果 · 供应商")
         or (f"{anchor_name}的直播间" if anchor_name else "直播间")
     )
+
+    room_title = _normalize_room_title(room_title, anchor_name)
 
     # ---- viewer_count ----
     # item_list[0].statistics.watch_count 或 play_count
@@ -430,6 +447,7 @@ def _search_via_cdp(keyword: str, max_results: int) -> list:
                         or lives.get("title")
                         or (f"{nickname}的直播间" if nickname else "直播间")
                     )
+                    title = _normalize_room_title(title, nickname)
                     rooms.append({
                         "room_id": room_id,
                         "anchor_name": nickname,

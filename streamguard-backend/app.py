@@ -1125,14 +1125,14 @@ def analyze_audio_semantics(text: str) -> dict:
 
     try:
         prompt = """
-浣犳槸鈥滅洿鎾棿璇煶杞啓鍚堣瀹¤鍛樷€濄€傝鍙熀浜庣粰瀹氭枃鏈仛鍒ゆ柇锛屼笉瑕佽剳琛ユ湭鍑虹幇浜嬪疄銆?
+你是“直播话术转写合规审查员”。请仅基于给定文本判断，不要补充不存在的事实。
 
-閲嶇偣锛?
-1) 鏄惁瀛樺湪鏋侀檺璇嶃€佺粷瀵瑰寲鎵胯銆佺枟鏁?鏀剁泭淇濊瘉銆?
-2) 鏄惁瀛樺湪鍘嬭揩寮忎績鍗?鍊掕鏃躲€佸彧鍓╂渶鍚庛€侀敊杩囧悗鎮?銆?
-3) 鏄惁缁欏嚭鍙牳楠屼緷鎹?妫€娴嬫姤鍛娿€佺紪鍙枫€佹垚鍒嗗拰鑼冨洿鏉′欢)銆?
+重点关注：
+1) 是否存在极限词、绝对化承诺、疗效或收益保证。
+2) 是否存在施压式促单，例如倒计时、只剩最后、错过后悔。
+3) 是否给出可核验依据，例如检测报告、编号、成分、适用范围。
 
-涓ユ牸杩斿洖 JSON锛?
+严格返回 JSON：
 {
   "type": "fact|hype|trap",
   "score": 0-1,
@@ -1150,7 +1150,7 @@ def analyze_audio_semantics(text: str) -> dict:
             model=LLM_MODEL,
             messages=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": f"璇疯瘎浼拌繖娈电洿鎾闊宠浆鍐欙細{text}"},
+                {"role": "user", "content": f"请评估这段直播话术转写：{text}"},
             ],
             temperature=0.1,
             max_tokens=650,
@@ -1195,11 +1195,11 @@ def _split_sentences_zh(text: str) -> list[str]:
     """Split Chinese text into short utterances for finer semantic analysis."""
     if not text:
         return []
-    parts = re.split(r"[銆傦紒锛??\n]+", text)
+    parts = re.split(r"[。！？?\n]+", text)
     return [p.strip() for p in parts if p and p.strip()]
 
 
-# 濯掍綋 URL 缂撳瓨锛氶伩鍏嶉噸澶嶅惎鍔?Chrome (TTL = 15 鍒嗛挓)
+# Media URL cache to avoid repeated Chrome startup (TTL = 15 minutes).
 _media_url_cache: dict[str, tuple[str, float]] = {}   # room_id -> (url, expire_ts)
 _MEDIA_URL_TTL = 900  # seconds
 
@@ -1303,7 +1303,7 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
                             break
                 if not result_url:
                     result_url = candidates[-1]
-                # 鍐欏叆缂撳瓨
+                # Cache the discovered media URL for a short time.
                 _media_url_cache[room_id] = (result_url, time.time() + _MEDIA_URL_TTL)
                 return result_url
 
@@ -1329,10 +1329,11 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
 
 def _get_ffmpeg_bin() -> str:
     """
-    鑷姩鑾峰彇 ffmpeg 璺緞銆?
-    浼樺厛椤哄簭锛?
-      1. imageio-ffmpeg 鍐呯疆浜岃繘鍒?pip install imageio-ffmpeg锛屾棤闇€鎵嬪姩瀹夎銆佹棤闇€閰?PATH)
-      2. 绯荤粺 PATH 涓殑 ffmpeg(宸叉墜鍔ㄥ畨瑁呯殑鐢ㄦ埛 fallback)
+    Resolve an ffmpeg binary path.
+
+    Preference order:
+      1. Bundled binary from imageio-ffmpeg
+      2. ffmpeg available on the system PATH
     """
     try:
         import imageio_ffmpeg
@@ -1345,8 +1346,8 @@ def _get_ffmpeg_bin() -> str:
     if path:
         return path
     raise RuntimeError(
-        "ffmpeg 鏈壘鍒般€傝杩愯: pip install imageio-ffmpeg  "
-        "(鎴栨墜鍔ㄥ畨瑁呯郴缁?ffmpeg 骞跺姞鍏?PATH)"
+        "ffmpeg not found. Run: pip install imageio-ffmpeg "
+        "(or install ffmpeg and add it to PATH)."
     )
 
 
@@ -1357,7 +1358,7 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
     """
     ffmpeg_bin = _get_ffmpeg_bin()
 
-    # ffmpeg CPU 绾跨▼鏁帮細淇濈暀 2 鏍哥粰绯荤粺锛屾渶灏?1 绾跨▼
+    # Keep a couple of CPU cores free for the rest of the system.
     ffmpeg_threads = str(max(1, (os.cpu_count() or 4) - 2))
 
     with tempfile.TemporaryDirectory() as td:
@@ -1365,15 +1366,15 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
         cmd = [
             ffmpeg_bin,
             "-y",
-            "-fflags", "nobuffer",          # 鍑忓皯杈撳叆缂撳啿寤惰繜
+            "-fflags", "nobuffer",          # Reduce input buffering delay.
             "-flags", "low_delay",
             "-i", stream_url,
             "-t", str(max(8, min(seconds, 90))),
-            "-vn",                           # 鍙闊抽锛岃烦杩囪棰戣В鐮?
+            "-vn",                           # Audio only; skip video decoding.
             "-ac", "1",
             "-ar", "16000",
             "-acodec", "pcm_s16le",
-            "-threads", ffmpeg_threads,      # 闄愬埗 CPU 绾跨▼鏁?
+            "-threads", ffmpeg_threads,      # Limit CPU thread usage.
             out_wav,
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -1421,8 +1422,8 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
         segments, _ = _fw_model.transcribe(
             tmp_path,
             language="zh",
-            beam_size=_FW_BEAM_SIZE,        # 1=璐績瑙ｇ爜锛堝揩 3-5x锛夛紝5=鏉熸悳绱紙鍑嗕絾鎱級
-            vad_filter=False,              # VAD闇€瑕乷nnxruntime锛屾殏鏃剁鐢?
+            beam_size=_FW_BEAM_SIZE,        # 1 is faster; larger beams may improve accuracy.
+            vad_filter=False,               # Keep disabled unless onnxruntime is available.
         )
         return " ".join(seg.text.strip() for seg in segments).strip()
     finally:

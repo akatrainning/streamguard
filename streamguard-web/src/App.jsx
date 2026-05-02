@@ -6,9 +6,7 @@ import Header, { NAV_TABS } from "./components/Header";
 import VideoPlayer from "./components/VideoPlayer";
 import LiveStreamPanel from "./components/LiveStreamPanel";
 import SemanticFeed from "./components/SemanticFeed";
-import RationalityGauge from "./components/RationalityGauge";
-import RiskRadar from "./components/RiskRadar";
-import TopologyGraph from "./components/TopologyGraph";
+import RiskInsightSidebar from "./components/RiskInsightSidebar";
 import AlertBanner from "./components/AlertBanner";
 import RationalityGate from "./components/RationalityGate";
 import DataSourceSelector from "./components/DataSourceSelector";
@@ -34,6 +32,7 @@ export default function App() {
   const [dashboardSection, setDashboardSection] = useState("ops");
   const [entryStep, setEntryStep] = useState("welcome");
   const [showSourceSelector, setShowSourceSelector] = useState(false);
+  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(true);
   const [authToken, setAuthToken] = useState(() => getStoredToken());
   const [authUser, setAuthUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -364,6 +363,10 @@ export default function App() {
     analytics: "深度分析",
     profile: "个人主页",
   };
+  const dashboardModuleLabel = dashboardSection === "ops" ? "运营指挥台" : "直播与话术";
+  const dashboardModuleDescription = dashboardSection === "ops"
+    ? "连接诊断、实时指标和告警处置"
+    : "直播画面、弹幕流和主播话术转写";
 
   return (
     <div className="app-shell sg-app">
@@ -389,17 +392,54 @@ export default function App() {
         <aside className="sg-sidebar">
           {/* <div className="sg-sidebar-title"></div> */}
           <div className="sg-sidebar-nav">
-            {NAV_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => navigateTo(tab.id)}
-                className={`sg-side-link ${page === tab.id ? "is-active" : ""} ${!authUser && protectedPages.has(tab.id) ? "is-locked" : ""}`}
-              >
-                <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
-                <span className="sg-side-label">{tab.label}</span>
-                {!authUser && protectedPages.has(tab.id) && <span className="sg-side-lock">LOCK</span>}
-              </button>
-            ))}
+            {NAV_TABS.map((tab) => {
+              if (tab.id === "dashboard") {
+                return (
+                  <div key={tab.id} className={`sg-side-group ${dashboardMenuOpen ? "is-open" : ""}`}>
+                    <button
+                      onClick={() => {
+                        setDashboardMenuOpen((open) => !open);
+                        navigateTo("dashboard");
+                      }}
+                      className={`sg-side-link sg-side-parent ${page === "dashboard" ? "is-active" : ""}`}
+                    >
+                      <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
+                      <span className="sg-side-label">{tab.label}</span>
+                      <span className="sg-side-chevron">⌄</span>
+                    </button>
+                    <div className="sg-side-submenu">
+                      {[
+                        { id: "ops", label: "运营指挥台" },
+                        { id: "stream", label: "直播与话术" },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          className={`sg-side-subitem ${page === "dashboard" && dashboardSection === item.id ? "is-active" : ""}`}
+                          onClick={() => {
+                            setDashboardMenuOpen(true);
+                            setDashboardSection(item.id);
+                            navigateTo("dashboard");
+                          }}
+                        >
+                          <span>{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => navigateTo(tab.id)}
+                  className={`sg-side-link ${page === tab.id ? "is-active" : ""} ${!authUser && protectedPages.has(tab.id) ? "is-locked" : ""}`}
+                >
+                  <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
+                  <span className="sg-side-label">{tab.label}</span>
+                  {!authUser && protectedPages.has(tab.id) && <span className="sg-side-lock">LOCK</span>}
+                </button>
+              );
+            })}
           </div>
           <div className="sg-sidebar-card">
             <div className="sg-sidebar-card-title">当前页</div>
@@ -420,24 +460,24 @@ export default function App() {
           }}
         >
           <div className="sg-dashboard-head">
-            <div className="sg-dashboard-title">实时总览</div>
-            <div className="sg-dashboard-tabs">
-              {[
-                { id: "ops", label: "运营指挥台" },
-                { id: "stream", label: "直播与话术" },
-                { id: "analysis", label: "风险分析" },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  className={`sg-dash-tab ${dashboardSection === tab.id ? "is-active" : ""}`}
-                  onClick={() => setDashboardSection(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <div className="sg-dashboard-heading">
+              <div className="sg-dashboard-title">{dashboardModuleLabel}</div>
             </div>
+            <div className="sg-dashboard-context">{dashboardModuleDescription}</div>
           </div>
 
+          <div className="sg-dashboard-body">
+            <RiskInsightSidebar
+              rationalityIndex={rationalityIndex}
+              riskData={riskData}
+              alerts={alerts}
+              utterances={utterances}
+              messageTotals={messageTotals}
+              viewerCount={viewerCount}
+              onJumpTo={jumpToUtterance}
+            />
+
+            <section className="sg-dashboard-stage">
           {dashboardSection === "ops" && (
             <div className="sg-ops-grid">
               <CommandCenter
@@ -540,8 +580,8 @@ export default function App() {
           <div style={{
             display: dashboardSection === "stream" ? "grid" : "none",
             gridTemplateColumns: dataSource === "douyin"
-              ? "minmax(420px, 1.1fr) minmax(420px, 1fr)"
-              : "minmax(520px, 1fr)",
+              ? "minmax(360px, 1.08fr) minmax(340px, 0.92fr)"
+              : "minmax(0, 1fr)",
             gap: 18,
             alignItems: "stretch",
             flex: 1,
@@ -602,18 +642,8 @@ export default function App() {
               </div>
             </div>
           </div>
-
-          {dashboardSection === "analysis" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, minHeight: 0 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <RationalityGauge value={rationalityIndex} utterances={utterances} />
-                <RiskRadar data={riskData} />
-              </div>
-              <div style={{ height: 560 }}>
-                <TopologyGraph utterances={utterances} />
-              </div>
-            </div>
-          )}
+            </section>
+          </div>
         </div>
 
       {activePageLocked && (
