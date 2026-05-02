@@ -13,9 +13,14 @@ import shutil
 import sys
 import tempfile
 import subprocess
-from typing import Optional, List
+import base64
+import hashlib
+import hmac
+import secrets
+import sqlite3
+from typing import Optional, List, Tuple
 from pydantic import BaseModel
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -53,6 +58,32 @@ class CompareStreamsRequest(BaseModel):
     user_profile: Optional[dict] = None
     stream_context: Optional[dict] = None   # { utterances: [...], chats: [...] }
 
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    nickname: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UpdateProfileRequest(BaseModel):
+    nickname: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
+
+
+class HistorySaveRequest(BaseModel):
+    entry: dict
+    snapshot: Optional[dict] = None
+
+
+class HistoryRenameRequest(BaseModel):
+    product: str
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -86,6 +117,11 @@ async def _startup_cleanup():
             print("[startup] cleaned stale chromedriver processes")
     except Exception:
         pass
+
+
+@app.on_event("startup")
+async def _startup_init_sqlite():
+    _init_sqlite()
 
 
 # LLM Configuration
@@ -156,6 +192,643 @@ else:
 
 _LLM_DISABLED_REASON = ""
 _ASR_DISABLED_REASON = ""
+
+_SQLITE_DB_PATH = os.getenv(
+    "SQLITE_DB_PATH",
+    os.path.join(os.path.dirname(__file__), "streamguard.db"),
+)
+_AUTH_TOKEN_TTL_DAYS = int(os.getenv("AUTH_TOKEN_TTL_DAYS", "7"))
+_AUTH_PASSWORD_MIN_LEN = int(os.getenv("AUTH_PASSWORD_MIN_LEN", "8"))
+
+
+def _ensure_sqlite_dir(path: str) -> None:
+    dir_path = os.path.dirname(path)
+    if dir_path:
+        os.makedirs(dir_path, exist_ok=True)
+
+
+def _init_sqlite() -> None:
+    if not _SQLITE_DB_PATH:
+        return
+    _ensure_sqlite_dir(_SQLITE_DB_PATH)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                password_salt TEXT NOT NULL,
+                password_iter INTEGER NOT NULL,
+                nickname TEXT,
+                avatar_url TEXT,
+                bio TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                last_login INTEGER
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token_hash TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                revoked_at INTEGER,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS session_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                product TEXT,
+                brand TEXT,
+                date TEXT,
+                duration TEXT,
+                total INTEGER,
+                fact INTEGER,
+                hype INTEGER,
+                trap INTEGER,
+                score INTEGER,
+                viewers INTEGER,
+                start_time INTEGER,
+                end_time INTEGER,
+                room_id TEXT,
+                sample_utterances TEXT,
+                snapshot_json TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_history_user_time ON session_history(user_id, created_at)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS utterances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT,
+                room_id TEXT,
+                source TEXT,
+                text TEXT,
+                display_text TEXT,
+                type TEXT,
+                score REAL,
+                timestamp TEXT,
+                created_at INTEGER,
+                engine TEXT,
+                keywords TEXT,
+                violations TEXT,
+                sub_scores TEXT,
+                suggestion TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT,
+                room_id TEXT,
+                user TEXT,
+                text TEXT,
+                timestamp TEXT,
+                created_at INTEGER,
+                sentiment TEXT,
+                intent TEXT,
+                flags TEXT,
+                risk_score REAL,
+                label TEXT,
+                correlation TEXT
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_utterances_room_time ON utterances(room_id, created_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chats_room_time ON chats(room_id, created_at)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _json_dump(value) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=True, separators=(",", ":"))
+    except Exception:
+        return "[]" if isinstance(value, list) else "{}"
+
+
+def _safe_json_loads(value, fallback):
+    if value is None:
+        return fallback
+    try:
+        return json.loads(value)
+    except Exception:
+        return fallback
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _hash_password(password: str, salt_b64: Optional[str] = None, iterations: Optional[int] = None):
+    if iterations is None:
+        iterations = 150000
+    if salt_b64:
+        salt = base64.b64decode(salt_b64.encode("utf-8"))
+    else:
+        salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return (
+        base64.b64encode(digest).decode("utf-8"),
+        base64.b64encode(salt).decode("utf-8"),
+        iterations,
+    )
+
+
+def _verify_password(password: str, stored_hash: str, stored_salt: str, stored_iter: int) -> bool:
+    derived_hash, _, _ = _hash_password(password, stored_salt, stored_iter)
+    return hmac.compare_digest(derived_hash, stored_hash)
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _public_user(row: dict) -> dict:
+    return {
+        "id": row.get("id"),
+        "email": row.get("email"),
+        "nickname": row.get("nickname"),
+        "avatar_url": row.get("avatar_url"),
+        "bio": row.get("bio"),
+        "created_at": row.get("created_at"),
+        "last_login": row.get("last_login"),
+    }
+
+
+def _get_user_by_email(email: str) -> Optional[dict]:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _get_user_by_id(user_id: int) -> Optional[dict]:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _create_user(email: str, password: str, nickname: Optional[str]) -> dict:
+    now = int(time.time() * 1000)
+    pwd_hash, pwd_salt, pwd_iter = _hash_password(password)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO users (email, password_hash, password_salt, password_iter, nickname, avatar_url, bio, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                email,
+                pwd_hash,
+                pwd_salt,
+                pwd_iter,
+                nickname,
+                None,
+                None,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        user_id = cur.lastrowid
+    finally:
+        conn.close()
+    return _get_user_by_id(user_id)
+
+
+def _create_session(user_id: int) -> str:
+    token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(token)
+    now = int(time.time() * 1000)
+    expires_at = now + _AUTH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute(
+            """
+            INSERT INTO auth_sessions (user_id, token_hash, created_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, token_hash, now, expires_at),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
+def _get_user_by_token(token: str) -> Optional[dict]:
+    token_hash = _hash_token(token)
+    now = int(time.time() * 1000)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            """
+            SELECT u.*
+            FROM auth_sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.token_hash = ? AND s.revoked_at IS NULL AND s.expires_at >= ?
+            ORDER BY s.id DESC
+            LIMIT 1
+            """,
+            (token_hash, now),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def _revoke_session(token: str) -> None:
+    token_hash = _hash_token(token)
+    now = int(time.time() * 1000)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute(
+            "UPDATE auth_sessions SET revoked_at = ? WHERE token_hash = ? AND revoked_at IS NULL",
+            (now, token_hash),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _touch_last_login(user_id: int) -> None:
+    now = int(time.time() * 1000)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute(
+            "UPDATE users SET last_login = ?, updated_at = ? WHERE id = ?",
+            (now, now, user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _update_user_profile(user_id: int, nickname: Optional[str], avatar_url: Optional[str], bio: Optional[str]) -> None:
+    now = int(time.time() * 1000)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute(
+            """
+            UPDATE users
+            SET nickname = ?, avatar_url = ?, bio = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (nickname, avatar_url, bio, now, user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
+    if not authorization:
+        return None
+    parts = authorization.strip().split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    return parts[1]
+
+
+async def _get_user_from_auth_header(authorization: Optional[str]) -> Tuple[dict, str]:
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authorization token")
+    user = await asyncio.to_thread(_get_user_by_token, token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return user, token
+
+
+def _insert_utterance(event: dict, room_id: Optional[str]) -> None:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        event_id = event.get("id")
+        display_text = event.get("display_text") or event.get("text") or ""
+        conn.execute(
+            """
+            INSERT INTO utterances (
+                event_id, room_id, source, text, display_text, type, score,
+                timestamp, created_at, engine, keywords, violations, sub_scores, suggestion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(event_id) if event_id is not None else None,
+                room_id,
+                event.get("source"),
+                event.get("text"),
+                display_text,
+                event.get("type"),
+                event.get("score"),
+                event.get("timestamp"),
+                int(time.time() * 1000),
+                event.get("engine"),
+                _json_dump(event.get("keywords") or []),
+                _json_dump(event.get("violations") or []),
+                _json_dump(event.get("sub_scores") or {}),
+                event.get("suggestion"),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _insert_chat(event: dict, room_id: Optional[str]) -> None:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        event_id = event.get("id")
+        conn.execute(
+            """
+            INSERT INTO chats (
+                event_id, room_id, user, text, timestamp, created_at,
+                sentiment, intent, flags, risk_score, label, correlation
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(event_id) if event_id is not None else None,
+                room_id,
+                event.get("user"),
+                event.get("text"),
+                event.get("timestamp"),
+                int(time.time() * 1000),
+                event.get("sentiment"),
+                event.get("intent"),
+                _json_dump(event.get("flags") or []),
+                event.get("risk_score"),
+                event.get("label"),
+                event.get("correlation"),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _persist_stream_event(event: dict, room_id: Optional[str]) -> None:
+    if not _SQLITE_DB_PATH:
+        return
+    event_type = event.get("event")
+    if event_type == "utterance":
+        _insert_utterance(event, room_id)
+    elif event_type == "chat":
+        _insert_chat(event, room_id)
+
+
+async def _persist_event_async(event: dict, room_id: Optional[str]) -> None:
+    if not _SQLITE_DB_PATH:
+        return
+    try:
+        await asyncio.to_thread(_persist_stream_event, event, room_id)
+    except Exception as exc:
+        print(f"[sqlite] persist failed: {exc}")
+
+
+def _fetch_utterances(room_id: Optional[str], limit: int) -> list:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        if room_id:
+            rows = conn.execute(
+                "SELECT * FROM utterances WHERE room_id = ? ORDER BY created_at DESC LIMIT ?",
+                (room_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM utterances ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        items = []
+        for row in rows:
+            items.append({
+                **dict(row),
+                "keywords": _safe_json_loads(row["keywords"], []),
+                "violations": _safe_json_loads(row["violations"], []),
+                "sub_scores": _safe_json_loads(row["sub_scores"], {}),
+            })
+        return items
+    finally:
+        conn.close()
+
+
+def _fetch_chats(room_id: Optional[str], limit: int) -> list:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        if room_id:
+            rows = conn.execute(
+                "SELECT * FROM chats WHERE room_id = ? ORDER BY created_at DESC LIMIT ?",
+                (room_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM chats ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        items = []
+        for row in rows:
+            items.append({
+                **dict(row),
+                "flags": _safe_json_loads(row["flags"], []),
+            })
+        return items
+    finally:
+        conn.close()
+
+
+def _normalize_history_entry(entry: dict) -> dict:
+    return {
+        "product": entry.get("product") or "Session",
+        "brand": entry.get("brand") or "-",
+        "date": entry.get("date") or "",
+        "duration": entry.get("duration") or "",
+        "total": int(entry.get("total") or 0),
+        "fact": int(entry.get("fact") or 0),
+        "hype": int(entry.get("hype") or 0),
+        "trap": int(entry.get("trap") or 0),
+        "score": int(entry.get("score") or 0),
+        "viewers": int(entry.get("viewers") or 0),
+        "start_time": entry.get("startTime"),
+        "end_time": entry.get("endTime"),
+        "room_id": entry.get("roomId"),
+        "sample_utterances": entry.get("sampleUtterances") or [],
+    }
+
+
+def _insert_history_session(user_id: int, entry: dict, snapshot: Optional[dict]) -> dict:
+    now = int(time.time() * 1000)
+    normalized = _normalize_history_entry(entry)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        cur = conn.execute(
+            """
+            INSERT INTO session_history (
+                user_id, product, brand, date, duration, total, fact, hype, trap,
+                score, viewers, start_time, end_time, room_id, sample_utterances,
+                snapshot_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                normalized["product"],
+                normalized["brand"],
+                normalized["date"],
+                normalized["duration"],
+                normalized["total"],
+                normalized["fact"],
+                normalized["hype"],
+                normalized["trap"],
+                normalized["score"],
+                normalized["viewers"],
+                normalized["start_time"],
+                normalized["end_time"],
+                normalized["room_id"],
+                _json_dump(normalized["sample_utterances"]),
+                _json_dump(snapshot) if snapshot else None,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+        session_id = cur.lastrowid
+    finally:
+        conn.close()
+    return _get_history_session(user_id, session_id)
+
+
+def _history_row_to_entry(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "product": row["product"],
+        "brand": row["brand"],
+        "date": row["date"],
+        "duration": row["duration"],
+        "total": row["total"],
+        "fact": row["fact"],
+        "hype": row["hype"],
+        "trap": row["trap"],
+        "score": row["score"],
+        "viewers": row["viewers"],
+        "startTime": row["start_time"],
+        "endTime": row["end_time"],
+        "roomId": row["room_id"],
+        "sampleUtterances": _safe_json_loads(row["sample_utterances"], []),
+    }
+
+
+def _get_history_session(user_id: int, session_id: int) -> Optional[dict]:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT * FROM session_history WHERE id = ? AND user_id = ?",
+            (session_id, user_id),
+        ).fetchone()
+        return _history_row_to_entry(row) if row else None
+    finally:
+        conn.close()
+
+
+def _list_history_sessions(user_id: int, limit: int) -> list:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM session_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+        return [_history_row_to_entry(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def _get_history_snapshot(user_id: int, session_id: int) -> Optional[dict]:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT snapshot_json FROM session_history WHERE id = ? AND user_id = ?",
+            (session_id, user_id),
+        ).fetchone()
+        if not row:
+            return None
+        return _safe_json_loads(row["snapshot_json"], None)
+    finally:
+        conn.close()
+
+
+def _rename_history_session(user_id: int, session_id: int, product: str) -> None:
+    now = int(time.time() * 1000)
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute(
+            "UPDATE session_history SET product = ?, updated_at = ? WHERE id = ? AND user_id = ?",
+            (product, now, session_id, user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _delete_history_session(user_id: int, session_id: int) -> None:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute(
+            "DELETE FROM session_history WHERE id = ? AND user_id = ?",
+            (session_id, user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _clear_history_sessions(user_id: int) -> None:
+    conn = sqlite3.connect(_SQLITE_DB_PATH)
+    try:
+        conn.execute("DELETE FROM session_history WHERE user_id = ?", (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _is_auth_error(exc: Exception) -> bool:
@@ -913,6 +1586,7 @@ async def ws_mock_stream(websocket: WebSocket):
     async def push(data):
         try:
             await websocket.send_json(data)
+            await _persist_event_async(data, "mock")
         except Exception:
             pass
 
@@ -1070,6 +1744,7 @@ async def ws_douyin_stream(websocket: WebSocket, room_id: str):
     async def push(data: dict):
         try:
             await websocket.send_json(data)
+            await _persist_event_async(data, room_id)
         except Exception:
             pass
 
@@ -1095,6 +1770,150 @@ async def ws_douyin_stream(websocket: WebSocket, room_id: str):
             await websocket.close()
         except Exception:
             pass
+
+
+@app.post("/auth/register")
+async def auth_register(payload: RegisterRequest):
+    email = (payload.email or "").strip().lower()
+    password = payload.password or ""
+    nickname = (payload.nickname or "").strip() or email.split("@", 1)[0]
+
+    if not email or not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Invalid email")
+    if len(password) < _AUTH_PASSWORD_MIN_LEN:
+        raise HTTPException(status_code=400, detail="Password too short")
+    if len(nickname) > 60:
+        raise HTTPException(status_code=400, detail="Nickname too long")
+
+    existing = await asyncio.to_thread(_get_user_by_email, email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    try:
+        user = await asyncio.to_thread(_create_user, email, password, nickname)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    token = await asyncio.to_thread(_create_session, user["id"])
+    return {"token": token, "user": _public_user(user)}
+
+
+@app.post("/auth/login")
+async def auth_login(payload: LoginRequest):
+    email = (payload.email or "").strip().lower()
+    password = payload.password or ""
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Missing credentials")
+
+    user = await asyncio.to_thread(_get_user_by_email, email)
+    if not user or not _verify_password(password, user["password_hash"], user["password_salt"], user["password_iter"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    await asyncio.to_thread(_touch_last_login, user["id"])
+    user = await asyncio.to_thread(_get_user_by_id, user["id"])
+    token = await asyncio.to_thread(_create_session, user["id"])
+    return {"token": token, "user": _public_user(user)}
+
+
+@app.post("/auth/logout")
+async def auth_logout(authorization: Optional[str] = Header(None)):
+    _, token = await _get_user_from_auth_header(authorization)
+    await asyncio.to_thread(_revoke_session, token)
+    return {"success": True}
+
+
+@app.get("/me")
+async def get_me(authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    return {"user": _public_user(user)}
+
+
+@app.put("/me")
+async def update_me(payload: UpdateProfileRequest, authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    nickname = payload.nickname if payload.nickname is not None else user.get("nickname")
+    avatar_url = payload.avatar_url if payload.avatar_url is not None else user.get("avatar_url")
+    bio = payload.bio if payload.bio is not None else user.get("bio")
+
+    if isinstance(nickname, str):
+        nickname = nickname.strip() or None
+    if isinstance(avatar_url, str):
+        avatar_url = avatar_url.strip() or None
+    if isinstance(bio, str):
+        bio = bio.strip()
+
+    if nickname is not None and len(nickname) > 60:
+        raise HTTPException(status_code=400, detail="Nickname too long")
+    if bio is not None and len(bio) > 200:
+        raise HTTPException(status_code=400, detail="Bio too long")
+
+    await asyncio.to_thread(_update_user_profile, user["id"], nickname, avatar_url, bio)
+    updated = await asyncio.to_thread(_get_user_by_id, user["id"])
+    return {"user": _public_user(updated)}
+
+
+@app.post("/history/sessions")
+async def save_history(payload: HistorySaveRequest, authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    entry = payload.entry or {}
+    snapshot = payload.snapshot
+    saved = await asyncio.to_thread(_insert_history_session, user["id"], entry, snapshot)
+    return {"item": saved}
+
+
+@app.get("/history/sessions")
+async def list_history(limit: int = 50, authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    limit = max(1, min(limit, 200))
+    items = await asyncio.to_thread(_list_history_sessions, user["id"], limit)
+    return {"items": items}
+
+
+@app.get("/history/sessions/{session_id}")
+async def get_history(session_id: int, authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    entry = await asyncio.to_thread(_get_history_session, user["id"], session_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="History not found")
+    snapshot = await asyncio.to_thread(_get_history_snapshot, user["id"], session_id)
+    return {"item": entry, "snapshot": snapshot}
+
+
+@app.put("/history/sessions/{session_id}")
+async def rename_history(session_id: int, payload: HistoryRenameRequest, authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    product = (payload.product or "").strip()
+    if not product:
+        raise HTTPException(status_code=400, detail="Product name required")
+    await asyncio.to_thread(_rename_history_session, user["id"], session_id, product)
+    entry = await asyncio.to_thread(_get_history_session, user["id"], session_id)
+    return {"item": entry}
+
+
+@app.delete("/history/sessions/{session_id}")
+async def delete_history(session_id: int, authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    await asyncio.to_thread(_delete_history_session, user["id"], session_id)
+    return {"success": True}
+
+
+@app.delete("/history/sessions")
+async def clear_history(authorization: Optional[str] = Header(None)):
+    user, _ = await _get_user_from_auth_header(authorization)
+    await asyncio.to_thread(_clear_history_sessions, user["id"])
+    return {"success": True}
+
+
+@app.get("/db/utterances")
+async def list_utterances(room_id: Optional[str] = None, limit: int = 100):
+    limit = max(1, min(limit, 500))
+    return {"items": await asyncio.to_thread(_fetch_utterances, room_id, limit)}
+
+
+@app.get("/db/chats")
+async def list_chats(room_id: Optional[str] = None, limit: int = 100):
+    limit = max(1, min(limit, 500))
+    return {"items": await asyncio.to_thread(_fetch_chats, room_id, limit)}
 
 
 @app.get("/douyin/room-info/{room_id}")

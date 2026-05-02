@@ -5,6 +5,7 @@
   { id: "history", label: "历史记录", description: "回顾往期会话，追踪风险变化与关键证据片段。" },
   { id: "analytics", label: "深度分析", description: "从统计维度观察趋势、分布、模型判定稳定性。" },
   { id: "rules", label: "规则中心", description: "查看判定规则与阈值，校准风控策略和解释口径。" },
+  { id: "profile", label: "个人主页", description: "管理账号资料、头像与个性签名。" },
 ];
 
 export default function Header({

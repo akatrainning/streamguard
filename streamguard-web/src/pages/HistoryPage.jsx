@@ -2,12 +2,12 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import {
-  loadSessions,
-  loadSnapshot,
-  deleteSession,
-  clearAllSessions,
-  renameSession,
-} from "../utils/historyStorage";
+  listHistorySessions,
+  getHistorySession,
+  deleteHistorySession,
+  clearHistorySessions,
+  renameHistorySession,
+} from "../utils/historyApi";
 import SessionReportModal from "../components/SessionReportModal";
 
 //  演示数据（仅在没有任何真实记录时展示）
@@ -78,44 +78,77 @@ function EditableTitle({ value, sessionId, onRename }) {
   );
 }
 
-export default function HistoryPage({ apiBase = "http://localhost:8011" }) {
+export default function HistoryPage({ apiBase = "http://localhost:8011", token }) {
   const [sessions, setSessions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
   const [search, setSearch] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [replaySnapshot, setReplaySnapshot] = useState(null);
 
-  const reload = useCallback(() => { setSessions(loadSessions()); }, []);
+  const reload = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError("");
+    try {
+      const payload = await listHistorySessions(apiBase, token, 100);
+      setSessions(payload.items || []);
+    } catch (err) {
+      setError(err?.message || "历史记录加载失败");
+      setSessions([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [apiBase, token]);
 
   useEffect(() => {
     reload();
-    const onStorage = e => { if (e.key === "sg_history_sessions") reload(); };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
   }, [reload]);
 
-  const handleDelete = useCallback((id, e) => {
-    e.stopPropagation(); deleteSession(id); reload();
-  }, [reload]);
-
-  const handleRename = useCallback((id, name) => {
-    renameSession(id, name); reload();
-  }, [reload]);
-
-  const handleReplay = useCallback((id, e) => {
+  const handleDelete = useCallback(async (id, e) => {
     e.stopPropagation();
-    const snap = loadSnapshot(id);
-    if (snap) {
-      setReplaySnapshot(snap);
-    } else {
-      alert("该记录没有保存完整报告数据（可能是旧版本记录）");
+    try {
+      await deleteHistorySession(apiBase, token, id);
+      await reload();
+    } catch (err) {
+      setError(err?.message || "删除失败");
     }
-  }, []);
+  }, [apiBase, token, reload]);
 
-  const handleClearAll = useCallback(() => {
-    clearAllSessions(); reload(); setShowClearConfirm(false);
-  }, [reload]);
+  const handleRename = useCallback(async (id, name) => {
+    try {
+      await renameHistorySession(apiBase, token, id, name);
+      await reload();
+    } catch (err) {
+      setError(err?.message || "重命名失败");
+    }
+  }, [apiBase, token, reload]);
+
+  const handleReplay = useCallback(async (id, e) => {
+    e.stopPropagation();
+    try {
+      const payload = await getHistorySession(apiBase, token, id);
+      if (payload.snapshot) {
+        setReplaySnapshot(payload.snapshot);
+      } else {
+        alert("该记录没有保存完整报告数据（可能是旧版本记录）");
+      }
+    } catch (err) {
+      setError(err?.message || "报告加载失败");
+    }
+  }, [apiBase, token]);
+
+  const handleClearAll = useCallback(async () => {
+    try {
+      await clearHistorySessions(apiBase, token);
+      await reload();
+      setShowClearConfirm(false);
+    } catch (err) {
+      setError(err?.message || "清空失败");
+    }
+  }, [apiBase, token, reload]);
 
   const isDemo = sessions.length === 0;
   const allSessions = isDemo ? DEMO_SESSIONS : sessions;
@@ -134,7 +167,9 @@ export default function HistoryPage({ apiBase = "http://localhost:8011" }) {
           <div>
             <h1 style={{ fontSize:"20px", fontWeight:700, color:"#00FFE0", margin:0, letterSpacing:"1px" }}>历史档案</h1>
             <div style={{ fontSize:"12px", color:"rgba(228,240,255,0.4)", marginTop:"4px" }}>
-              {isDemo
+              {loading
+                ? "正在加载账号历史..."
+                : isDemo
                 ? <span style={{ color:"rgba(255,211,80,0.6)" }}> 演示数据  结束直播会话后将自动保存真实报告</span>
                 : `共 ${sessions.length} 场直播记录`}
             </div>
@@ -161,6 +196,14 @@ export default function HistoryPage({ apiBase = "http://localhost:8011" }) {
             </div>
           )}
         </div>
+
+        {error && (
+          <div style={{ marginBottom:"14px", padding:"10px 12px", borderRadius:"8px",
+            background:"rgba(255,50,100,0.08)", border:"1px solid rgba(255,50,100,0.24)",
+            color:"rgba(255,120,150,0.86)", fontSize:"12px" }}>
+            {error}
+          </div>
+        )}
 
         {/* 搜索 + 筛选 */}
         <div style={{ display:"flex", gap:"12px", marginBottom:"20px", alignItems:"center", flexWrap:"wrap" }}>

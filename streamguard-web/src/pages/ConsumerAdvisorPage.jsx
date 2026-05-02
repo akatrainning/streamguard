@@ -117,7 +117,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
 
       {products.length > 0 && (
         <Section
-          title="P1：候选商品列表"
+          title="候选商品列表"
           subtitle={
             <span>
               勾选后参与垂类对比分析（可多选）
@@ -152,7 +152,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
       )}
 
       {suite?.p0 && (
-        <Section title="P0：值不值得买（结论卡）" subtitle={`引擎：${suite.engine} · 证据：话术${suite.evidence_stats?.utterance_count || 0}/弹幕${suite.evidence_stats?.chat_count || 0}`}>
+        <Section title="值不值得买（结论卡）" subtitle={`引擎：${suite.engine} · 证据：话术${suite.evidence_stats?.utterance_count || 0}/弹幕${suite.evidence_stats?.chat_count || 0}`}>
           <div style={{ display: "grid", gridTemplateColumns: "280px 1fr 1fr", gap: 10 }}>
             <VerdictCard p0={suite.p0} />
             <BulletCard title="值得买的理由" items={suite.p0.why_buy || []} />
@@ -169,7 +169,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
       )}
 
       {suite?.p1 && (
-        <Section title="P1：同类商品垂直对比" subtitle="包含价格透明度、质量证据、售后保障、主播话术可信度、弹幕口碑等维度">
+        <Section title="同类商品垂直对比" subtitle="包含价格透明度、质量证据、售后保障、主播话术可信度、弹幕口碑等维度">
           <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
@@ -201,7 +201,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
       )}
 
       {suite?.p2 && (
-        <Section title="P2：行动工具包" subtitle="你现在就能执行的提问、替代、时机和风险回看">
+        <Section title="行动工具包" subtitle="你现在就能执行的提问、替代、时机和风险回看">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <BulletCard title="问主播的关键问题" items={suite.p2.ask_anchor_questions || []} />
             <BulletCard title="替代方案" items={suite.p2.alternatives || []} />
