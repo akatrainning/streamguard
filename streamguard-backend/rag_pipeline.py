@@ -13,13 +13,18 @@ class RAGPipeline:
     def __init__(self):
         self.claim_cases = self.load_claim_cases()
         self.evidence_db = self.load_evidence_db()
+        self.fetched_texts = self.load_fetched_texts()
+        self.rule_graph = self.load_rule_graph()
         self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
         # Fit vectorizer on combined texts for consistent vocabulary
-        all_texts = self.claim_cases + self.evidence_db
-        all_text_contents = [case['current_utterance'] for case in self.claim_cases] + [ev['content'] for ev in self.evidence_db]
+        all_text_contents = [case['current_utterance'] for case in self.claim_cases]
+        all_text_contents += [ev['content'] for ev in self.evidence_db]
+        all_text_contents += [ft['content'] for ft in self.fetched_texts]
+        all_text_contents += [node['content'] for node in self.rule_graph.get('nodes', [])]
         self.vectorizer.fit(all_text_contents)
         self.claim_matrix = self.vectorizer.transform([case['current_utterance'] for case in self.claim_cases])
         self.evidence_matrix = self.vectorizer.transform([ev['content'] for ev in self.evidence_db])
+        self.fetched_texts_matrix = self.vectorizer.transform([ft['content'] for ft in self.fetched_texts])
         # LLM not used for now, simplified
 
     def load_claim_cases(self) -> List[Dict]:
@@ -32,6 +37,19 @@ class RAGPipeline:
 
     def load_evidence_db(self) -> List[Dict]:
         path = os.path.join(os.path.dirname(__file__), '..', 'src', 'agentdojo', 'data', 'knowledge_base', 'evidence_db.json')
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    def load_fetched_texts(self) -> List[Dict]:
+        path = os.path.join(os.path.dirname(__file__), '..', 'src', 'agentdojo', 'data', 'knowledge_base', 'fetched_texts.jsonl')
+        texts = []
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                texts.append(json.loads(line))
+        return texts
+
+    def load_rule_graph(self) -> Dict[str, Any]:
+        path = os.path.join(os.path.dirname(__file__), '..', 'src', 'agentdojo', 'data', 'knowledge_base', 'rule_graph.json')
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
@@ -93,6 +111,37 @@ class RAGPipeline:
                     related_claim_types=[ClaimType(ct) for ct in meta['related_claim_types']]
                 )
                 evidences.append(evidence)
+        # Add fetched text evidence if any captured text is related
+        if self.fetched_texts:
+            query_text = ' '.join(claim.predicate + claim.value + [claim.subject])
+            query_vector = self.vectorizer.transform([query_text])
+            similarities = cosine_similarity(query_vector, self.fetched_texts_matrix)[0]
+            best_idx = int(np.argsort(similarities)[-1])
+            best_text = self.fetched_texts[best_idx]
+            evidences.append(Evidence(
+                evidence_id=best_text['text_id'],
+                source='captured_text',
+                title='抓取文本片段',
+                content=best_text['content'],
+                stance=EvidenceStance.NEUTRAL,
+                score=best_text.get('confidence', 0.8),
+                related_claim_types=[ClaimType(ct) for ct in best_text.get('related_claim_types', [])]
+            ))
+
+        # Add rule graph evidence directly
+        matched_nodes = [node for node in self.rule_graph.get('nodes', [])
+                         if any(ct.value in node.get('related_claim_types', []) for ct in claim.claim_type)]
+        for node in matched_nodes:
+            evidences.append(Evidence(
+                evidence_id=node['node_id'],
+                source='rule_graph',
+                title=node.get('label', '规则图谱节点'),
+                content=node.get('content', ''),
+                stance=EvidenceStance.RISK_SUPPORTING,
+                score=node.get('score', 0.85),
+                related_claim_types=[ClaimType(ct) for ct in node.get('related_claim_types', [])]
+            ))
+
         return evidences
 
     def evidence_verifier(self, claim: Claim, evidences: List[Evidence]) -> Verification:
@@ -205,6 +254,7 @@ class RAGPipeline:
         # Report Generator
         report = self.report_generator(claim, risk)
         trace.append({"step": "report_generator", "suggestions_count": len(report.suggestions)})
+        graph = self.graph_for_claim(claim)
 
         return AnalysisResult(
             event=event,
@@ -214,5 +264,17 @@ class RAGPipeline:
             risk=risk,
             report=report,
             trace=trace,
+            graph=graph,
             rag_debug=rag_debug
         )
+
+    def graph_for_claim(self, claim: Claim) -> Dict[str, Any]:
+        nodes = [node for node in self.rule_graph.get('nodes', [])
+                 if any(ct.value in node.get('related_claim_types', []) for ct in claim.claim_type)]
+        node_ids = {node['node_id'] for node in nodes}
+        edges = [edge for edge in self.rule_graph.get('edges', [])
+                 if edge.get('from') in node_ids or edge.get('to') in node_ids]
+        return {
+            'matched_nodes': nodes,
+            'matched_edges': edges,
+        }
