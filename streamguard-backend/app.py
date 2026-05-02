@@ -77,9 +77,6 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def _startup_cleanup():
-    """寮€鏈烘竻鐞嗭細鏉€鎺変笂娆″穿婧冮仐鐣欑殑 chromedriver.exe 杩涚▼锛岄槻姝㈠兊灏歌繘绋嬪崰鐢ㄥ唴瀛樸€?
-    瀹夊叏锛歝hromedriver.exe 鏄嚜鍔ㄥ寲宸ュ叿锛屼笉鏄敤鎴锋祻瑙堝櫒锛屾潃鎺変笉褰卞搷鐢ㄦ埛銆?
-    """
     try:
         result = subprocess.run(
             ['taskkill', '/F', '/IM', 'chromedriver.exe'],
@@ -520,13 +517,13 @@ def _split_sentences_zh(text: str) -> list[str]:
 
 # 濯掍綋 URL 缂撳瓨锛氶伩鍏嶉噸澶嶅惎鍔?Chrome (TTL = 15 鍒嗛挓)
 _media_url_cache: dict[str, tuple[str, float]] = {}   # room_id -> (url, expire_ts)
-_MEDIA_URL_TTL = 900  # seconds(涓婃 5鍒嗛挓锛岀幇鍦?15鍒嗛挓)
+_MEDIA_URL_TTL = 900  # seconds
 
 
 
 def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[str]:
     """Open Douyin room and detect candidate media URL (m3u8/flv) from CDP logs."""
-    # 鍛戒腑缂撳瓨锛氬悓涓€鎴块棿鍦?TTL 鍐呯洿鎺ヨ繑鍥炰笂娆″彂鐜扮殑 URL
+    # Reuse a recent discovery result before starting Chrome again.
     cached = _media_url_cache.get(room_id)
     if cached and time.time() < cached[1]:
         print(f"[media-url] cache hit, skipping Chrome startup: {cached[0][:60]}...")
@@ -545,20 +542,20 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--mute-audio")
-    opts.add_argument("--window-size=800,600")          # 缂╁皬绐楀彛
+    opts.add_argument("--window-size=800,600")
     opts.add_argument("--ignore-certificate-errors")
     opts.add_argument("--allow-running-insecure-content")
-    # 鑺傜渷璧勬簮锛氱鐢ㄤ笉蹇呰鐨勫姛鑳?
+    # Keep discovery resource usage down.
     opts.add_argument("--disable-extensions")
     opts.add_argument("--disable-background-networking")
     opts.add_argument("--disable-sync")
     opts.add_argument("--disable-translate")
     opts.add_argument("--disable-plugins")
-    opts.add_argument("--blink-settings=imagesEnabled=false")  # 绂佺敤鍥剧墖鍔犺浇
+    opts.add_argument("--blink-settings=imagesEnabled=false")
     opts.add_argument("--js-flags=--max-old-space-size=256")
     opts.add_argument("--media-cache-size=1")
     opts.add_argument("--disk-cache-size=1")
-    # 灞忚斀 Chrome 鍐呴儴鏃ュ織璇濋煶澶辫触銆丟PU 椹卞姩璀﹀憡绛夊櫔闊?
+    # Suppress noisy Chrome logs.
     opts.add_argument("--log-level=3")
     opts.add_argument("--silent")
     opts.add_argument("--disable-logging")
@@ -572,7 +569,7 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     candidates: list[str] = []
     try:
         import sys
-        # log_output 浠呭湪杈冩柊鐗堟湰鐨?selenium Service 涓敮鎸侊紝鍏煎鏃х増
+        # `log_output` is supported only in newer Selenium versions.
         try:
             driver_path = _get_chromedriver_path()
             service = Service(
@@ -710,6 +707,7 @@ _FW_MODEL_SIZE = os.getenv("LOCAL_WHISPER_MODEL", "base")  # tiny/base/small/med
 _FW_CPU_THREADS = int(os.getenv("WHISPER_CPU_THREADS", "2"))
 _FW_BEAM_SIZE = int(os.getenv("WHISPER_BEAM_SIZE", "1"))
 _ENABLE_LIVE_AUDIO_ASR = os.getenv("ENABLE_LIVE_AUDIO_ASR", "0").strip().lower() in ("1", "true", "yes")
+_AUDIO_CAPTURE_WINDOW_SECS = float(os.getenv("AUDIO_CAPTURE_WINDOW_SECS", "5"))
 
 
 def _transcribe_local_whisper(audio_bytes: bytes) -> str:
@@ -729,8 +727,8 @@ def _transcribe_local_whisper(audio_bytes: bytes) -> str:
             model_path,
             device="cpu",
             compute_type="int8",
-            cpu_threads=_FW_CPU_THREADS,   # 闄愬埗杞啓绾跨▼鏁?
-            num_workers=1,                 # 鍗曞伐浣滆繘绋嬶紝閬垮厤澶氬疄渚嬬珵浜?CPU
+            cpu_threads=_FW_CPU_THREADS,
+            num_workers=1,
         )
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp.write(audio_bytes)
@@ -811,14 +809,14 @@ async def _polish_transcript_async(raw_text: str) -> dict:
 
     try:
         system_prompt = """
-你是直播电商内容整理助手。请把主播语音转写文本整理为通顺的简体中文句子，并提取关键词。
+你是直播电商语音转写整理助手。请把转写文本修成更通顺、更像人话的简体中文。
 要求：
-1. 只使用简体中文。
-2. 补充合适标点，但不要添加原文没有的事实。
-3. 修正常见语音识别错误。
-4. 去掉明显重复和无意义语气词。
-5. 提取 3-5 个核心关键词。
-只返回 JSON：{"polished": "整理后的句子", "keywords": ["关键词"]}
+1. 只返回 JSON：{"polished": "...", "keywords": ["..."]}。
+2. 可以补充标点、合并断句、修正常见同音字和明显识别错误。
+3. 不要编造原文没有的新事实，不确定时保守处理。
+4. 去掉口头禅、重复词、乱码片段和明显噪声词。
+5. `polished` 要像直播里真实说出来的话，长度尽量与原文接近。
+6. `keywords` 提取 3-5 个关键词，优先商品、功效、促销词。
 """
         resp = await client_async.chat.completions.create(
             model=LLM_MODEL,
@@ -937,7 +935,7 @@ class DouyinLiveSource:
             print("[audio-loop] live audio ASR disabled; set ENABLE_LIVE_AUDIO_ASR=1 to enable")
             return
 
-        window_secs = 8
+        window_secs = max(3.0, min(_AUDIO_CAPTURE_WINDOW_SECS, 10.0))
         capture_idle_secs = float(os.getenv("AUDIO_CAPTURE_IDLE", "2"))
 
         print(f"[audio-loop] discovering media URL for room {self.room_id}")

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Douyin Live Scraper - CDP WebSocket Frame Capture.
 
 Uses Chrome DevTools Protocol (CDP) to capture WebSocket frames directly,
@@ -21,15 +21,15 @@ import stat
 from typing import Callable, Optional
 
 # ---------------------------------------------------------------------------
-# Global Chrome process tracker - 追踪所有我们启动的 chromedriver 进程树
-# 新连接启动前强制清理旧进程，防止 Chrome 僵尸进程积累
+# Global Chrome process tracker.
+# Clean up stale Chrome/chromedriver processes between runs.
 # ---------------------------------------------------------------------------
 _tracked_service_pids: list = []
 _tracked_pids_lock = threading.Lock()
 
 
 def _kill_chrome_pid(pid: int):
-    """强制终止指定 PID 的进程及其所有子进程(Windows taskkill /T)。"""
+    """Force-kill the given process tree on Windows."""
     try:
         subprocess.run(
             ['taskkill', '/F', '/T', '/PID', str(pid)],
@@ -40,7 +40,7 @@ def _kill_chrome_pid(pid: int):
 
 
 def _kill_all_tracked_chromes():
-    """杀掉所有追踪中的 Chrome/chromedriver 进程树。"""
+    """Kill all tracked Chrome/chromedriver process trees."""
     with _tracked_pids_lock:
         pids = _tracked_service_pids[:]
         _tracked_service_pids.clear()
@@ -274,20 +274,20 @@ class DouyinCDPScraper:
         opts.add_argument("--ignore-certificate-errors")
         opts.add_argument("--allow-running-insecure-content")
         opts.add_argument("--mute-audio")
-        opts.add_argument("--window-size=800,600")       # 缩小窗口，减少渲染开销
+        opts.add_argument("--window-size=800,600")       # 缂╁皬绐楀彛锛屽噺灏戞覆鏌撳紑閿€
         opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                           "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        # 节省资源：禁用不必要的功能
+        # 鑺傜渷璧勬簮锛氱鐢ㄤ笉蹇呰鐨勫姛鑳?
         opts.add_argument("--disable-extensions")
-        opts.add_argument("--disable-background-networking")   # 禁用后台网络请求
-        opts.add_argument("--disable-sync")                    # 禁用账号同步
+        opts.add_argument("--disable-background-networking")   # 绂佺敤鍚庡彴缃戠粶璇锋眰
+        opts.add_argument("--disable-sync")                    # 绂佺敤璐﹀彿鍚屾
         opts.add_argument("--disable-translate")
         opts.add_argument("--disable-plugins")
         opts.add_argument("--disable-background-timer-throttling")
-        opts.add_argument("--disable-renderer-backgrounding")  # 防止 Chrome 降低后台标签优先级
-        opts.add_argument("--blink-settings=imagesEnabled=false")  # 禁止加载图片
+        opts.add_argument("--disable-renderer-backgrounding")  # 闃叉 Chrome 闄嶄綆鍚庡彴鏍囩浼樺厛绾?
+        opts.add_argument("--blink-settings=imagesEnabled=false")  # 绂佹鍔犺浇鍥剧墖
         opts.add_argument("--disable-javascript-harmony-shipping")
-        opts.add_argument("--js-flags=--max-old-space-size=256")   # 限制 JS 堆内存 256MB
+        opts.add_argument("--js-flags=--max-old-space-size=256")   # 闄愬埗 JS 鍫嗗唴瀛?256MB
         opts.add_argument("--media-cache-size=1")
         opts.add_argument("--disk-cache-size=1")
         opts.add_experimental_option("excludeSwitches", ["enable-automation"])
@@ -324,7 +324,7 @@ class DouyinCDPScraper:
                     "status": "connecting",
                     "message": "Page load timeout, continue listening WebSocket frames...",
                 })
-            # 智能等待：轮询检测首条WS帧，最长等5s，而非固定sleep
+            # 鏅鸿兘绛夊緟锛氳疆璇㈡娴嬮鏉S甯э紝鏈€闀跨瓑5s锛岃€岄潪鍥哄畾sleep
             _wait_start = time.time()
             while time.time() - _wait_start < 5:
                 try:
@@ -410,7 +410,7 @@ class DouyinCDPScraper:
                     })
                     last_note_ts = now
 
-                time.sleep(0.2)  # 5Hz 轮询(原 10Hz)，减少 CPU 占用
+                time.sleep(0.2)  # 5Hz 杞(鍘?10Hz)锛屽噺灏?CPU 鍗犵敤
 
         except Exception as e:
             self.q.put({"event": "error", "message": f"CDP error: {e}"})
@@ -419,7 +419,7 @@ class DouyinCDPScraper:
                 if self.driver: self.driver.quit()
             except Exception:
                 pass
-            # 强制杀 chromedriver 进程树(确保 chrome.exe 子进程也被清理)
+            # 寮哄埗鏉€ chromedriver 杩涚▼鏍?纭繚 chrome.exe 瀛愯繘绋嬩篃琚竻鐞?
             if _service_pid:
                 _unregister_chrome_pid(_service_pid)
                 _kill_chrome_pid(_service_pid)
@@ -459,10 +459,10 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
     1) headless mode only (headed mode disabled - too resource intensive)
     Chrome process cleanup is handled automatically via _tracked_service_pids.
     """
-    # 启动新连接前先清理所有追踪中的旧 Chrome 进程，防止僵尸进程积累
+    # 鍚姩鏂拌繛鎺ュ墠鍏堟竻鐞嗘墍鏈夎拷韪腑鐨勬棫 Chrome 杩涚▼锛岄槻姝㈠兊灏歌繘绋嬬Н绱?
     _kill_all_tracked_chromes()
 
-    modes = [headless]  # 只尝试 headless，不再自动 fallback 到 headed(节省资源)
+    modes = [headless]  # 鍙皾璇?headless锛屼笉鍐嶈嚜鍔?fallback 鍒?headed(鑺傜渷璧勬簮)
 
     last_error = None
     for idx, mode in enumerate(modes, start=1):
@@ -492,7 +492,7 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
                         last_error = evt.get("message")
                     await callback(evt)
 
-                await asyncio.sleep(0.1)  # 10Hz(原 20Hz)
+                await asyncio.sleep(0.1)  # 10Hz(鍘?20Hz)
 
             # Drain any remaining events after thread exits
             while True:
