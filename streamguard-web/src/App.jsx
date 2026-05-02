@@ -21,7 +21,11 @@ import RulesPage from "./pages/RulesPage";
 import ConsumerAdvisorPage from "./pages/ConsumerAdvisorPage";
 import LiveDiscoverPage from "./pages/LiveDiscoverPage";
 import WelcomePage from "./pages/WelcomePage";
-import { buildHistoryEntry, saveSession } from "./utils/historyStorage";
+import AuthPage from "./pages/AuthPage";
+import ProfilePage from "./pages/ProfilePage";
+import { buildHistoryEntry } from "./utils/historyStorage";
+import { getStoredToken, setStoredToken, clearStoredToken, requestJson } from "./utils/authClient";
+import { saveHistorySession } from "./utils/historyApi";
 
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
@@ -30,6 +34,11 @@ export default function App() {
   const [dashboardSection, setDashboardSection] = useState("ops");
   const [entryStep, setEntryStep] = useState("welcome");
   const [showSourceSelector, setShowSourceSelector] = useState(false);
+  const [authToken, setAuthToken] = useState(() => getStoredToken());
+  const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [intendedPage, setIntendedPage] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   // 蝥???詨?嗆?
   const [sessionSnapshot, setSessionSnapshot] = useState(null); // ??null ????????
   const [showReportModal, setShowReportModal] = useState(false);
@@ -75,6 +84,88 @@ export default function App() {
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
 
+  const protectedPages = useMemo(
+    () => new Set(["discover", "consumer", "history", "analytics", "profile"]),
+    [],
+  );
+
+  const navigateTo = useCallback((nextPage) => {
+    if (!authUser && protectedPages.has(nextPage)) {
+      setIntendedPage(nextPage);
+      setPage(nextPage);
+      return;
+    }
+    setPage(nextPage);
+  }, [authUser, protectedPages]);
+
+  useEffect(() => {
+    let alive = true;
+    const loadUser = async () => {
+      if (!authToken) {
+        if (alive) setAuthLoading(false);
+        return;
+      }
+      if (alive) setAuthLoading(true);
+      try {
+        const payload = await requestJson(apiBase, "/me", { token: authToken });
+        if (alive) setAuthUser(payload.user);
+      } catch {
+        clearStoredToken();
+        if (alive) {
+          setAuthToken(null);
+          setAuthUser(null);
+        }
+      } finally {
+        if (alive) setAuthLoading(false);
+      }
+    };
+    loadUser();
+    return () => {
+      alive = false;
+    };
+  }, [authToken, apiBase]);
+
+  const handleAuthSuccess = useCallback((payload) => {
+    if (!payload?.token) return;
+    setStoredToken(payload.token);
+    setAuthToken(payload.token);
+    setAuthUser(payload.user || null);
+    setAuthLoading(false);
+    setShowAuthModal(false);
+    if (intendedPage) {
+      setPage(intendedPage);
+      setIntendedPage(null);
+    }
+  }, [intendedPage]);
+
+  const handleLogout = useCallback(async () => {
+    if (authToken) {
+      try {
+        await requestJson(apiBase, "/auth/logout", { method: "POST", token: authToken });
+      } catch {
+        // ignore
+      }
+    }
+    clearStoredToken();
+    setAuthToken(null);
+    setAuthUser(null);
+    setDataSource(null);
+    setSourceConfig({});
+    setPage("dashboard");
+    setEntryStep("app");
+    realStream.disconnect?.();
+  }, [authToken, apiBase, realStream]);
+
+  const handleUserUpdate = useCallback((nextUser) => {
+    setAuthUser(nextUser);
+  }, []);
+
+  useEffect(() => {
+    if (!authUser && protectedPages.has(page)) {
+      setIntendedPage(page);
+    }
+  }, [authUser, page, protectedPages]);
+
   useEffect(() => {
     if (!sessionSnapshot) {
       setShowReportModal(false);
@@ -87,7 +178,7 @@ export default function App() {
 
 
   /** ?孵"蝏??"嚗蝏翰?????剖?餈 ??撘孵?亙? */
-  const handleEndSession = useCallback(() => {
+  const handleEndSession = useCallback(async () => {
     if (endingRef.current) return;
     endingRef.current = true;
 
@@ -103,17 +194,18 @@ export default function App() {
       viewerCount,
     };
 
-    try {
-      const entry = buildHistoryEntry(snap, viewerCount || 0);
-      saveSession(entry, snap, apiBase);
-      console.log("[history] session saved:", entry.id);
-    } catch (e) {
-      console.error("[history] save failed:", e);
+    if (authUser && authToken) {
+      try {
+        const entry = buildHistoryEntry(snap, viewerCount || 0);
+        await saveHistorySession(apiBase, authToken, entry, snap);
+      } catch (e) {
+        console.error("[history] save failed:", e);
+      }
     }
 
     setSessionSnapshot(snap);
     realStream.disconnect?.();
-  }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, viewerCount, apiBase, realStream]);
+  }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, viewerCount, apiBase, realStream, authUser, authToken]);
 
   /** 报告关闭 → 若有待切换房间则跳转，否则回到数据源选择 */
   const handleReportClose = useCallback(() => {
@@ -222,8 +314,33 @@ export default function App() {
   // Source selection screen
   if (!dataSource) {
     return (
-      <div className="sg-page-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div className="sg-page-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, position: "relative" }}>
+        <div className="sg-entry-auth">
+          {authUser ? (
+            <>
+              <span>{authUser.nickname || authUser.email}</span>
+              <button onClick={handleLogout} type="button">退出登录</button>
+            </>
+          ) : (
+            <button onClick={() => setShowAuthModal(true)} type="button">
+              登录 / 注册
+            </button>
+          )}
+        </div>
         <DataSourceSelector onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
+        {showAuthModal && (
+          <div
+            className="sg-auth-modal-backdrop"
+            onClick={(e) => e.target === e.currentTarget && setShowAuthModal(false)}
+          >
+            <AuthPage
+              apiBase={apiBase}
+              onAuthSuccess={handleAuthSuccess}
+              onCancel={() => setShowAuthModal(false)}
+              modal
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -237,12 +354,21 @@ export default function App() {
     history: "◷",
     analytics: "◲",
     rules: "⚑",
+    profile: "◈",
+  };
+  const activePageLocked = !authUser && protectedPages.has(page);
+  const lockedFeatureNames = {
+    discover: "直播发现",
+    consumer: "消费建议",
+    history: "历史记录",
+    analytics: "深度分析",
+    profile: "个人主页",
   };
 
   return (
     <div className="app-shell sg-app">
       <Header
-        page={page} setPage={setPage}
+        page={page} setPage={navigateTo}
         viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
         isPaused={isPaused} setIsPaused={setIsPaused}
         onReset={reset} onExport={handleExport}
@@ -266,11 +392,12 @@ export default function App() {
             {NAV_TABS.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setPage(tab.id)}
-                className={`sg-side-link ${page === tab.id ? "is-active" : ""}`}
+                onClick={() => navigateTo(tab.id)}
+                className={`sg-side-link ${page === tab.id ? "is-active" : ""} ${!authUser && protectedPages.has(tab.id) ? "is-locked" : ""}`}
               >
                 <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
                 <span className="sg-side-label">{tab.label}</span>
+                {!authUser && protectedPages.has(tab.id) && <span className="sg-side-lock">LOCK</span>}
               </button>
             ))}
           </div>
@@ -489,9 +616,19 @@ export default function App() {
           )}
         </div>
 
-      {page === "history" && <HistoryPage />}
+      {activePageLocked && (
+        <LockedFeature
+          title={lockedFeatureNames[page] || activeTab.label}
+          description={activeTab.description}
+          onLogin={() => {
+            setIntendedPage(page);
+            setShowAuthModal(true);
+          }}
+        />
+      )}
+      {!activePageLocked && page === "history" && <HistoryPage apiBase={apiBase} token={authToken} />}
       {page === "discover" && (
-        <LiveDiscoverPage
+        !activePageLocked && <LiveDiscoverPage
           apiBase={apiBase}
           onConnectRoom={handleConnectRoom}
           utterances={utterances}
@@ -499,14 +636,23 @@ export default function App() {
         />
       )}
       {page === "consumer" && (
-        <ConsumerAdvisorPage
+        !activePageLocked && <ConsumerAdvisorPage
           apiBase={apiBase}
           utterances={utterances}
           chatMessages={chatMessages}
         />
       )}
-      {page === "analytics" && <AnalyticsPage />}
+      {!activePageLocked && page === "analytics" && <AnalyticsPage />}
       {page === "rules" && <RulesPage />}
+      {!activePageLocked && page === "profile" && (
+        <ProfilePage
+          apiBase={apiBase}
+          token={authToken}
+          user={authUser}
+          onUserUpdate={handleUserUpdate}
+          onLogout={handleLogout}
+        />
+      )}
         </main>
       </div>
 
@@ -529,6 +675,20 @@ export default function App() {
           onClick={e => e.target === e.currentTarget && setShowSourceSelector(false)}
         >
           <DataSourceSelector onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
+        </div>
+      )}
+
+      {showAuthModal && (
+        <div
+          className="sg-auth-modal-backdrop"
+          onClick={(e) => e.target === e.currentTarget && setShowAuthModal(false)}
+        >
+          <AuthPage
+            apiBase={apiBase}
+            onAuthSuccess={handleAuthSuccess}
+            onCancel={() => setShowAuthModal(false)}
+            modal
+          />
         </div>
       )}
 
@@ -558,6 +718,24 @@ export default function App() {
         />
       )}
       {/* 蝎折△??*/}
+    </div>
+  );
+}
+
+function LockedFeature({ title, description, onLogin }) {
+  return (
+    <div className="sg-locked-shell">
+      <div className="sg-locked-panel">
+        <div className="sg-locked-badge">LOCKED</div>
+        <h1>{title}</h1>
+        <p>{description}</p>
+        <p className="sg-locked-copy">
+          该功能会读取或沉淀账号数据，需要先登录或注册后使用。实时总览和首页仍可直接访问。
+        </p>
+        <button className="sg-locked-action" onClick={onLogin} type="button">
+          登录 / 注册
+        </button>
+      </div>
     </div>
   );
 }
