@@ -313,7 +313,7 @@ export default function App() {
   // Source selection screen
   if (!dataSource) {
     return (
-      <div className="sg-page-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, position: "relative" }}>
+      <div className="sg-page-shell sg-entry-page">
         <div className="sg-entry-auth">
           {authUser ? (
             <>
@@ -326,7 +326,7 @@ export default function App() {
             </button>
           )}
         </div>
-        <DataSourceSelector onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
+        <DataSourceSelector variant="page" onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
         {showAuthModal && (
           <div
             className="sg-auth-modal-backdrop"
@@ -704,7 +704,7 @@ export default function App() {
           }}
           onClick={e => e.target === e.currentTarget && setShowSourceSelector(false)}
         >
-          <DataSourceSelector onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
+          <DataSourceSelector variant="modal" onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
         </div>
       )}
 

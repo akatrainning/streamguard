@@ -1,6 +1,5 @@
-﻿import { useMemo } from "react";
-
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { Button, MetricTile, Panel, StatusBadge } from "./ui";
 
 export default function CommandCenter({
   dataSource,
@@ -25,13 +24,10 @@ export default function CommandCenter({
     return new Date(connection.lastMessageAt).toLocaleTimeString("zh-CN", { hour12: false });
   }, [connection?.lastMessageAt]);
 
-  // statusLog is stored newest-first; render oldest-first so the fixed-height panel
-  // reads naturally top-to-bottom and can anchor to the bottom when short.
   const logLines = useMemo(() => {
     return (connection.statusLog || []).slice(0, 30).slice().reverse();
   }, [connection.statusLog]);
 
-  // Auto-scroll to bottom (terminal-style). If user scrolls up, don't yank.
   useEffect(() => {
     const el = logScrollRef.current;
     if (!el) return;
@@ -83,148 +79,72 @@ export default function CommandCenter({
     URL.revokeObjectURL(url);
   };
 
+  const statusTone = connection.connected ? "success" : connection.connecting ? "warning" : "danger";
   const statusText = connection.connected ? "已连接" : connection.connecting ? "连接中" : "未连接";
-  const statusColor = connection.connected ? "var(--fact)" : connection.connecting ? "var(--hype)" : "var(--trap)";
 
   return (
-    <div style={{
-      background: "linear-gradient(180deg, rgba(18,29,45,0.94), rgba(15,24,37,0.95))",
-      border: "1px solid #2b3f5c",
-      borderRadius: 12,
-      overflow: "hidden",
-      boxShadow: "0 12px 28px rgba(4,9,16,0.24)",
-      height: "100%",
-      minHeight: 0,
-      display: "flex",
-      flexDirection: "column",
-    }}>
-      <div style={{
-        padding: "14px 16px",
-        borderBottom: "1px solid #2b3f5c",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}>
-        <span style={{ fontSize: 15, fontWeight: 700 }}>运营指挥台</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onReconnect} style={btnStyle}>重连</button>
-          <button onClick={exportSnapshot} style={btnStyle}>导出快照</button>
-        </div>
+    <Panel
+      className="sg-command"
+      title="运营指挥台"
+      eyebrow="Operations"
+      actions={(
+        <>
+          <StatusBadge tone={statusTone}>{statusText}</StatusBadge>
+          <Button onClick={onReconnect}>重连</Button>
+          <Button onClick={exportSnapshot} variant="primary">导出快照</Button>
+        </>
+      )}
+      bodyClassName="sg-command-body"
+    >
+      <div className="sg-command-kpis">
+        <MetricTile label="语义累计" value={totalUtterances} />
+        <MetricTile label="弹幕累计" value={totalChats} />
+        <MetricTile label="估算速率" value={`${throughput}/min`} tone="success" />
+        <MetricTile label="尝试次数" value={connection.connectionAttempts ?? 0} tone={connection.connected ? "neutral" : "warning"} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, padding: 14, flex: "0 0 auto" }}>
-        <Card title="连接诊断">
+      <div className="sg-command-grid">
+        <section className="sg-command-card">
+          <div className="sg-command-card-title">连接诊断</div>
           <KV k="数据源" v={dataSource || "--"} />
           <KV k="房间" v={sourceConfig?.roomId || "--"} mono />
-          <KV k="状态" v={statusText} color={statusColor} />
-          <KV k="尝试次数" v={connection.connectionAttempts ?? 0} mono />
+          <KV k="状态" v={statusText} tone={statusTone} />
           <KV k="最近消息" v={lastSeen} mono />
-          {connection.error && <div style={{ marginTop: 8, fontSize: 12, color: "var(--trap)" }}>{connection.error}</div>}
-        </Card>
+          {connection.error && <div className="sg-command-error">{connection.error}</div>}
+        </section>
 
-        <Card title="吞吐与负载">
-          <KV k="语义条数(累计)" v={totalUtterances} mono />
-          <KV k="聊天条数(累计)" v={totalChats} mono />
-          <KV k="总消息(累计)" v={totalMsgs} mono />
-          <KV k="最近语义缓存" v={`${utterances.length}/${recentLimits?.utterances ?? utterances.length}`} mono />
-          <KV k="最近聊天缓存" v={`${chatMessages.length}/${recentLimits?.chats ?? chatMessages.length}`} mono />
-          <KV k="估算速率" v={`${throughput}/min`} mono />
-          <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)" }}>
-            仅限前端最近 N 条缓存展示，累计计数不封顶，不影响真实流速统计。
-          </div>
-        </Card>
+        <section className="sg-command-card">
+          <div className="sg-command-card-title">缓存窗口</div>
+          <KV k="最近语义" v={`${utterances.length}/${recentLimits?.utterances ?? utterances.length}`} mono />
+          <KV k="最近弹幕" v={`${chatMessages.length}/${recentLimits?.chats ?? chatMessages.length}`} mono />
+          <KV k="总消息" v={totalMsgs} mono />
+          <p className="sg-command-note">累计计数不封顶，前端仅保留最近窗口用于渲染。</p>
+        </section>
       </div>
 
-      <div style={{ borderTop: "1px solid #2b3f5c", padding: "10px 12px", flex: 1, minHeight: 0, display: "flex" }}>
-        <div style={{
-          background: "rgba(18,30,46,0.9)",
-          border: "1px solid #2f4666",
-          borderRadius: 8,
-          overflow: "hidden",
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-        }}>
-          <div style={{
-            padding: "10px 12px",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            gap: 10,
-            fontSize: 12,
-            color: "var(--text-muted)",
-          }}>
-            <span style={{ fontWeight: 800, color: "var(--text-secondary)" }}>连接日志</span>
-            <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>
-              {(connection.statusLog || []).length} 条
-            </span>
-          </div>
-
-          <div style={{ borderTop: "1px solid #2f4666", padding: "8px 10px", flex: 1, minHeight: 0 }}>
-            <div style={{
-              height: "100%",
-              overflowY: "auto",
-              background: "rgba(0,0,0,0.16)",
-              borderRadius: 6,
-              border: "1px solid rgba(255,255,255,0.08)",
-              padding: "6px 8px",
-              display: "flex",
-              flexDirection: "column",
-              rowGap: 2,
-            }} ref={logScrollRef}>
-              {logLines.map((line, i) => (
-                <div
-                  key={i}
-                  className="mono"
-                  style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.35 }}
-                >
-                  {line}
-                </div>
-              ))}
-              {(!connection.statusLog || connection.statusLog.length === 0) && (
-                <div className="mono" style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.35 }}>
-                  -- no logs --
-                </div>
-              )}
-            </div>
-          </div>
+      <section className="sg-command-log">
+        <div className="sg-command-log-head">
+          <span>连接日志</span>
+          <span className="mono">{(connection.statusLog || []).length} 条</span>
         </div>
-      </div>
-    </div>
+        <div className="sg-command-log-body" ref={logScrollRef}>
+          {logLines.map((line, index) => (
+            <div key={`${line}-${index}`} className="mono">{line}</div>
+          ))}
+          {(!connection.statusLog || connection.statusLog.length === 0) && (
+            <div className="mono">-- no logs --</div>
+          )}
+        </div>
+      </section>
+    </Panel>
   );
 }
 
-function Card({ title, children }) {
+function KV({ k, v, mono, tone }) {
   return (
-    <div style={{
-      border: "1px solid #304865",
-      borderRadius: 8,
-      padding: 12,
-      background: "rgba(20,33,50,0.85)",
-    }}>
-      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8, fontWeight: 700 }}>{title}</div>
-      {children}
+    <div className="sg-command-kv">
+      <span>{k}</span>
+      <strong className={`${mono ? "mono" : ""} ${tone ? `is-${tone}` : ""}`.trim()}>{v}</strong>
     </div>
   );
 }
-
-function KV({ k, v, mono, color }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 12 }}>
-      <span style={{ color: "var(--text-muted)" }}>{k}</span>
-      <span className={mono ? "mono" : ""} style={{ color: color || "var(--text-secondary)", fontWeight: 600 }}>{v}</span>
-    </div>
-  );
-}
-
-const btnStyle = {
-  padding: "6px 10px",
-  borderRadius: 8,
-  background: "linear-gradient(180deg, rgba(28,43,65,0.95), rgba(22,35,52,0.95))",
-  border: "1px solid #355072",
-  color: "var(--text-secondary)",
-  fontSize: 12,
-  cursor: "pointer",
-  fontWeight: 600,
-};

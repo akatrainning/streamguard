@@ -1,4 +1,6 @@
-﻿export const NAV_TABS = [
+import { Button, StatusBadge, StreamGuardMark } from "./ui";
+
+export const NAV_TABS = [
   { id: "dashboard", label: "实时总览", description: "查看直播监控、语义风险、关系拓扑和告警状态。" },
   { id: "discover", label: "直播发现", description: "搜索直播间并进行横向对比，快速切换目标房间。" },
   { id: "consumer", label: "消费建议", description: "结合直播内容和用户需求给出购买与避坑建议。" },
@@ -19,142 +21,82 @@ export default function Header({
   onExport,
   onEnd,
   sessionStats = {},
-  currentSource,
-  onSwitchSource,
   connectionStatus,
   showTabs = true,
 }) {
   const totalForRate = sessionStats.total || utteranceCount || 0;
   const trapRate = totalForRate > 0
-    ? Math.round((sessionStats.trap || 0) / totalForRate * 100)
+    ? Math.round(((sessionStats.trap || 0) / totalForRate) * 100)
     : 0;
   const activeTab = NAV_TABS.find((tab) => tab.id === page) || NAV_TABS[0];
 
   return (
-    <header style={{
-      background: "linear-gradient(180deg, rgba(16,26,41,0.96), rgba(16,26,41,0.86))",
-      borderBottom: "1px solid #2b3d56",
-      boxShadow: "0 10px 22px rgba(4,9,16,0.26)",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", padding: "14px 22px", gap: 18 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <StreamGuardMark />
-          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1 }}>StreamGuard</span>
-            <span style={{ fontSize: 11, color: "var(--text-muted)", letterSpacing: 0.5 }}>Live Monitoring Console</span>
+    <header className="sg-app-header">
+      <div className="sg-app-header-main">
+        <div className="sg-lockup">
+          <StreamGuardMark gradientId="sgHeaderMark" />
+          <div className="sg-lockup-copy">
+            <span className="sg-lockup-title">StreamGuard</span>
+            <span className="sg-lockup-subtitle">Live Monitoring Console</span>
           </div>
         </div>
 
         {connectionStatus && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "6px 12px", borderRadius: 999, fontSize: 12,
-            background: connectionStatus.connected ? "var(--fact-bg)"
-              : connectionStatus.error ? "var(--trap-bg)"
-              : "var(--accent-soft)",
-            border: connectionStatus.connected ? "1px solid var(--fact-border)"
-              : connectionStatus.error ? "1px solid var(--trap-border)"
-              : "1px solid rgba(63,140,255,0.3)",
-            color: connectionStatus.connected ? "var(--fact)"
-              : connectionStatus.error ? "var(--trap)"
-              : "var(--accent)",
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: "50%", background: "currentColor",
-              animation: !connectionStatus.connected && !connectionStatus.error ? "blink 1s infinite" : "none",
-            }} />
+          <StatusBadge tone={connectionStatus.connected ? "success" : connectionStatus.error ? "danger" : "neutral"}>
             {connectionStatus.connected
               ? `已连接 ${connectionStatus.roomId}`
               : connectionStatus.error ? "连接失败" : "连接中..."}
-          </div>
+          </StatusBadge>
         )}
 
-        <div style={{
-          display: "flex",
-          gap: 10,
-          marginLeft: "auto",
-          alignItems: "center",
-          fontSize: 13,
-          color: "var(--text-secondary)",
-          flexWrap: "wrap",
-        }}>
+        <div className="sg-app-header-stats">
           <StatPill label="观众" value={viewerCount.toLocaleString()} />
           <StatPill label="话术" value={utteranceCount} />
           <Stat color="var(--fact)" value={sessionStats.fact || 0} label="事实" />
           <Stat color="var(--hype)" value={sessionStats.hype || 0} label="夸大" />
           <Stat color="var(--trap)" value={sessionStats.trap || 0} label="陷阱" />
           {trapRate > 0 && (
-            <span style={{
-              fontWeight: 700,
-              color: trapRate >= 30 ? "var(--trap)" : trapRate >= 15 ? "var(--hype)" : "var(--fact)",
-            }}>
+            <span
+              className="sg-app-header-risk"
+              style={{ color: trapRate >= 30 ? "var(--trap)" : trapRate >= 15 ? "var(--hype)" : "var(--fact)" }}
+            >
               风险 {trapRate}%
             </span>
           )}
-          {isPaused && (
-            <span style={{ color: "var(--hype)", fontWeight: 700 }}>{"\u23f8"} 已暂停</span>
-          )}
+          {isPaused && <span className="sg-app-header-paused">暂停中</span>}
         </div>
 
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <Btn onClick={() => setIsPaused((p) => !p)}>
-            {isPaused ? "\u25b6 继续" : "\u23f8 暂停"}
-          </Btn>
-          <Btn onClick={onReset}>重置</Btn>
-          <Btn onClick={onExport}>导出</Btn>
+        <div className="sg-app-header-actions">
+          <Button onClick={() => setIsPaused((paused) => !paused)}>
+            {isPaused ? "继续" : "暂停"}
+          </Button>
+          <Button onClick={onReset}>重置</Button>
+          <Button onClick={onExport}>导出</Button>
           {onEnd && (
-            <Btn onClick={onEnd} danger>
+            <Button onClick={onEnd} variant="danger">
               结束会话
-            </Btn>
+            </Button>
           )}
         </div>
       </div>
 
       {showTabs && (
         <>
-          <div style={{
-            display: "flex",
-            padding: "0 20px",
-            borderBottom: "1px solid #2b3d56",
-            gap: 4,
-          }}>
+          <nav className="sg-app-tabs">
             {NAV_TABS.map((tab) => (
-              <button key={tab.id} onClick={() => setPage(tab.id)} style={{
-                padding: "12px 17px",
-                marginBottom: -1,
-                background: page === tab.id ? "rgba(63,140,255,0.1)" : "transparent",
-                border: page === tab.id ? "1px solid rgba(63,140,255,0.34)" : "1px solid transparent",
-                borderBottom: page === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
-                borderTopLeftRadius: 10,
-                borderTopRightRadius: 10,
-                color: page === tab.id ? "var(--text-primary)" : "var(--text-muted)",
-                fontWeight: page === tab.id ? 700 : 500,
-                fontSize: 13,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                transition: "all .16s ease",
-              }}>
+              <button
+                key={tab.id}
+                onClick={() => setPage(tab.id)}
+                className={page === tab.id ? "is-active" : ""}
+                type="button"
+              >
                 {tab.label}
               </button>
             ))}
-          </div>
+          </nav>
 
-          <div style={{ padding: "0 20px 12px" }}>
-            <div style={{
-              border: "1px solid #2d405d",
-              borderTop: "none",
-              borderRadius: "0 10px 10px 10px",
-              background: "linear-gradient(180deg, rgba(20,33,50,0.75), rgba(15,24,37,0.9))",
-              padding: "14px 18px",
-            }}>
-              <span style={{
-                color: "var(--text-secondary)",
-                fontSize: 13,
-                lineHeight: 1.6,
-              }}>
-                {activeTab.description}
-              </span>
-            </div>
+          <div className="sg-app-tab-context">
+            <div>{activeTab.description}</div>
           </div>
         </>
       )}
@@ -162,87 +104,20 @@ export default function Header({
   );
 }
 
-function StreamGuardMark() {
-  return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      focusable="false"
-      style={{ display: "block", flexShrink: 0 }}
-    >
-      <defs>
-        <linearGradient id="sgMarkStroke_s" x1="2" y1="22" x2="22" y2="2" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="var(--fact)" stopOpacity="0.95" />
-          <stop offset="0.45" stopColor="var(--accent)" stopOpacity="0.95" />
-          <stop offset="1" stopColor="var(--purple)" stopOpacity="0.9" />
-        </linearGradient>
-      </defs>
-
-      {/* Mirror-S stream + guard hook (original) */}
-      <path
-        d="M6.2 7.2c0-2.1 1.7-3.8 3.8-3.8h4.1c2.1 0 3.8 1.7 3.8 3.8S16.2 11 14.1 11H9.9c-2.1 0-3.8 1.7-3.8 3.8s1.7 3.8 3.8 3.8h4.1c2.1 0 3.8-1.7 3.8-3.8"
-        fill="none"
-        stroke="url(#sgMarkStroke_s)"
-        strokeWidth="2.25"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M18.2 18.2l2.1 2.1"
-        fill="none"
-        stroke="url(#sgMarkStroke_s)"
-        strokeWidth="2.25"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function Stat({ color, label, value }) {
   return (
-    <span style={{
-      padding: "4px 8px",
-      borderRadius: 999,
-      border: "1px solid var(--border)",
-      background: "rgba(255,255,255,0.02)",
-      fontSize: 12,
-    }}>
-      <span style={{ color, fontWeight: 700, marginRight: 4 }}>{value}</span>{label}
+    <span className="sg-app-stat">
+      <strong style={{ color }}>{value}</strong>
+      {label}
     </span>
   );
 }
 
 function StatPill({ label, value }) {
   return (
-    <span style={{
-      padding: "4px 8px",
-      borderRadius: 999,
-      border: "1px solid var(--border)",
-      background: "rgba(255,255,255,0.02)",
-      fontSize: 12,
-    }}>
-      <span style={{ color: "var(--text-muted)", marginRight: 5 }}>{label}</span>
-      <span className="mono" style={{ color: "var(--text-primary)" }}>{value}</span>
+    <span className="sg-app-stat">
+      <span>{label}</span>
+      <strong className="mono">{value}</strong>
     </span>
-  );
-}
-
-function Btn({ onClick, children, danger }) {
-  return (
-    <button onClick={onClick} style={{
-      padding: "6px 10px",
-      borderRadius: 8,
-      background: danger ? "var(--trap-bg)" : "linear-gradient(180deg, rgba(28,43,65,0.95), rgba(22,35,52,0.95))",
-      border: danger ? "1px solid var(--trap-border)" : "1px solid #355072",
-      color: danger ? "var(--trap)" : "var(--text-secondary)",
-      fontSize: 12,
-      cursor: "pointer",
-      fontWeight: danger ? 700 : 500,
-      boxShadow: "0 5px 12px rgba(0,0,0,0.18)",
-    }}>
-      {children}
-    </button>
   );
 }
