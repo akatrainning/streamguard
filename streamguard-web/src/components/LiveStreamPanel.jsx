@@ -84,7 +84,7 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
               background: "rgba(255,51,102,0.15)", color: "#FF3366",
               border: "1px solid rgba(255,51,102,0.3)", fontWeight: 600,
             }}>
-              ⚠ 风险弹幕 {sentimentStats.riskCount}
+              风险弹幕 {sentimentStats.riskCount}
             </span>
           )}
           <span className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
@@ -114,17 +114,17 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
             <div style={{ flex: sentimentStats.negP, background: "#FF3366", transition: "flex 0.4s" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginBottom: 6 }}>
-            <span style={{ color: "#00FF88" }}>😊 正向 {sentimentStats.posP}%</span>
-            <span>😐 中性 {sentimentStats.neutralP}%</span>
-            <span style={{ color: "#FF3366" }}>😠 负向 {sentimentStats.negP}%</span>
+            <span style={{ color: "#00FF88" }}>正向 {sentimentStats.posP}%</span>
+            <span>中性 {sentimentStats.neutralP}%</span>
+            <span style={{ color: "#FF3366" }}>负向 {sentimentStats.negP}%</span>
           </div>
           {/* 意图 Top3 */}
           {sentimentStats.topIntents.length > 0 && (
             <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
               {sentimentStats.topIntents.map(([intent, cnt]) => {
                 const c = INTENT_COLOR[intent] || INTENT_COLOR.other;
-                const labels = { purchase:"🛒购买", question:"❓提问", complaint:"🚨客诉",
-                                 doubt:"🤔质疑", support:"🙌支持", ad_spam:"🚫广告" };
+                const labels = { purchase:"购买", question:"提问", complaint:"客诉",
+                                 doubt:"质疑", support:"支持", ad_spam:"广告" };
                 return (
                   <span key={intent} style={{
                     fontSize: 9, padding: "2px 6px", borderRadius: 4,

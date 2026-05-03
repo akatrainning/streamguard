@@ -6,7 +6,6 @@ import Header, { NAV_TABS } from "./components/Header";
 import VideoPlayer from "./components/VideoPlayer";
 import LiveStreamPanel from "./components/LiveStreamPanel";
 import SemanticFeed from "./components/SemanticFeed";
-import RiskInsightSidebar from "./components/RiskInsightSidebar";
 import AlertBanner from "./components/AlertBanner";
 import RationalityGate from "./components/RationalityGate";
 import DataSourceSelector from "./components/DataSourceSelector";
@@ -20,6 +19,7 @@ import LiveDiscoverPage from "./pages/LiveDiscoverPage";
 import WelcomePage from "./pages/WelcomePage";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
+import RagSettingsPage from "./pages/RagSettingsPage";
 import { buildHistoryEntry } from "./utils/historyStorage";
 import { getStoredToken, setStoredToken, clearStoredToken, requestJson } from "./utils/authClient";
 import { saveHistorySession } from "./utils/historyApi";
@@ -31,6 +31,7 @@ const NAV_ICONS = {
   history: "H",
   analytics: "A",
   rules: "R",
+  rag: "V",
   profile: "P",
 };
 
@@ -102,7 +103,7 @@ export default function App() {
   } = streamData || {};
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
-  const protectedPages = useMemo(() => new Set(["discover", "consumer", "history", "analytics", "profile"]), []);
+  const protectedPages = useMemo(() => new Set(["discover", "consumer", "history", "analytics", "rag", "profile"]), []);
 
   const navigateTo = useCallback((nextPage) => {
     if (!authUser && protectedPages.has(nextPage)) {
@@ -467,6 +468,7 @@ export default function App() {
           {!activePageLocked && page === "analytics" && (
             <AnalyticsPage apiBase={apiBase} token={authToken} />
           )}
+          {!activePageLocked && page === "rag" && <RagSettingsPage apiBase={apiBase} />}
           {page === "rules" && (
             <Suspense fallback={<PageFallback title="正在载入规则知识图谱" detail="拆分后的图谱模块会按需加载，不再占用主工作台首屏体积。" />}>
               <RulesPage />
@@ -542,10 +544,20 @@ function Dashboard(props) {
     jumpToUtterance,
     feedRef,
   } = props;
+  const isOps = dashboardSection === "ops";
+  const connectionTone = realStream.connected ? "success" : realStream.connecting ? "warning" : "danger";
+  const connectionText = realStream.connected ? "已连接" : realStream.connecting ? "连接中" : "未连接";
+  const lastSeen = realStream.lastMessageAt
+    ? new Date(realStream.lastMessageAt).toLocaleTimeString("zh-CN", { hour12: false })
+    : "--";
+  const trapCount = utterances.filter((u) => u.type === "trap").length;
+  const hypeCount = utterances.filter((u) => u.type === "hype").length;
+  const riskHeat = Math.max(0, Math.min(100, 100 - Math.round(rationalityIndex || 0)));
+  const roomLabel = sourceConfig.roomId ? `直播间 ${sourceConfig.roomId}` : "等待直播间";
 
   return (
     <div
-      className="sg-dashboard"
+      className={`sg-dashboard is-${dashboardSection}`}
       style={{
         padding: "20px 24px 20px",
         display: visible ? "flex" : "none",
@@ -561,17 +573,25 @@ function Dashboard(props) {
         <div className="sg-dashboard-context">{dashboardModuleDescription}</div>
       </div>
 
-      <div className="sg-dashboard-body">
-        <RiskInsightSidebar
-          rationalityIndex={rationalityIndex}
-          riskData={riskData}
-          alerts={alerts}
-          utterances={utterances}
-          messageTotals={messageTotals}
-          viewerCount={viewerCount}
-          onJumpTo={jumpToUtterance}
-        />
+      <section className={`sg-dashboard-focus-strip is-${dashboardSection}`}>
+        <div className="sg-dashboard-focus-main">
+          <span>{isOps ? "Connection health" : "Live review"}</span>
+          <strong>{isOps ? connectionText : roomLabel}</strong>
+          <small>
+            {isOps
+              ? `最近消息 ${lastSeen} · 尝试 ${realStream.connectionAttempts ?? 0} 次`
+              : `风险热度 ${riskHeat} · 高危 ${trapCount} · 夸大 ${hypeCount}`}
+          </small>
+        </div>
+        <div className="sg-dashboard-focus-metrics">
+          <FocusMetric label={isOps ? "语义" : "观众"} value={isOps ? (messageTotals.utterances || utterances.length) : (viewerCount || 0)} />
+          <FocusMetric label={isOps ? "弹幕" : "证据"} value={isOps ? (messageTotals.chats || chatMessages.length) : utterances.length} />
+          <FocusMetric label={isOps ? "告警" : "告警"} value={alerts?.length || 0} tone={(alerts?.length || 0) > 0 ? "danger" : "neutral"} />
+          <FocusMetric label={isOps ? "状态" : "连接"} value={isOps ? connectionText : connectionText} tone={connectionTone} />
+        </div>
+      </section>
 
+      <div className={`sg-dashboard-body is-${dashboardSection}`}>
         <section className="sg-dashboard-stage">
           {dashboardSection === "ops" && (
             <div className="sg-ops-grid">
@@ -635,6 +655,15 @@ function Dashboard(props) {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function FocusMetric({ label, value, tone = "neutral" }) {
+  return (
+    <div className={`sg-focus-metric is-${tone}`}>
+      <span>{label}</span>
+      <strong className="mono">{value}</strong>
     </div>
   );
 }

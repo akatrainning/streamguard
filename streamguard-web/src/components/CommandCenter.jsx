@@ -96,31 +96,33 @@ export default function CommandCenter({
       )}
       bodyClassName="sg-command-body"
     >
-      <div className="sg-command-kpis">
-        <MetricTile label="语义累计" value={totalUtterances} />
-        <MetricTile label="弹幕累计" value={totalChats} />
-        <MetricTile label="估算速率" value={`${throughput}/min`} tone="success" />
-        <MetricTile label="尝试次数" value={connection.connectionAttempts ?? 0} tone={connection.connected ? "neutral" : "warning"} />
-      </div>
-
-      <div className="sg-command-grid">
-        <section className="sg-command-card">
-          <div className="sg-command-card-title">连接诊断</div>
-          <KV k="数据源" v={dataSource || "--"} />
-          <KV k="房间" v={sourceConfig?.roomId || "--"} mono />
-          <KV k="状态" v={statusText} tone={statusTone} />
-          <KV k="最近消息" v={lastSeen} mono />
+      <section className="sg-command-hero">
+        <div className="sg-command-connection">
+          <div className="sg-command-connection-copy">
+            <span>WebSocket pipeline</span>
+            <strong>{statusText}</strong>
+            <p>
+              {connection.connected
+                ? `最近消息 ${lastSeen}，直播间数据正在进入审查管线。`
+                : "连接未稳定，优先检查后端、代理和房间号。"}
+            </p>
+          </div>
+          <div className="sg-command-diagnostics">
+            <KV k="数据源" v={dataSource || "--"} />
+            <KV k="房间" v={sourceConfig?.roomId || "--"} mono />
+            <KV k="最近消息" v={lastSeen} mono />
+            <KV k="尝试次数" v={connection.connectionAttempts ?? 0} mono />
+          </div>
           {connection.error && <div className="sg-command-error">{connection.error}</div>}
-        </section>
+        </div>
 
-        <section className="sg-command-card">
-          <div className="sg-command-card-title">缓存窗口</div>
-          <KV k="最近语义" v={`${utterances.length}/${recentLimits?.utterances ?? utterances.length}`} mono />
-          <KV k="最近弹幕" v={`${chatMessages.length}/${recentLimits?.chats ?? chatMessages.length}`} mono />
-          <KV k="总消息" v={totalMsgs} mono />
-          <p className="sg-command-note">累计计数不封顶，前端仅保留最近窗口用于渲染。</p>
-        </section>
-      </div>
+        <div className="sg-command-signal-strip">
+          <MetricTile label="语义累计" value={totalUtterances} />
+          <MetricTile label="弹幕累计" value={totalChats} />
+          <MetricTile label="估算速率" value={`${throughput}/min`} tone="success" />
+          <MetricTile label="缓存窗口" value={`${utterances.length}/${chatMessages.length}`} tone={connection.connected ? "neutral" : "warning"} />
+        </div>
+      </section>
 
       <section className="sg-command-log">
         <div className="sg-command-log-head">

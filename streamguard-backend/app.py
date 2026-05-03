@@ -27,6 +27,8 @@ from fastapi.responses import Response, StreamingResponse
 from dotenv import load_dotenv
 import httpx
 
+load_dotenv()
+
 # Import RAG Pipeline
 try:
     def _compile_rule_graph_from_frontend() -> None:
@@ -67,9 +69,6 @@ except ImportError as e:
     print(f"[RAG] Import failed: {e}; RAG features disabled")
     RAG_AVAILABLE = False
     rag_pipeline = None
-
-load_dotenv()
-
 try:
     from openai import AsyncOpenAI, OpenAI
     OPENAI_AVAILABLE = True
@@ -127,6 +126,15 @@ class HistorySaveRequest(BaseModel):
 
 class HistoryRenameRequest(BaseModel):
     product: str
+
+
+class RAGConfigRequest(BaseModel):
+    config: dict
+    rebuild: Optional[bool] = False
+
+
+class RAGTestRequest(BaseModel):
+    text: str
 
 app.add_middleware(
     CORSMiddleware,
@@ -2023,7 +2031,7 @@ class DouyinLiveSource:
                         )
                         rag_result = await asyncio.to_thread(rag_pipeline.process_event, rag_event)
                         # Add RAG results to the event
-                        evt["rag_claims"] = [claim.dict() if hasattr(claim, 'dict') else claim for claim in (rag_result.claim or [])]
+                        evt["rag_claims"] = [rag_result.claim.dict()] if rag_result.claim and hasattr(rag_result.claim, 'dict') else ([] if not rag_result.claim else [rag_result.claim])
                         evt["rag_evidence"] = [ev.dict() if hasattr(ev, 'dict') else ev for ev in (rag_result.evidence or [])]
                         evt["rag_verification"] = rag_result.verification.dict() if rag_result.verification and hasattr(rag_result.verification, 'dict') else rag_result.verification
                         evt["rag_risk"] = rag_result.risk.dict() if rag_result.risk and hasattr(rag_result.risk, 'dict') else rag_result.risk
@@ -2824,6 +2832,51 @@ async def health():
 
 
 # ============= RAG Endpoints =============
+
+@app.get("/rag/config")
+async def rag_get_config():
+    """Return sanitized RAG configuration and runtime index status."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    return rag_pipeline.get_public_status()
+
+
+@app.put("/rag/config")
+async def rag_update_config(request: RAGConfigRequest):
+    """Update RAG tuning configuration. API keys are read from environment variables only."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    try:
+        return rag_pipeline.update_config(request.config, persist=True, rebuild=bool(request.rebuild))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"RAG config update failed: {str(e)}")
+
+
+@app.post("/rag/reindex")
+async def rag_reindex():
+    """Rebuild TF-IDF spaces and the FAISS embedding index."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    try:
+        rag_pipeline.rebuild_vector_spaces(rebuild_embedding=True)
+        return rag_pipeline.get_public_status()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG reindex failed: {str(e)}")
+
+
+@app.post("/rag/test")
+async def rag_test_query(request: RAGTestRequest):
+    """Run a single utterance through the current RAG configuration."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    text = (request.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    try:
+        return rag_pipeline.test_query(text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG test failed: {str(e)}")
+
 
 @app.post("/rag/analyze")
 async def rag_analyze_event(event: LiveSemanticEvent):

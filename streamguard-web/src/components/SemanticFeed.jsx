@@ -50,7 +50,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
       <header className="sg-ui-panel-head">
         <div>
           <div className="sg-ui-eyebrow">语义证据</div>
-          <h2>话术风险分析</h2>
+          <h2>审查队列</h2>
         </div>
         <span className="sg-ui-status is-neutral">
           <i />

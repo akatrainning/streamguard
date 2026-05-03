@@ -10,6 +10,12 @@ export const NAV_TABS = [
   { id: "profile", label: "个人主页", description: "管理账号资料、头像和个人信息。" },
 ];
 
+NAV_TABS.splice(
+  Math.max(0, NAV_TABS.findIndex((tab) => tab.id === "profile")),
+  0,
+  { id: "rag", label: "RAG 调优", description: "配置 AIHubMix embedding、FAISS 召回和 LLM 证据打分参数。" }
+);
+
 export default function Header({
   page,
   setPage,
