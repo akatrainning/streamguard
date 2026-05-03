@@ -253,7 +253,9 @@ function EvidenceGraph({ rule }) {
 
 function RewriteWorkbench({ rule }) {
   const profile = rule.profile || {};
-  const templates = (profile.claimTypes || []).map((claimType) => SAFE_REWRITE_TEMPLATES[claimType]).filter(Boolean);
+  const templates = (profile.claimTypes || [])
+    .map((claimType) => normalizeRewriteTemplate(SAFE_REWRITE_TEMPLATES[claimType]))
+    .filter(Boolean);
   return (
     <section className="sg-ui-panel">
       <header className="sg-ui-panel-head">
@@ -270,6 +272,19 @@ function RewriteWorkbench({ rule }) {
       </div>
     </section>
   );
+}
+
+function normalizeRewriteTemplate(template) {
+  if (!template) return "";
+  if (typeof template === "string") return template;
+  if (Array.isArray(template)) return template.filter(Boolean).join(" / ");
+  if (typeof template === "object") {
+    const parts = [];
+    if (template.risky) parts.push(`风险表达：${template.risky}`);
+    if (template.safe) parts.push(`安全改写：${template.safe}`);
+    return parts.join(" / ");
+  }
+  return String(template);
 }
 
 function InfoBlock({ title, items = [], danger = false, positive = false }) {

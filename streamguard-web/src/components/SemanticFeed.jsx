@@ -1,15 +1,22 @@
 import { useState, useRef, forwardRef, useImperativeHandle } from "react";
 
 const TYPE_CFG = {
-  fact: { label: "FACT", color: "var(--fact)", bg: "var(--fact-bg)", border: "var(--fact-border)" },
-  hype: { label: "HYPE", color: "var(--hype)", bg: "var(--hype-bg)", border: "var(--hype-border)" },
-  trap: { label: "TRAP", color: "var(--trap)", bg: "var(--trap-bg)", border: "var(--trap-border)" },
+  fact: { label: "事实", color: "var(--fact)", bg: "var(--fact-bg)", border: "var(--fact-border)" },
+  hype: { label: "炒作", color: "var(--hype)", bg: "var(--hype-bg)", border: "var(--hype-border)" },
+  trap: { label: "陷阱", color: "var(--trap)", bg: "var(--trap-bg)", border: "var(--trap-border)" },
 };
 
 const SOURCE_CFG = {
-  audio: { tag: "MIC", label: "主播话术", color: "var(--accent)", bg: "var(--accent-soft)", border: "var(--sg-border-accent)" },
-  default: { tag: "AI", label: "分析", color: "var(--text-muted)", bg: "rgba(255,255,255,0.03)", border: "var(--sg-border-muted)" },
+  audio: { tag: "MIC", label: "音频转写", color: "var(--accent)", bg: "var(--accent-soft)", border: "var(--sg-border-accent)" },
+  default: { tag: "AI", label: "语义分析", color: "var(--text-muted)", bg: "rgba(255,255,255,0.03)", border: "var(--sg-border-muted)" },
 };
+
+const TABS = [
+  { key: "all", label: "全部", color: "var(--accent)" },
+  { key: "fact", label: "事实", color: "var(--fact)" },
+  { key: "hype", label: "炒作", color: "var(--hype)" },
+  { key: "trap", label: "陷阱", color: "var(--trap)" },
+];
 
 const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) {
   const [expandedId, setExpandedId] = useState(null);
@@ -42,7 +49,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
     <section className="sg-ui-panel sg-semantic-feed">
       <header className="sg-ui-panel-head">
         <div>
-          <div className="sg-ui-eyebrow">Semantic Evidence</div>
+          <div className="sg-ui-eyebrow">语义证据</div>
           <h2>话术风险分析</h2>
         </div>
         <span className="sg-ui-status is-neutral">
@@ -51,24 +58,22 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
         </span>
       </header>
 
-      <div className="sg-semantic-tabs">
-        {[
-          { key: "all", label: "全部", count: visibleUtterances.length, color: "var(--accent)" },
-          { key: "fact", label: "FACT", count: counts.fact, color: "var(--fact)" },
-          { key: "hype", label: "HYPE", count: counts.hype, color: "var(--hype)" },
-          { key: "trap", label: "TRAP", count: counts.trap, color: "var(--trap)" },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            className={filter === tab.key ? "is-active" : ""}
-            onClick={() => setFilter(tab.key)}
-            style={{ "--semantic-color": tab.color }}
-            type="button"
-          >
-            {tab.label}
-            {tab.count > 0 ? <span>{tab.count}</span> : null}
-          </button>
-        ))}
+      <div className="sg-semantic-tabs" role="tablist" aria-label="话术风险筛选">
+        {TABS.map((tab) => {
+          const count = tab.key === "all" ? visibleUtterances.length : counts[tab.key] || 0;
+          return (
+            <button
+              key={tab.key}
+              className={filter === tab.key ? "is-active" : ""}
+              onClick={() => setFilter(tab.key)}
+              style={{ "--semantic-color": tab.color }}
+              type="button"
+            >
+              {tab.label}
+              {count > 0 ? <span>{count}</span> : null}
+            </button>
+          );
+        })}
       </div>
 
       <div ref={scrollRef} className="sg-semantic-list">
@@ -77,6 +82,8 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
           const id = item.uid || item.id;
           const isOpen = expandedId === id;
           const src = SOURCE_CFG[item.source] || SOURCE_CFG.default;
+          const score = Math.max(0, Math.min(1, Number(item.score) || 0));
+
           return (
             <article
               key={id}
@@ -89,14 +96,17 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                 onClick={() => setExpandedId(isOpen ? null : id)}
                 type="button"
               >
-                <span className="sg-semantic-text">{item.display_text || item.text}</span>
-                {Array.isArray(item.keywords) && item.keywords.length > 0 && (
-                  <span className="sg-semantic-keywords">
-                    {item.keywords.slice(0, 5).map((kw, i) => (
-                      <em key={`${kw}-${i}`}>#{kw}</em>
-                    ))}
-                  </span>
-                )}
+                <span className="sg-semantic-primary">
+                  <span className="sg-semantic-text">{item.display_text || item.text}</span>
+                  {Array.isArray(item.keywords) && item.keywords.length > 0 && (
+                    <span className="sg-semantic-keywords">
+                      {item.keywords.slice(0, 5).map((kw, i) => (
+                        <em key={`${kw}-${i}`}>#{kw}</em>
+                      ))}
+                    </span>
+                  )}
+                </span>
+
                 <span className="sg-semantic-meta">
                   <strong>{cfg.label}</strong>
                   {item.source && (
@@ -105,12 +115,12 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                       {src.label}
                     </small>
                   )}
-                  <span className="sg-semantic-score" aria-label={`score ${item.score?.toFixed?.(2) || 0}`}>
-                    <i style={{ width: `${Math.max(0, Math.min(1, item.score || 0)) * 100}%` }} />
+                  <span className="sg-semantic-score" aria-label={`score ${score.toFixed(2)}`}>
+                    <i style={{ width: `${score * 100}%` }} />
                   </span>
-                  <span className="mono">{item.score?.toFixed?.(2) || "--"}</span>
-                  <span>{item.timestamp}</span>
-                  <span aria-hidden="true">{isOpen ? "^" : "v"}</span>
+                  <span className="mono">{score.toFixed(2)}</span>
+                  <span>{item.timestamp || "--:--:--"}</span>
+                  <span className="sg-semantic-chevron" aria-hidden="true">{isOpen ? "收起" : "展开"}</span>
                 </span>
               </button>
 
@@ -118,7 +128,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                 <div className="sg-semantic-detail">
                   {!!item.violations?.length && (
                     <div>
-                      <h3>模型识别风险点</h3>
+                      <h3>命中风险</h3>
                       {item.violations.slice(0, 5).map((v, i) => (
                         <p key={i}>{v}</p>
                       ))}
@@ -150,7 +160,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
 
         {!filtered.length && (
           <div className="sg-semantic-empty">
-            <strong>等待主播话术转写</strong>
+            <strong>暂无话术证据</strong>
             <span>连接直播间后，系统会持续沉淀可审查的语义证据。</span>
           </div>
         )}

@@ -123,8 +123,47 @@ def _validate_chromedriver_path(driver_path: str) -> str:
 def _get_chromedriver_path() -> str:
     global _CHROMEDRIVER_PATH
     if _CHROMEDRIVER_PATH is None:
-        raw_path = ChromeDriverManager().install()
-        _CHROMEDRIVER_PATH = _validate_chromedriver_path(raw_path)
+        max_retries = 3
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                print(f"[chromedriver] download attempt {attempt + 1}/{max_retries}...")
+                # 使用简单的 ChromeDriverManager，不带兼容性问题的参数
+                manager = ChromeDriverManager()
+                raw_path = manager.install()
+                _CHROMEDRIVER_PATH = _validate_chromedriver_path(raw_path)
+                print(f"[chromedriver] installed successfully at {_CHROMEDRIVER_PATH}")
+                return _CHROMEDRIVER_PATH
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # 指数退避：1, 2 秒
+                    print(f"[chromedriver] attempt {attempt + 1} failed: {type(e).__name__}. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"[chromedriver] all {max_retries} attempts failed")
+        
+        # 如果下载失败，尝试查找已存在的 chromedriver
+        print("[chromedriver] trying to find existing chromedriver...")
+        possible_locations = [
+            os.path.expanduser("~/.wdm/drivers/chromedriver/win64"),
+            os.path.join(os.path.dirname(__file__), "..", "chromedriver.exe"),
+        ]
+        for loc in possible_locations:
+            if os.path.exists(loc):
+                try:
+                    _CHROMEDRIVER_PATH = _validate_chromedriver_path(loc)
+                    print(f"[chromedriver] found existing at {_CHROMEDRIVER_PATH}")
+                    return _CHROMEDRIVER_PATH
+                except Exception as locate_err:
+                    print(f"[chromedriver] existing at {loc} not usable: {locate_err}")
+        
+        # 最后的手段
+        raise RuntimeError(
+            f"Failed to get chromedriver after {max_retries} attempts. "
+            f"Last error: {type(last_error).__name__}: {last_error}"
+        )
     return _CHROMEDRIVER_PATH
 
 
