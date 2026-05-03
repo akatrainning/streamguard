@@ -1,39 +1,3406 @@
 {
   "nodes": [
     {
-      "node_id": "rule_price_001",
-      "label": "绝对化价格宣传规则",
-      "content": "涉及最低、第一、唯一、全网最低等价格绝对化表述，需提供可核验的比价证明。",
-      "related_claim_types": ["price_claim"],
-      "score": 0.88
+      "node_id": "AD-009-ABS",
+      "label": "禁止绝对化用语",
+      "content": "广告法\n第9条\n宣传真实性\n广告不得使用国家级、最高级、最佳等绝对化用语。直播口播中的“全网第一”“最强”“唯一”等表达应被识别为高风险。\n关键词: 国家级\n关键词: 最高级\n关键词: 最佳\n关键词: 第一\n关键词: 唯一\n关键词: 顶级\n关键词: 100%\n模式: 绝对化排名\n模式: 排他性承诺\n模式: 无条件效果保证\n证据: 权威排名依据\n证据: 统计口径\n证据: 适用范围说明",
+      "related_claim_types": [
+        "price_claim",
+        "qualification_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.92
     },
     {
-      "node_id": "rule_scarcity_001",
-      "label": "稀缺促销规则",
-      "content": "只剩最后、库存有限、限时抢购等话术，需引用真实库存或活动规则。",
-      "related_claim_types": ["scarcity_claim"],
-      "score": 0.85
+      "node_id": "AD-008-DISCLOSE",
+      "label": "商品信息应清楚明白",
+      "content": "广告法\n第8条\n宣传真实性\n广告中涉及商品性能、功能、产地、用途、质量、价格、生产者、有效期限、允诺等内容的，应当准确、清楚、明白。\n关键词: 升级款\n关键词: 同款\n关键词: 进口\n关键词: 官方\n关键词: 限量\n关键词: 专供\n模式: 关键交易条件缺失\n模式: 规格和适用范围含糊\n模式: 赠品数量不明\n证据: 商品详情页\n证据: 生产者信息\n证据: 有效期和规格信息",
+      "related_claim_types": [
+        "price_claim",
+        "scarcity_claim",
+        "authority_claim",
+        "quality_claim"
+      ],
+      "score": 0.75
     },
     {
-      "node_id": "rule_combined_001",
-      "label": "价格与稀缺复合风险规则",
-      "content": "价格绝对化加稀缺促销组合时，违规风险进一步提高。",
-      "related_claim_types": ["price_claim", "scarcity_claim"],
+      "node_id": "AD-011-DATA",
+      "label": "数据和引用资料必须真实并标明出处",
+      "content": "广告法\n第11条\n宣传真实性\n广告使用数据、统计资料、调查结果、文摘、引用语等引证内容的，应当真实、准确，并表明出处。\n关键词: 复购率\n关键词: 好评率\n关键词: 销量第一\n关键词: 万人实测\n关键词: 临床数据\n关键词: 行业报告\n模式: 无来源数据\n模式: 统计范围不明\n模式: 选择性引用\n证据: 数据来源\n证据: 统计周期\n证据: 样本范围\n证据: 第三方报告",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AD-012-PATENT",
+      "label": "专利宣传应标明专利号和专利种类",
+      "content": "广告法\n第12条\n宣传真实性\n广告中涉及专利产品或者专利方法的，应当标明专利号和专利种类；未取得专利权的不得谎称取得专利权。\n关键词: 专利\n关键词: 黑科技\n关键词: 独家技术\n关键词: 国家认证技术\n模式: 专利编号缺失\n模式: 过期或未授权专利\n模式: 技术背书泛化\n证据: 专利号\n证据: 专利类型\n证据: 专利权状态",
+      "related_claim_types": [
+        "authority_claim",
+        "qualification_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "AD-013-DISPARAGE",
+      "label": "不得贬低其他经营者商品或服务",
+      "content": "广告法\n第13条\n宣传真实性\n广告不得贬低其他生产经营者的商品或者服务。直播间对竞品作无证据负面评价，可能构成商业贬损。\n关键词: 别家都是假的\n关键词: 同行都偷工减料\n关键词: 竞品有毒\n关键词: 其他牌子没用\n模式: 无依据贬损竞品\n模式: 攻击同行\n模式: 暗示竞品安全风险\n证据: 对比测试报告\n证据: 客观比较条件\n证据: 第三方检测",
+      "related_claim_types": [
+        "quality_claim",
+        "comparison_claim",
+        "chat_signal"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "AD-014-IDENTIFY",
+      "label": "广告应具有可识别性",
+      "content": "广告法\n第14条\n直播营销\n广告应当具有可识别性，能够使消费者辨明其为广告。收取推广费用或存在商业合作时，不宜伪装成纯自用推荐。\n关键词: 自用推荐\n关键词: 不是广告\n关键词: 真实测评\n关键词: 路人实测\n模式: 软广未标注\n模式: 商业合作隐藏\n模式: 伪装独立测评\n证据: 合作关系说明\n证据: 广告标识\n证据: 佣金/推广协议",
+      "related_claim_types": [
+        "authority_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "AD-016-MEDICAL",
+      "label": "医疗、药品、医疗器械广告限制",
+      "content": "广告法\n第16条\n特殊品类\n医疗、药品、医疗器械广告不得含有表示功效、安全性的断言或者保证，不得利用广告代言人作推荐、证明。\n关键词: 包治\n关键词: 根治\n关键词: 无副作用\n关键词: 专家推荐\n关键词: 患者证明\n关键词: 名医\n模式: 疗效保证\n模式: 安全性保证\n模式: 专家患者背书\n证据: 广告审查文件\n证据: 药品或器械说明书\n证据: 批准文号",
+      "related_claim_types": [
+        "efficacy_claim",
+        "authority_claim",
+        "quality_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AD-017-NONMED",
+      "label": "非医疗商品不得涉及疾病治疗功能",
+      "content": "广告法\n第17条\n特殊品类\n除医疗、药品、医疗器械广告外，任何广告不得涉及疾病治疗功能，并不得使用医疗用语或者易与药品、医疗器械相混淆的用语。\n关键词: 治疗\n关键词: 疗效\n关键词: 消炎\n关键词: 修复疾病\n关键词: 药王\n关键词: 处方级\n模式: 普通商品医疗化\n模式: 疾病治疗暗示\n模式: 医药用语包装\n证据: 商品属性\n证据: 批准文件\n证据: 说明书适用范围",
+      "related_claim_types": [
+        "efficacy_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AD-018-HEALTHFOOD",
+      "label": "保健食品广告不得替代药物或保证功效",
+      "content": "广告法\n第18条\n特殊品类\n保健食品广告不得涉及疾病预防、治疗功能，不得表示功效和安全性的断言或者保证，并应声明不能代替药物。\n关键词: 降血糖\n关键词: 降血压\n关键词: 改善失眠\n关键词: 替代药\n关键词: 无任何副作用\n模式: 保健食品药品化\n模式: 安全性保证\n模式: 功效断言\n证据: 保健食品批准或备案信息\n证据: 允许声称的保健功能\n证据: 警示声明",
+      "related_claim_types": [
+        "efficacy_claim",
+        "quality_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AD-024-EDU",
+      "label": "教育培训广告不得保证效果",
+      "content": "广告法\n第24条\n特殊品类\n教育、培训广告不得对升学、通过考试、取得学位学历或者合格证书等作出明示或者暗示的保证性承诺。\n关键词: 保过\n关键词: 包过\n关键词: 稳上岸\n关键词: 不过退费\n关键词: 内部押题\n模式: 效果保证\n模式: 考试机构背书暗示\n模式: 退款承诺误导\n证据: 课程服务协议\n证据: 退款条件\n证据: 师资证明",
+      "related_claim_types": [
+        "authority_claim",
+        "quality_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "AD-025-INVEST",
+      "label": "招商投资广告不得承诺收益",
+      "content": "广告法\n第25条\n特殊品类\n招商等有投资回报预期的广告不得对未来效果、收益或者与其相关的情况作出保证性承诺，不得明示或者暗示保本、无风险。\n关键词: 稳赚\n关键词: 躺赚\n关键词: 保本\n关键词: 无风险\n关键词: 月入过万\n关键词: 官方扶持\n模式: 收益承诺\n模式: 虚构扶持政策\n模式: 名额稀缺诱导\n证据: 加盟合同\n证据: 真实经营数据\n证据: 风险提示",
+      "related_claim_types": [
+        "authority_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AD-028-FAKE",
+      "label": "禁止虚假广告",
+      "content": "广告法\n第28条\n宣传真实性\n广告以虚假或者引人误解的内容欺骗、误导消费者的，构成虚假广告。商品性能、功能、产地、质量、销售状况、荣誉等均属于重点核验对象。\n关键词: 亲测有效\n关键词: 万人验证\n关键词: 进口原装\n关键词: 官方授权\n关键词: 销量暴涨\n模式: 功效虚假\n模式: 材质虚假\n模式: 产地虚假\n模式: 销售状况虚假\n证据: 检测报告\n证据: 授权证明\n证据: 进货凭证\n证据: 销售数据",
+      "related_claim_types": [
+        "efficacy_claim",
+        "authority_claim",
+        "qualification_claim",
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AD-038-ENDORSE",
+      "label": "广告代言推荐应基于实际使用",
+      "content": "广告法\n第38条\n直播营销\n广告代言人在广告中对商品、服务作推荐、证明，应当依据事实。直播达人声称亲测、自用、长期使用，应能与真实体验相匹配。\n关键词: 我亲自用过\n关键词: 我每天都用\n关键词: 我家一直买\n关键词: 亲测\n模式: 未使用即推荐\n模式: 虚构体验\n模式: 达人背书泛化\n证据: 试用记录\n证据: 合作披露\n证据: 体验范围说明",
+      "related_claim_types": [
+        "authority_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "AD-040-MINOR",
+      "label": "未成年人广告保护",
+      "content": "广告法\n第40条\n特殊品类\n针对不满十四周岁未成年人的商品或者服务广告，不得含有劝诱其要求家长购买广告商品或者可能引发模仿不安全行为的内容。\n关键词: 小朋友必买\n关键词: 学生党冲\n关键词: 让爸妈买\n关键词: 儿童专用\n模式: 诱导未成年人消费\n模式: 利用儿童形象不当代言\n模式: 不安全模仿\n证据: 受众定位\n证据: 商品适龄说明\n证据: 青少年保护设置",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "CP-008-KNOW",
+      "label": "消费者知情权",
+      "content": "消费者权益保护法\n第8条\n消费者权益\n消费者享有知悉其购买、使用的商品或者接受的服务真实情况的权利。直播间应充分披露影响购买决策的重要信息。\n关键词: 详情问客服\n关键词: 不用看参数\n关键词: 放心拍\n关键词: 一样的\n模式: 隐瞒规格\n模式: 隐瞒瑕疵\n模式: 关键限制不披露\n证据: 商品详情\n证据: 售后政策\n证据: 检测报告",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-010-FAIR",
+      "label": "公平交易权",
+      "content": "消费者权益保护法\n第10条\n消费者权益\n消费者享有公平交易的权利，有权获得质量保障、价格合理、计量正确等公平交易条件。\n关键词: 不买就亏\n关键词: 必须搭配\n关键词: 只能套餐\n关键词: 补差价\n模式: 强制交易\n模式: 价格不合理\n模式: 计量不足\n证据: 价格明细\n证据: 计量凭证\n证据: 套餐规则",
+      "related_claim_types": [
+        "ai_generated_claim",
+        "price_claim",
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-020-INFO",
+      "label": "经营者信息真实披露义务",
+      "content": "消费者权益保护法\n第20条\n宣传真实性\n经营者向消费者提供有关商品或者服务的质量、性能、用途、有效期限等信息，应当真实、全面，不得作虚假或者引人误解的宣传。\n关键词: 绝对安全\n关键词: 永久有效\n关键词: 无瑕疵\n关键词: 进口正品\n关键词: 官方同款\n模式: 性能虚假\n模式: 用途夸大\n模式: 有效期限隐瞒\n证据: 商品标签\n证据: 质检证明\n证据: 授权文件\n证据: 保质期",
+      "related_claim_types": [
+        "authority_claim",
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "CP-022-INVOICE",
+      "label": "应出具发票等购货凭证",
+      "content": "消费者权益保护法\n第22条\n消费者权益\n经营者提供商品或者服务，应当按照国家有关规定或者商业惯例向消费者出具发票等购货凭证或者服务单据。\n关键词: 不开发票\n关键词: 私下转账\n关键词: 没有小票\n关键词: 不要票更便宜\n模式: 拒开发票\n模式: 私域交易规避凭证\n模式: 凭证缺失\n证据: 订单信息\n证据: 发票记录\n证据: 支付凭证",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.55
+    },
+    {
+      "node_id": "CP-023-WARRANTY",
+      "label": "商品质量应与广告说明相符",
+      "content": "消费者权益保护法\n第23条\n商品质量\n经营者以广告、产品说明、实物样品或者其他方式表明商品质量状况的，应当保证实际提供的商品质量与表明的质量状况相符。\n关键词: 展示款\n关键词: 同样品质\n关键词: 视频同款\n关键词: 原厂材质\n模式: 展示样品与实物不一致\n模式: 材质缩水\n模式: 质量承诺不兑现\n证据: 样品记录\n证据: 发货批次\n证据: 质检报告",
+      "related_claim_types": [
+        "quality_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-024-RETURN",
+      "label": "不合格商品的退换修责任",
+      "content": "消费者权益保护法\n第24条\n消费者权益\n商品或者服务不符合质量要求的，消费者可以依照规定或者约定要求退货、更换、修理等。\n关键词: 售后不管\n关键词: 自己承担\n关键词: 质量问题不退\n关键词: 只修不退\n模式: 质量问题拒售后\n模式: 售后条件不合理\n模式: 责任转嫁\n证据: 售后政策\n证据: 质量检测\n证据: 订单记录",
+      "related_claim_types": [
+        "quality_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-025-7DAY",
+      "label": "网络购物七日无理由退货",
+      "content": "消费者权益保护法\n第25条\n消费者权益\n经营者采用网络、电视、电话、邮购等方式销售商品，消费者有权自收到商品之日起七日内退货，法律规定不宜退货的商品除外。\n关键词: 概不退换\n关键词: 不支持七天无理由\n关键词: 拆封不退\n关键词: 售出不退\n模式: 笼统排除七日退货\n模式: 扩大不适用范围\n模式: 退货门槛过高\n证据: 商品品类\n证据: 页面退货政策\n证据: 消费者确认记录",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-026-TERMS",
+      "label": "禁止格式条款不公平内容",
+      "content": "消费者权益保护法\n第26条\n消费者权益\n经营者不得以格式条款、通知、声明、店堂告示等方式排除或者限制消费者权利、减轻或者免除经营者责任。\n关键词: 最终解释权\n关键词: 概不负责\n关键词: 不退不换\n关键词: 自动放弃\n模式: 排除消费者权利\n模式: 免除商家责任\n模式: 解释权归商家\n证据: 活动规则\n证据: 页面声明\n证据: 售后条款",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-029-PI",
+      "label": "消费者个人信息保护",
+      "content": "消费者权益保护法\n第29条\n个人信息\n经营者收集、使用消费者个人信息，应当遵循合法、正当、必要原则，明示目的、方式和范围，并经消费者同意。\n关键词: 私信手机号\n关键词: 身份证\n关键词: 加群填资料\n关键词: 授权通讯录\n模式: 过度收集信息\n模式: 未明示用途\n模式: 强制授权\n证据: 隐私告知\n证据: 同意记录\n证据: 数据字段清单",
+      "related_claim_types": [
+        "qualification_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-045-PREPAY",
+      "label": "预付款消费保护",
+      "content": "消费者权益保护法\n第45条\n消费者权益\n经营者以预收款方式提供商品或者服务的，应当按照约定提供；未按约定提供的，应按照消费者要求履行约定或者退回预付款。\n关键词: 预付款\n关键词: 充值\n关键词: 储值\n关键词: 定金\n关键词: 押金\n模式: 预付规则不明\n模式: 退款条件苛刻\n模式: 余额清零\n证据: 预付协议\n证据: 履约记录\n证据: 退款规则",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "CP-055-FRAUD",
+      "label": "欺诈行为惩罚性赔偿",
+      "content": "消费者权益保护法\n第55条\n消费者权益\n经营者提供商品或者服务有欺诈行为的，应当按照消费者要求增加赔偿其受到的损失，通常为价款或者服务费用的三倍。\n关键词: 以假充真\n关键词: 假一赔三\n关键词: 正品保证\n关键词: 授权正品\n模式: 故意隐瞒真实情况\n模式: 假冒正品\n模式: 虚构核心交易信息\n证据: 鉴定报告\n证据: 授权证明\n证据: 进货凭证",
+      "related_claim_types": [
+        "qualification_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "EC-010-REGISTER",
+      "label": "电子商务经营者主体登记",
+      "content": "电子商务法\n第10条\n平台责任\n电子商务经营者应当依法办理市场主体登记，依法不需要办理登记的个人销售自产农副产品、家庭手工业产品等除外。\n关键词: 无营业执照\n关键词: 个人代购\n关键词: 厂家直发\n模式: 主体信息缺失\n模式: 许可资质不可查\n证据: 营业执照\n证据: 经营许可\n证据: 平台主体信息",
+      "related_claim_types": [
+        "qualification_claim"
+      ],
+      "score": 0.55
+    },
+    {
+      "node_id": "EC-014-INVOICE",
+      "label": "销售商品应出具发票或电子凭证",
+      "content": "电子商务法\n第14条\n消费者权益\n电子商务经营者销售商品或者提供服务应当依法出具纸质发票、电子发票等购货凭证或者服务单据。\n关键词: 不开票\n关键词: 无票价\n关键词: 私下付款\n关键词: 电子凭证\n模式: 拒绝开票\n模式: 规避平台订单\n模式: 交易凭证缺失\n证据: 订单记录\n证据: 发票记录\n证据: 支付流水",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.55
+    },
+    {
+      "node_id": "EC-015-PUBLIC",
+      "label": "经营主体和许可信息应公示",
+      "content": "电子商务法\n第15条\n平台责任\n电子商务经营者应当在首页显著位置持续公示营业执照信息、与经营业务有关的行政许可信息等。\n关键词: 资质齐全\n关键词: 正规厂家\n关键词: 官方渠道\n关键词: 许可证\n模式: 行政许可不可查\n模式: 主体公示缺失\n模式: 资质宣称无依据\n证据: 营业执照\n证据: 行政许可证\n证据: 平台资质页",
+      "related_claim_types": [
+        "authority_claim",
+        "qualification_claim"
+      ],
+      "score": 0.55
+    },
+    {
+      "node_id": "EC-017-TRUE",
+      "label": "商品服务信息全面真实准确及时",
+      "content": "电子商务法\n第17条\n宣传真实性\n电子商务经营者应当全面、真实、准确、及时地披露商品或者服务信息，保障消费者知情权和选择权，不得虚假或者引人误解宣传。\n关键词: 同款\n关键词: 正品\n关键词: 进口\n关键词: 最低价\n关键词: 官方授权\n关键词: 现货\n模式: 商品详情与口播冲突\n模式: 资质或库存虚假\n模式: 服务承诺不实\n证据: 商品详情页\n证据: 库存记录\n证据: 授权证明\n证据: 售后政策",
+      "related_claim_types": [
+        "price_claim",
+        "authority_claim",
+        "qualification_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "EC-018-PERSONALIZED",
+      "label": "个性化推荐应提供非个性化选项",
+      "content": "电子商务法\n第18条\n个人信息\n根据消费者兴趣爱好、消费习惯等特征提供搜索结果的，应当同时向消费者提供不针对其个人特征的选项。\n关键词: 猜你喜欢\n关键词: 专属价\n关键词: 会员价\n关键词: 老客价\n关键词: 新客价\n模式: 个性化推荐不透明\n模式: 差异化展示无说明\n模式: 非个性化选项缺失\n证据: 推荐策略说明\n证据: 用户选择入口\n证据: 价格展示记录",
+      "related_claim_types": [
+        "authority_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "EC-019-BUNDLE",
+      "label": "搭售应显著提示且不得默认同意",
+      "content": "电子商务法\n第19条\n消费者权益\n电子商务经营者搭售商品或者服务，应当以显著方式提请消费者注意，不得将搭售商品或者服务作为默认同意选项。\n关键词: 默认勾选\n关键词: 自动续费\n关键词: 套餐更划算\n关键词: 必须搭配\n模式: 默认搭售\n模式: 强制套餐\n模式: 自动续费提示不足\n证据: 下单页面\n证据: 勾选状态\n证据: 消费者确认记录",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "EC-021-DEPOSIT",
+      "label": "押金退还方式和程序应明示",
+      "content": "电子商务法\n第21条\n消费者权益\n收取押金的，应当明示押金退还的方式、程序，不得对押金退还设置不合理条件。\n关键词: 押金\n关键词: 保证金\n关键词: 订金\n关键词: 定金\n关键词: 不可退\n模式: 押金退还规则不明\n模式: 退还条件不合理\n模式: 定金订金混淆\n证据: 活动规则\n证据: 支付页面\n证据: 退款流程",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "EC-032-RULE",
+      "label": "平台服务协议和交易规则应公开",
+      "content": "电子商务法\n第32条\n平台责任\n电子商务平台经营者应当遵循公开、公平、公正原则，制定平台服务协议和交易规则，并在首页显著位置持续公示。\n关键词: 平台规则\n关键词: 处罚规则\n关键词: 活动规则\n关键词: 保证金规则\n模式: 规则不透明\n模式: 规则变更不提示\n模式: 处置依据缺失\n证据: 平台规则页面\n证据: 变更公告\n证据: 协议版本",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.55
+    },
+    {
+      "node_id": "EC-038-PLATFORM",
+      "label": "平台安全保障和必要措施责任",
+      "content": "电子商务法\n第38条\n平台责任\n平台知道或者应当知道平台内经营者销售的商品或者提供的服务不符合保障人身、财产安全要求，未采取必要措施的，依法承担相应责任。\n关键词: 投诉很多\n关键词: 多次违规\n关键词: 平台不处理\n关键词: 危险商品\n模式: 高风险商品未拦截\n模式: 重复违规未处置\n模式: 资质审核不足\n证据: 投诉记录\n证据: 风险告警\n证据: 平台处置记录",
+      "related_claim_types": [
+        "qualification_claim",
+        "quality_claim",
+        "chat_signal"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "EC-039-REVIEW",
+      "label": "不得删除消费者评价",
+      "content": "电子商务法\n第39条\n平台责任\n平台应当建立健全信用评价制度，公示信用评价规则，不得删除消费者对其平台内销售商品或者提供服务的评价。\n关键词: 删差评\n关键词: 控评\n关键词: 好评返现\n关键词: 只留好评\n模式: 删除不利评价\n模式: 诱导好评\n模式: 评价展示失真\n证据: 评价记录\n证据: 平台规则\n证据: 商家沟通记录",
+      "related_claim_types": [
+        "chat_signal"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "EC-049-CONTRACT",
+      "label": "提交订单成功合同成立",
+      "content": "电子商务法\n第49条\n消费者权益\n电子商务经营者发布商品或者服务信息符合要约条件的，消费者选择并提交订单成功，合同成立；不得以格式条款约定付款后合同不成立。\n关键词: 付款不算\n关键词: 客服确认\n关键词: 商家审核\n关键词: 有权取消\n模式: 付款后单方取消\n模式: 合同成立条件不合理\n模式: 格式条款排除权利\n证据: 商品页面\n证据: 订单记录\n证据: 交易规则",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LIVE-007-RULES",
+      "label": "平台应制定直播营销管理规则和负面目录",
+      "content": "直播规范\n网络直播营销管理办法第7条\n平台责任\n直播营销平台应制定并公开网络直播营销管理规则、平台公约和直播营销商品服务负面目录。\n关键词: 负面目录\n关键词: 平台规则\n关键词: 禁售\n关键词: 限售\n模式: 规则缺失\n模式: 禁售商品上架\n模式: 平台公约不可查\n证据: 平台规则\n证据: 商品类目准入\n证据: 负面目录",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.55
+    },
+    {
+      "node_id": "LIVE-009-AUDIT",
+      "label": "平台应开展内容审核和实时巡查",
+      "content": "直播规范\n网络直播营销管理办法第9条\n平台责任\n直播营销平台应当加强直播间内链接、二维码等跳转服务的信息安全管理，开展内容安全审核和实时巡查。\n关键词: 私下链接\n关键词: 二维码\n关键词: 跳转购买\n关键词: 加微信\n模式: 私域跳转风险\n模式: 直播内容未巡查\n模式: 违规链接\n证据: 巡查记录\n证据: 直播回放\n证据: 链接审查记录",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LIVE-010-RISK",
+      "label": "平台应建立直播营销风险识别模型",
+      "content": "直播规范\n网络直播营销管理办法第10条\n平台责任\n直播营销平台应建立风险识别模型，对高风险营销行为采取弹窗提示、违规警示、限制流量、暂停直播等措施。\n关键词: 高风险\n关键词: 预警\n关键词: 限流\n关键词: 暂停直播\n模式: 高危话术未提示\n模式: 重复违规未处置\n模式: 风控闭环缺失\n证据: 风险模型记录\n证据: 告警日志\n证据: 处置记录",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LIVE-018-TRUE",
+      "label": "直播营销人员应真实准确全面发布商品信息",
+      "content": "直播规范\n网络直播营销管理办法第18条\n直播营销\n直播营销人员或者直播间运营者应当真实、准确、全面地发布商品或者服务信息，不得发布虚假或者引人误解的信息。\n关键词: 据说有效\n关键词: 听说很厉害\n关键词: 大概能治\n关键词: 买了都说好\n模式: 口播脱离事实\n模式: 暗示性承诺\n模式: 信息不完整\n证据: 商品资料\n证据: 卖点卡\n证据: 检测报告\n证据: 说明书",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "LIVE-018-FAKEGOODS",
+      "label": "不得营销假冒伪劣或不安全商品",
+      "content": "直播规范\n网络直播营销管理办法第18条\n商品质量\n不得营销假冒伪劣、侵犯知识产权或者不符合保障人身、财产安全要求的商品。\n关键词: 正品尾货\n关键词: 原单\n关键词: 复刻\n关键词: 无标\n关键词: 证书\n模式: 假冒品牌\n模式: 以假充真\n模式: 质量不合格\n模式: 证书伪造\n证据: 品牌授权\n证据: 鉴定证书\n证据: 质检报告\n证据: 进货凭证",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "LIVE-018-DATA",
+      "label": "不得虚构交易、关注、浏览、点赞等数据",
+      "content": "直播规范\n网络直播营销管理办法第18条\n直播营销\n直播营销活动中不得虚构或者篡改交易、关注度、浏览量、点赞量等数据流量造假信息。\n关键词: 在线十万\n关键词: 卖爆\n关键词: 刚下单\n关键词: 库存秒没\n关键词: 点赞破万\n模式: 虚构观看量\n模式: 虚构销量\n模式: 刷单刷评\n模式: 虚假库存\n证据: 平台后台数据\n证据: 订单记录\n证据: 库存记录\n证据: 互动日志",
+      "related_claim_types": [
+        "chat_signal"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "LIVE-022-SUPPLIER",
+      "label": "直播间运营者应核验供应商资质",
+      "content": "直播规范\n网络直播营销管理办法第22条\n平台责任\n直播间运营者应核验商品服务供应商身份、地址、联系方式、行政许可、信用状况等信息，并留存相关记录。\n关键词: 厂家直供\n关键词: 源头工厂\n关键词: 官方供货\n关键词: 渠道价\n模式: 供应商不可核验\n模式: 行政许可缺失\n模式: 信用风险未排查\n证据: 供应商资质\n证据: 行政许可\n证据: 进货合同\n证据: 信用记录",
+      "related_claim_types": [
+        "authority_claim",
+        "qualification_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LIVE-023-AFTERSALE",
+      "label": "不得拖延或拒绝消费者合法合理要求",
+      "content": "直播规范\n网络直播营销管理办法第23条\n消费者权益\n直播间运营者、直播营销人员不得故意拖延或者无正当理由拒绝消费者提出的合法合理要求。\n关键词: 售后找平台\n关键词: 不退不换\n关键词: 过时不候\n关键词: 自己负责\n模式: 售后推诿\n模式: 拖延退款\n模式: 拒绝合理退换\n证据: 售后记录\n证据: 退款申请\n证据: 客服沟通",
+      "related_claim_types": [
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "IAD-003-LEGAL",
+      "label": "互联网广告应真实合法",
+      "content": "互联网广告管理办法\n第3条\n直播营销\n互联网广告应当真实、合法，坚持正确导向，以健康的表现形式表达广告内容，符合社会主义精神文明建设和弘扬中华优秀传统文化的要求。\n关键词: 直播广告\n关键词: 合作推广\n关键词: 商品推荐\n关键词: 软广\n模式: 互联网广告虚假\n模式: 广告导向不当\n模式: 商业推广未规范\n证据: 广告内容记录\n证据: 合作关系\n证据: 商品资质",
+      "related_claim_types": [
+        "authority_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "IAD-009-IDENTIFY",
+      "label": "竞价排名等广告应显著标明广告",
+      "content": "互联网广告管理办法\n第9条\n直播营销\n通过知识介绍、体验分享、消费测评等形式推销商品或者服务并附加购买链接的，应当显著标明广告。\n关键词: 测评\n关键词: 种草\n关键词: 体验分享\n关键词: 购买链接\n关键词: 同款链接\n模式: 种草带货未标广告\n模式: 测评附购买链接未披露\n模式: 软广伪装内容\n证据: 购买链接\n证据: 推广协议\n证据: 广告标识",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "IAD-012-MINOR",
+      "label": "面向未成年人的互联网广告限制",
+      "content": "互联网广告管理办法\n第12条\n特殊品类\n针对未成年人的互联网媒介不得发布医疗、药品、保健食品、医疗器械、化妆品、酒类、美容广告以及不利于未成年人身心健康的网络游戏广告。\n关键词: 学生党\n关键词: 儿童\n关键词: 未成年\n关键词: 青少年\n模式: 未成年人场景投放限制品类\n模式: 诱导未成年人消费\n证据: 受众定位\n证据: 广告投放记录\n证据: 商品品类",
+      "related_claim_types": [
+        "efficacy_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "PRICE-013-MARK",
+      "label": "明码标价且不得标价外加价",
+      "content": "价格规范\n价格法第13条\n价格促销\n经营者销售、收购商品和提供服务，应当按照规定明码标价，不得在标价之外加价出售商品，不得收取任何未予标明的费用。\n关键词: 到手价\n关键词: 补运费\n关键词: 服务费\n关键词: 直播价\n关键词: 结算价\n模式: 口播价与结算价不一致\n模式: 隐藏费用\n模式: 标价外加价\n证据: 口播记录\n证据: 商品页价格\n证据: 结算页截图",
+      "related_claim_types": [
+        "price_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "PRICE-014-FRAUD",
+      "label": "禁止虚假或使人误解的价格手段",
+      "content": "价格规范\n价格法第14条\n价格促销\n经营者不得利用虚假的或者使人误解的价格手段，诱骗消费者或者其他经营者与其进行交易。\n关键词: 原价\n关键词: 专柜价\n关键词: 全网最低\n关键词: 史低\n关键词: 限时秒杀\n模式: 虚构原价\n模式: 虚假折扣\n模式: 比较价格无依据\n证据: 历史成交价\n证据: 同款比价依据\n证据: 促销规则",
+      "related_claim_types": [
+        "price_claim",
+        "scarcity_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "PRICE-019-COMPARE",
+      "label": "禁止虚假折价、减价和价格比较",
+      "content": "价格规范\n明码标价和禁止价格欺诈规定第19条\n价格促销\n经营者不得以虚假折价、减价或者价格比较等方式销售商品或者提供服务，欺骗、诱导消费者交易。\n关键词: 划线价\n关键词: 专柜价\n关键词: 官方价\n关键词: 全网价\n关键词: 直降\n模式: 划线价无依据\n模式: 比较对象不一致\n模式: 促销前提隐瞒\n证据: 被比较价格来源\n证据: 同规格证明\n证据: 历史价格",
+      "related_claim_types": [
+        "price_claim",
+        "authority_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "PRICE-020-ONLINE",
+      "label": "网络交易价格展示不得误导",
+      "content": "价格规范\n明码标价和禁止价格欺诈规定第20条\n价格促销\n网络交易经营者不得通过首页、详情页、直播页面、结算页面等不同页面价格不一致的方式误导消费者。\n关键词: 直播间专享\n关键词: 拍下改价\n关键词: 联系客服改价\n关键词: 券后价\n模式: 多页面价格不一致\n模式: 优惠使用条件不明\n模式: 拍下改价\n证据: 直播截图\n证据: 详情页\n证据: 结算页\n证据: 优惠券规则",
+      "related_claim_types": [
+        "price_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "AUCL-008-FAKE",
+      "label": "禁止虚假或引人误解商业宣传",
+      "content": "反不正当竞争法\n第8条\n宣传真实性\n经营者不得对商品的性能、功能、质量、销售状况、用户评价、曾获荣誉等作虚假或者引人误解的商业宣传。\n关键词: 销量领先\n关键词: 好评如潮\n关键词: 官方推荐\n关键词: 用户见证\n关键词: 荣誉认证\n模式: 销售状况虚假\n模式: 用户评价虚假\n模式: 荣誉虚假\n模式: 功能虚假\n证据: 真实订单\n证据: 评价记录\n证据: 荣誉证明\n证据: 质检报告",
+      "related_claim_types": [
+        "authority_claim",
+        "qualification_claim",
+        "quality_claim",
+        "chat_signal"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AUCL-008-TRAFFIC",
+      "label": "不得组织虚假交易帮助虚假宣传",
+      "content": "反不正当竞争法\n第8条\n直播营销\n经营者不得通过组织虚假交易等方式，帮助其他经营者进行虚假或者引人误解的商业宣传。\n关键词: 刷单\n关键词: 刷评\n关键词: 刷人气\n关键词: 水军\n关键词: 虚假观看\n模式: 刷单刷评\n模式: 虚构直播热度\n模式: 虚构购买气氛\n证据: 流量日志\n证据: 交易记录\n证据: 账号关联\n证据: 异常互动",
+      "related_claim_types": [
+        "chat_signal"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "AUCL-010-PRIZE",
+      "label": "有奖销售不得欺骗或误导",
+      "content": "反不正当竞争法\n第10条\n价格促销\n经营者进行有奖销售，不得存在所设奖的种类、兑奖条件、奖金金额或者奖品等信息不明确，影响兑奖的情形。\n关键词: 免单\n关键词: 半价\n关键词: 前十名\n关键词: 中奖\n关键词: 抽奖\n模式: 中奖条件不明\n模式: 名单与规则不符\n模式: 奖品兑现困难\n证据: 活动规则\n证据: 中奖名单\n证据: 支付顺序\n证据: 兑奖记录",
+      "related_claim_types": [
+        "price_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "AUCL-011-DISPARAGE",
+      "label": "禁止编造传播虚假信息损害竞争对手",
+      "content": "反不正当竞争法\n第11条\n宣传真实性\n经营者不得编造、传播虚假信息或者误导性信息，损害竞争对手的商业信誉、商品声誉。\n关键词: 竞品有毒\n关键词: 同行假货\n关键词: 别人都是骗\n关键词: 某品牌出事\n模式: 编造竞品负面信息\n模式: 无证据传播谣言\n模式: 误导性对比\n证据: 事实来源\n证据: 检测报告\n证据: 法院或监管文书",
+      "related_claim_types": [
+        "comparison_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "PQL-026-SAFE",
+      "label": "产品质量应符合安全和使用性能要求",
+      "content": "商品质量与特殊品类\n产品质量法第26条\n商品质量\n产品质量应不存在危及人身、财产安全的不合理危险，并符合保障人体健康和人身、财产安全的国家标准、行业标准。\n关键词: 国标\n关键词: 安全认证\n关键词: 耐高温\n关键词: 儿童安全\n关键词: 电器安全\n模式: 强制标准不合格\n模式: 安全风险未提示\n模式: 性能与标准不符\n证据: 质检报告\n证据: 执行标准\n证据: 强制认证\n证据: 安全说明",
+      "related_claim_types": [
+        "authority_claim",
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "PQL-027-LABEL",
+      "label": "产品标识应真实完整",
+      "content": "商品质量与特殊品类\n产品质量法第27条\n商品质量\n产品或者其包装上的标识必须真实，并有产品质量检验合格证明、中文标明的产品名称、生产厂厂名和厂址等。\n关键词: 三无\n关键词: 无标\n关键词: 进口无中文\n关键词: 合格证\n关键词: 厂名厂址\n模式: 中文标签缺失\n模式: 合格证明缺失\n模式: 厂名厂址不明\n证据: 产品标签\n证据: 合格证\n证据: 中文说明\n证据: 厂商信息",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "PQL-033-CHECK",
+      "label": "销售者应验明产品合格证明和标识",
+      "content": "商品质量与特殊品类\n产品质量法第33条\n商品质量\n销售者应当建立并执行进货检查验收制度，验明产品合格证明和其他标识。\n关键词: 源头工厂\n关键词: 代工尾货\n关键词: 无票\n关键词: 厂家直供\n模式: 进货验收缺失\n模式: 合格证明不可查\n模式: 供应链证据不足\n证据: 进货台账\n证据: 合格证明\n证据: 供应商资质",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "PQL-035-EXPIRED",
+      "label": "不得销售失效、变质产品",
+      "content": "商品质量与特殊品类\n产品质量法第35条\n商品质量\n销售者不得销售国家明令淘汰并停止销售的产品和失效、变质的产品。\n关键词: 临期\n关键词: 清仓\n关键词: 尾货\n关键词: 过期\n关键词: 库存\n模式: 有效期隐瞒\n模式: 变质商品销售\n模式: 淘汰产品销售\n证据: 生产日期\n证据: 保质期\n证据: 仓储记录\n证据: 产品批次",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "PQL-037-ORIGIN",
+      "label": "不得伪造产地、厂名厂址和认证标志",
+      "content": "商品质量与特殊品类\n产品质量法第37、38条\n商品质量\n不得伪造产地，不得伪造或者冒用他人的厂名、厂址，不得伪造或者冒用认证标志等质量标志。\n关键词: 原产地\n关键词: 进口\n关键词: 认证\n关键词: 授权\n关键词: 证书\n关键词: 正品\n模式: 产地虚假\n模式: 认证标志冒用\n模式: 授权虚假\n模式: 证书伪造\n证据: 产地证明\n证据: 授权链路\n证据: 认证证书\n证据: 鉴定报告",
+      "related_claim_types": [
+        "authority_claim",
+        "qualification_claim",
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "FOOD-073-AD",
+      "label": "食品广告不得虚假或涉及疾病预防治疗",
+      "content": "商品质量与特殊品类\n食品安全法第73条\n特殊品类\n食品广告的内容应当真实合法，不得含有虚假内容，不得涉及疾病预防、治疗功能。\n关键词: 减肥\n关键词: 降糖\n关键词: 治胃病\n关键词: 排毒\n关键词: 抗癌\n关键词: 改善三高\n模式: 普通食品保健化\n模式: 普通食品药品化\n模式: 疾病治疗暗示\n证据: 食品标签\n证据: 批准或备案信息\n证据: 成分依据",
+      "related_claim_types": [
+        "efficacy_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "FOOD-078-HF",
+      "label": "保健食品标签说明不得涉及疾病预防治疗",
+      "content": "商品质量与特殊品类\n食品安全法第78条\n特殊品类\n保健食品的标签、说明书不得涉及疾病预防、治疗功能，内容应当真实，并声明本品不能代替药物。\n关键词: 替代药\n关键词: 治失眠\n关键词: 降血脂\n关键词: 不用吃药\n关键词: 药食同源\n模式: 保健食品药品化\n模式: 未声明不能代替药物\n模式: 超范围功能声称\n证据: 保健食品备案或批准文件\n证据: 标签说明书\n证据: 允许声称范围",
+      "related_claim_types": [
+        "efficacy_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "DRUG-090-AD",
+      "label": "药品广告应以核准说明书为准",
+      "content": "商品质量与特殊品类\n药品管理法第90条\n特殊品类\n药品广告内容应当真实、合法，以国务院药品监督管理部门核准的药品说明书为准，不得含有虚假内容。\n关键词: 药效最好\n关键词: 根治\n关键词: 立刻见效\n关键词: 无毒副作用\n关键词: 秘方\n模式: 超说明书宣传\n模式: 功效安全性保证\n模式: 非药品冒充药品\n证据: 药品说明书\n证据: 批准文号\n证据: 广告审查文件",
+      "related_claim_types": [
+        "efficacy_claim",
+        "quality_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "MD-045-AD",
+      "label": "医疗器械广告应真实合法",
+      "content": "商品质量与特殊品类\n医疗器械监督管理条例第45条\n特殊品类\n医疗器械广告应当真实、合法，不得含有虚假、夸大、误导性的内容，并应符合经注册或者备案的产品说明书。\n关键词: 医用级\n关键词: 理疗\n关键词: 治疗仪\n关键词: 改善疾病\n关键词: 医院同款\n模式: 器械功效夸大\n模式: 普通器械医疗化\n模式: 超说明书宣传\n证据: 注册证\n证据: 备案信息\n证据: 说明书\n证据: 广告审查",
+      "related_claim_types": [
+        "efficacy_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "COS-043-MEDICAL",
+      "label": "化妆品不得明示或暗示医疗作用",
+      "content": "商品质量与特殊品类\n化妆品监督管理条例第43条\n特殊品类\n化妆品广告不得明示或者暗示产品具有医疗作用，不得含有虚假或者引人误解的内容。\n关键词: 祛斑根治\n关键词: 修复皮炎\n关键词: 抗炎\n关键词: 医美替代\n关键词: 细胞再生\n模式: 化妆品医疗化\n模式: 功效夸大\n模式: 虚假成分背书\n证据: 化妆品备案信息\n证据: 功效评价资料\n证据: 成分表",
+      "related_claim_types": [
+        "efficacy_claim",
+        "authority_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "PIPL-005-PRINCIPLE",
+      "label": "个人信息处理应合法正当必要",
+      "content": "个人信息保护法\n第5、6条\n个人信息\n处理个人信息应当遵循合法、正当、必要和诚信原则，并限于实现处理目的的最小范围。\n关键词: 手机号\n关键词: 身份证\n关键词: 通讯录\n关键词: 定位\n关键词: 人脸\n模式: 过度收集\n模式: 目的不明确\n模式: 与直播交易无关\n证据: 数据字段清单\n证据: 处理目的\n证据: 最小必要说明",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "PIPL-017-NOTICE",
+      "label": "处理个人信息前应充分告知",
+      "content": "个人信息保护法\n第17条\n个人信息\n处理个人信息前，应以显著方式、清晰易懂的语言真实、准确、完整告知处理者名称、目的、方式、种类、保存期限等事项。\n关键词: 授权\n关键词: 同意\n关键词: 隐私\n关键词: 留资\n关键词: 填表\n模式: 隐私告知缺失\n模式: 告知不清楚\n模式: 保存期限不明\n证据: 隐私政策\n证据: 授权弹窗\n证据: 同意记录",
+      "related_claim_types": [
+        "qualification_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "PIPL-024-AUTO",
+      "label": "自动化决策应透明公平",
+      "content": "个人信息保护法\n第24条\n个人信息\n利用个人信息进行自动化决策，应保证决策透明和结果公平、公正，不得对个人在交易价格等交易条件上实行不合理的差别待遇。\n关键词: 专属价\n关键词: 老客价\n关键词: 会员价\n关键词: 算法推荐\n关键词: 猜你喜欢\n模式: 价格差别待遇\n模式: 推荐不透明\n模式: 拒绝非个性化选项\n证据: 算法说明\n证据: 价格记录\n证据: 用户选择入口",
+      "related_claim_types": [
+        "price_claim",
+        "authority_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "PIPL-051-SECURITY",
+      "label": "个人信息处理者应采取安全保护措施",
+      "content": "个人信息保护法\n第51条\n个人信息\n个人信息处理者应采取制定内部管理制度、分类管理、加密、去标识化、权限控制、安全审计等措施。\n关键词: 录音\n关键词: 弹幕\n关键词: 会话快照\n关键词: 用户ID\n关键词: 日志\n模式: 会话数据未脱敏\n模式: 访问权限缺失\n模式: 安全审计不足\n证据: 权限配置\n证据: 脱敏策略\n证据: 日志留存\n证据: 加密措施",
+      "related_claim_types": [
+        "quality_claim",
+        "chat_signal"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LCE-016-RETAIN",
+      "label": "交易信息和直播证据保存不少于三年",
+      "content": "直播电商监督管理办法\n第16条\n平台责任\n平台应通过技术手段确保交易信息完整，直播账号、直播视频回放、互动信息、商品详情页快照、客服、支付、物流、退换货和售后等信息，自交易完成之日起保存不少于三年。\n关键词: 回放记录\n关键词: 互动信息\n关键词: 商品快照\n关键词: 交易信息\n关键词: 三年\n模式: 证据留痕缺失\n模式: 回放或互动记录不可追溯\n模式: 交易链路证据不完整\n证据: 直播视频回放\n证据: 互动记录\n证据: 商品详情页快照\n证据: 订单与售后记录",
+      "related_claim_types": [
+        "ai_generated_claim",
+        "guarantee_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LCE-017-AI",
+      "label": "AI 生成内容和虚拟主播应防止误导并持续标识",
+      "content": "直播电商监督管理办法\n第17、37条\n直播营销\n平台应防范利用人工智能技术编造、传播虚假或引人误解的商业信息；直播间使用 AI 生成的人物图像、视频从事直播电商活动，应按规定标识并持续提示。\n关键词: AI主播\n关键词: 虚拟主播\n关键词: 数字人\n关键词: 智能生成\n关键词: 仿真人\n模式: AI 生成内容未标识\n模式: 虚拟人物假冒真人背书\n模式: AI 编造商业信息\n证据: AI 标识记录\n证据: 主播身份说明\n证据: 内容生成说明",
+      "related_claim_types": [
+        "ai_generated_claim",
+        "authority_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LCE-027-PRESCREEN",
+      "label": "选品和直播脚本应事前合规审核",
+      "content": "直播电商监督管理办法\n第30、45条\n平台责任\n直播间运营者应核验实际销售商品或服务经营者信息、行政许可、强制性产品认证、产品合格证明，并建立直播前展示内容、讲解内容、服装、布景、道具等事前合规审核机制。\n关键词: 选品\n关键词: 脚本审核\n关键词: 行政许可\n关键词: 合格证明\n关键词: 强制认证\n模式: 直播前脚本未审核\n模式: 选品资质不完整\n模式: 强制认证缺失\n证据: 选品审核表\n证据: 供应商资质\n证据: 行政许可\n证据: 产品合格证明",
+      "related_claim_types": [
+        "authority_claim",
+        "qualification_claim",
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LCE-031-CORRECT",
+      "label": "口误和不当表述应现场纠正并留痕",
+      "content": "直播电商监督管理办法\n第31条\n直播营销\n直播间运营者应建立直播营销人员纠错机制，发现口误、表述不完整、表述不当等情形时，应现场纠正，并保存记录备查。\n关键词: 口误\n关键词: 说错了\n关键词: 纠正\n关键词: 补充说明\n关键词: 以页面为准\n模式: 不当表述未纠正\n模式: 纠错无记录\n模式: 高危话术持续重复\n证据: 纠错记录\n证据: 直播回放片段\n证据: 整改话术\n证据: 人工复核记录",
+      "related_claim_types": [
+        "quality_claim"
+      ],
+      "score": 0.75
+    },
+    {
+      "node_id": "LCE-032-PRICE",
+      "label": "直播间应显著展示品名、价格、计价单位和促销基准",
+      "content": "直播电商监督管理办法\n第32条\n价格促销\n直播间应显著展示商品品名、价格和计价单位；采取价格比较、折价、减价等促销方式的，应显著标明被比较价格或者折价、减价的计算基准等信息。\n关键词: 直播价\n关键词: 到手价\n关键词: 原价\n关键词: 折扣\n关键词: 计价单位\n关键词: 券后\n模式: 价格基准不明\n模式: 计价单位缺失\n模式: 直播价与页面价不一致\n证据: 商品卡截图\n证据: 价格基准说明\n证据: 计价单位\n证据: 活动规则",
+      "related_claim_types": [
+        "price_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "LCE-033-ILLEGAL-GOODS",
+      "label": "不得销售假冒伪劣或不符合安全要求的商品",
+      "content": "直播电商监督管理办法\n第33条\n商品质量\n直播间运营者、直播营销人员不得通过直播间销售不符合人身财产安全要求、掺杂掺假、以假充真、以次充好等质量不合格商品。\n关键词: 以假充真\n关键词: 以次充好\n关键词: 复刻\n关键词: 无标\n关键词: 三无\n关键词: 仿版\n模式: 假冒伪劣\n模式: 安全标准不合格\n模式: 证书或授权虚假\n证据: 质检报告\n证据: 鉴定证书\n证据: 品牌授权\n证据: 产品合格证明",
+      "related_claim_types": [
+        "qualification_claim",
+        "quality_claim"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "LCE-034-FAKE",
+      "label": "不得对经营主体、性能、功能、质量、销量、评价、荣誉、资质作虚假宣传",
+      "content": "直播电商监督管理办法\n第34条\n宣传真实性\n直播间运营者、直播营销人员不得对商品或服务的经营主体以及性能、功能、质量、销售情况、用户评价、曾获荣誉、资格资质等作虚假或引人误解的商业宣传。\n关键词: 销量第一\n关键词: 官方认证\n关键词: 用户都说好\n关键词: 功效显著\n关键词: 荣誉\n关键词: 资质\n模式: 经营主体虚假\n模式: 功能质量虚假\n模式: 销量评价虚假\n模式: 荣誉资质虚假\n证据: 经营主体信息\n证据: 检测报告\n证据: 真实订单\n证据: 评价记录\n证据: 荣誉证书",
+      "related_claim_types": [
+        "efficacy_claim",
+        "authority_claim",
+        "qualification_claim",
+        "quality_claim",
+        "chat_signal"
+      ],
+      "score": 0.92
+    },
+    {
+      "node_id": "LCE-036-COMPETE",
+      "label": "不得编造误导信息损害竞品或组织虚假交易评价",
+      "content": "直播电商监督管理办法\n第36、44条\n直播营销\n直播间运营者、直播营销人员不得编造、传播误导性信息损害其他经营者商业信誉、商品声誉；服务机构不得通过组织虚假交易、虚假评价帮助虚假宣传。\n关键词: 竞品是假货\n关键词: 同行有毒\n关键词: 刷单\n关键词: 刷评\n关键词: 水军\n模式: 商业贬损\n模式: 虚假交易\n模式: 虚假评价\n模式: 水军互动\n证据: 客观对比报告\n证据: 评价日志\n证据: 交易记录\n证据: 账号异常分析",
+      "related_claim_types": [
+        "comparison_claim",
+        "chat_signal"
+      ],
       "score": 0.92
     }
   ],
   "edges": [
     {
-      "from": "rule_price_001",
-      "to": "rule_combined_001",
-      "relation": "组合风险",
-      "weight": 0.9
+      "from": "AD-009-ABS",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
     },
     {
-      "from": "rule_scarcity_001",
-      "to": "rule_combined_001",
-      "relation": "组合风险",
-      "weight": 0.9
+      "from": "AD-009-ABS",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-009-ABS",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-009-ABS",
+      "to": "权威排名依据",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-009-ABS",
+      "to": "统计口径",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-009-ABS",
+      "to": "适用范围说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-009-ABS",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "scarcity_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "商品详情页",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "生产者信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "有效期和规格信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-008-DISCLOSE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-011-DATA",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-011-DATA",
+      "to": "数据来源",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-011-DATA",
+      "to": "统计周期",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-011-DATA",
+      "to": "样本范围",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-011-DATA",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-012-PATENT",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-012-PATENT",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-012-PATENT",
+      "to": "专利号",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-012-PATENT",
+      "to": "专利类型",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-012-PATENT",
+      "to": "专利权状态",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-012-PATENT",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-013-DISPARAGE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-013-DISPARAGE",
+      "to": "comparison_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-013-DISPARAGE",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-013-DISPARAGE",
+      "to": "对比测试报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-013-DISPARAGE",
+      "to": "客观比较条件",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-013-DISPARAGE",
+      "to": "第三方检测",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-013-DISPARAGE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-014-IDENTIFY",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-014-IDENTIFY",
+      "to": "合作关系说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-014-IDENTIFY",
+      "to": "广告标识",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-014-IDENTIFY",
+      "to": "佣金/推广协议",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-014-IDENTIFY",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "广告审查文件",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "药品或器械说明书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "批准文号",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-016-MEDICAL",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-017-NONMED",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-017-NONMED",
+      "to": "商品属性",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-017-NONMED",
+      "to": "批准文件",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-017-NONMED",
+      "to": "说明书适用范围",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-017-NONMED",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-018-HEALTHFOOD",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-018-HEALTHFOOD",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-018-HEALTHFOOD",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-018-HEALTHFOOD",
+      "to": "保健食品批准或备案信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-018-HEALTHFOOD",
+      "to": "允许声称的保健功能",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-018-HEALTHFOOD",
+      "to": "警示声明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-018-HEALTHFOOD",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-024-EDU",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-024-EDU",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-024-EDU",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-024-EDU",
+      "to": "课程服务协议",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-024-EDU",
+      "to": "退款条件",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-024-EDU",
+      "to": "师资证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-024-EDU",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-025-INVEST",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-025-INVEST",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-025-INVEST",
+      "to": "加盟合同",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-025-INVEST",
+      "to": "真实经营数据",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-025-INVEST",
+      "to": "风险提示",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-025-INVEST",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "检测报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "授权证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "进货凭证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-028-FAKE",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-038-ENDORSE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-038-ENDORSE",
+      "to": "试用记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-038-ENDORSE",
+      "to": "合作披露",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-038-ENDORSE",
+      "to": "体验范围说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-038-ENDORSE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-040-MINOR",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-040-MINOR",
+      "to": "受众定位",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-040-MINOR",
+      "to": "商品适龄说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-040-MINOR",
+      "to": "青少年保护设置",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AD-040-MINOR",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-008-KNOW",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-008-KNOW",
+      "to": "商品详情",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-008-KNOW",
+      "to": "售后政策",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-008-KNOW",
+      "to": "检测报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-008-KNOW",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-010-FAIR",
+      "to": "ai_generated_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-010-FAIR",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-010-FAIR",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-010-FAIR",
+      "to": "价格明细",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-010-FAIR",
+      "to": "计量凭证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-010-FAIR",
+      "to": "套餐规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-010-FAIR",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-020-INFO",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-020-INFO",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-020-INFO",
+      "to": "商品标签",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-020-INFO",
+      "to": "质检证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-020-INFO",
+      "to": "授权文件",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-020-INFO",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-022-INVOICE",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-022-INVOICE",
+      "to": "订单信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-022-INVOICE",
+      "to": "发票记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-022-INVOICE",
+      "to": "支付凭证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-022-INVOICE",
+      "to": "P3",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-023-WARRANTY",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-023-WARRANTY",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-023-WARRANTY",
+      "to": "样品记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-023-WARRANTY",
+      "to": "发货批次",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-023-WARRANTY",
+      "to": "质检报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-023-WARRANTY",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-024-RETURN",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-024-RETURN",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-024-RETURN",
+      "to": "售后政策",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-024-RETURN",
+      "to": "质量检测",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-024-RETURN",
+      "to": "订单记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-024-RETURN",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-025-7DAY",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-025-7DAY",
+      "to": "商品品类",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-025-7DAY",
+      "to": "页面退货政策",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-025-7DAY",
+      "to": "消费者确认记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-025-7DAY",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-026-TERMS",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-026-TERMS",
+      "to": "活动规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-026-TERMS",
+      "to": "页面声明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-026-TERMS",
+      "to": "售后条款",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-026-TERMS",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-029-PI",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-029-PI",
+      "to": "隐私告知",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-029-PI",
+      "to": "同意记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-029-PI",
+      "to": "数据字段清单",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-029-PI",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-045-PREPAY",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-045-PREPAY",
+      "to": "预付协议",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-045-PREPAY",
+      "to": "履约记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-045-PREPAY",
+      "to": "退款规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-045-PREPAY",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-055-FRAUD",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-055-FRAUD",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-055-FRAUD",
+      "to": "鉴定报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-055-FRAUD",
+      "to": "授权证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-055-FRAUD",
+      "to": "进货凭证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "CP-055-FRAUD",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-010-REGISTER",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-010-REGISTER",
+      "to": "营业执照",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-010-REGISTER",
+      "to": "经营许可",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-010-REGISTER",
+      "to": "平台主体信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-010-REGISTER",
+      "to": "P3",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-014-INVOICE",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-014-INVOICE",
+      "to": "订单记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-014-INVOICE",
+      "to": "发票记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-014-INVOICE",
+      "to": "支付流水",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-014-INVOICE",
+      "to": "P3",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-015-PUBLIC",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-015-PUBLIC",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-015-PUBLIC",
+      "to": "营业执照",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-015-PUBLIC",
+      "to": "行政许可证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-015-PUBLIC",
+      "to": "平台资质页",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-015-PUBLIC",
+      "to": "P3",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "商品详情页",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "库存记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "授权证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-017-TRUE",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-018-PERSONALIZED",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-018-PERSONALIZED",
+      "to": "推荐策略说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-018-PERSONALIZED",
+      "to": "用户选择入口",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-018-PERSONALIZED",
+      "to": "价格展示记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-018-PERSONALIZED",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-019-BUNDLE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-019-BUNDLE",
+      "to": "下单页面",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-019-BUNDLE",
+      "to": "勾选状态",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-019-BUNDLE",
+      "to": "消费者确认记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-019-BUNDLE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-021-DEPOSIT",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-021-DEPOSIT",
+      "to": "活动规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-021-DEPOSIT",
+      "to": "支付页面",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-021-DEPOSIT",
+      "to": "退款流程",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-021-DEPOSIT",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-032-RULE",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-032-RULE",
+      "to": "平台规则页面",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-032-RULE",
+      "to": "变更公告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-032-RULE",
+      "to": "协议版本",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-032-RULE",
+      "to": "P3",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-038-PLATFORM",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-038-PLATFORM",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-038-PLATFORM",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-038-PLATFORM",
+      "to": "投诉记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-038-PLATFORM",
+      "to": "风险告警",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-038-PLATFORM",
+      "to": "平台处置记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-038-PLATFORM",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-039-REVIEW",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-039-REVIEW",
+      "to": "评价记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-039-REVIEW",
+      "to": "平台规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-039-REVIEW",
+      "to": "商家沟通记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-039-REVIEW",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-049-CONTRACT",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-049-CONTRACT",
+      "to": "商品页面",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-049-CONTRACT",
+      "to": "订单记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-049-CONTRACT",
+      "to": "交易规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "EC-049-CONTRACT",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-007-RULES",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-007-RULES",
+      "to": "平台规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-007-RULES",
+      "to": "商品类目准入",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-007-RULES",
+      "to": "负面目录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-007-RULES",
+      "to": "P3",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-009-AUDIT",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-009-AUDIT",
+      "to": "巡查记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-009-AUDIT",
+      "to": "直播回放",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-009-AUDIT",
+      "to": "链接审查记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-009-AUDIT",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-010-RISK",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-010-RISK",
+      "to": "风险模型记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-010-RISK",
+      "to": "告警日志",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-010-RISK",
+      "to": "处置记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-010-RISK",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-TRUE",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-TRUE",
+      "to": "商品资料",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-TRUE",
+      "to": "卖点卡",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-TRUE",
+      "to": "检测报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-TRUE",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-FAKEGOODS",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-FAKEGOODS",
+      "to": "品牌授权",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-FAKEGOODS",
+      "to": "鉴定证书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-FAKEGOODS",
+      "to": "质检报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-FAKEGOODS",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-DATA",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-DATA",
+      "to": "平台后台数据",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-DATA",
+      "to": "订单记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-DATA",
+      "to": "库存记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-018-DATA",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-022-SUPPLIER",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-022-SUPPLIER",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-022-SUPPLIER",
+      "to": "供应商资质",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-022-SUPPLIER",
+      "to": "行政许可",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-022-SUPPLIER",
+      "to": "进货合同",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-022-SUPPLIER",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-023-AFTERSALE",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-023-AFTERSALE",
+      "to": "售后记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-023-AFTERSALE",
+      "to": "退款申请",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-023-AFTERSALE",
+      "to": "客服沟通",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LIVE-023-AFTERSALE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-003-LEGAL",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-003-LEGAL",
+      "to": "广告内容记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-003-LEGAL",
+      "to": "合作关系",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-003-LEGAL",
+      "to": "商品资质",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-003-LEGAL",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-009-IDENTIFY",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-009-IDENTIFY",
+      "to": "购买链接",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-009-IDENTIFY",
+      "to": "推广协议",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-009-IDENTIFY",
+      "to": "广告标识",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-009-IDENTIFY",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-012-MINOR",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-012-MINOR",
+      "to": "受众定位",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-012-MINOR",
+      "to": "广告投放记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-012-MINOR",
+      "to": "商品品类",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "IAD-012-MINOR",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-013-MARK",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-013-MARK",
+      "to": "口播记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-013-MARK",
+      "to": "商品页价格",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-013-MARK",
+      "to": "结算页截图",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-013-MARK",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-014-FRAUD",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-014-FRAUD",
+      "to": "scarcity_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-014-FRAUD",
+      "to": "历史成交价",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-014-FRAUD",
+      "to": "同款比价依据",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-014-FRAUD",
+      "to": "促销规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-014-FRAUD",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-019-COMPARE",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-019-COMPARE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-019-COMPARE",
+      "to": "被比较价格来源",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-019-COMPARE",
+      "to": "同规格证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-019-COMPARE",
+      "to": "历史价格",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-019-COMPARE",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-020-ONLINE",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-020-ONLINE",
+      "to": "直播截图",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-020-ONLINE",
+      "to": "详情页",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-020-ONLINE",
+      "to": "结算页",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PRICE-020-ONLINE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "真实订单",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "评价记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "荣誉证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-FAKE",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-TRAFFIC",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-TRAFFIC",
+      "to": "流量日志",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-TRAFFIC",
+      "to": "交易记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-TRAFFIC",
+      "to": "账号关联",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-008-TRAFFIC",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-010-PRIZE",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-010-PRIZE",
+      "to": "活动规则",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-010-PRIZE",
+      "to": "中奖名单",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-010-PRIZE",
+      "to": "支付顺序",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-010-PRIZE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-011-DISPARAGE",
+      "to": "comparison_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-011-DISPARAGE",
+      "to": "事实来源",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-011-DISPARAGE",
+      "to": "检测报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-011-DISPARAGE",
+      "to": "法院或监管文书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "AUCL-011-DISPARAGE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-026-SAFE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-026-SAFE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-026-SAFE",
+      "to": "质检报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-026-SAFE",
+      "to": "执行标准",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-026-SAFE",
+      "to": "强制认证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-026-SAFE",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-027-LABEL",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-027-LABEL",
+      "to": "产品标签",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-027-LABEL",
+      "to": "合格证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-027-LABEL",
+      "to": "中文说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-027-LABEL",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-033-CHECK",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-033-CHECK",
+      "to": "进货台账",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-033-CHECK",
+      "to": "合格证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-033-CHECK",
+      "to": "供应商资质",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-033-CHECK",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-035-EXPIRED",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-035-EXPIRED",
+      "to": "生产日期",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-035-EXPIRED",
+      "to": "保质期",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-035-EXPIRED",
+      "to": "仓储记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-035-EXPIRED",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-037-ORIGIN",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-037-ORIGIN",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-037-ORIGIN",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-037-ORIGIN",
+      "to": "产地证明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-037-ORIGIN",
+      "to": "授权链路",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-037-ORIGIN",
+      "to": "认证证书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PQL-037-ORIGIN",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-073-AD",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-073-AD",
+      "to": "食品标签",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-073-AD",
+      "to": "批准或备案信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-073-AD",
+      "to": "成分依据",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-073-AD",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-078-HF",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-078-HF",
+      "to": "保健食品备案或批准文件",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-078-HF",
+      "to": "标签说明书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-078-HF",
+      "to": "允许声称范围",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "FOOD-078-HF",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "DRUG-090-AD",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "DRUG-090-AD",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "DRUG-090-AD",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "DRUG-090-AD",
+      "to": "药品说明书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "DRUG-090-AD",
+      "to": "批准文号",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "DRUG-090-AD",
+      "to": "广告审查文件",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "DRUG-090-AD",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "MD-045-AD",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "MD-045-AD",
+      "to": "注册证",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "MD-045-AD",
+      "to": "备案信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "MD-045-AD",
+      "to": "说明书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "MD-045-AD",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "COS-043-MEDICAL",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "COS-043-MEDICAL",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "COS-043-MEDICAL",
+      "to": "化妆品备案信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "COS-043-MEDICAL",
+      "to": "功效评价资料",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "COS-043-MEDICAL",
+      "to": "成分表",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "COS-043-MEDICAL",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-005-PRINCIPLE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-005-PRINCIPLE",
+      "to": "数据字段清单",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-005-PRINCIPLE",
+      "to": "处理目的",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-005-PRINCIPLE",
+      "to": "最小必要说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-005-PRINCIPLE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-017-NOTICE",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-017-NOTICE",
+      "to": "隐私政策",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-017-NOTICE",
+      "to": "授权弹窗",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-017-NOTICE",
+      "to": "同意记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-017-NOTICE",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-024-AUTO",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-024-AUTO",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-024-AUTO",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-024-AUTO",
+      "to": "算法说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-024-AUTO",
+      "to": "价格记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-024-AUTO",
+      "to": "用户选择入口",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-024-AUTO",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-051-SECURITY",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-051-SECURITY",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-051-SECURITY",
+      "to": "权限配置",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-051-SECURITY",
+      "to": "脱敏策略",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-051-SECURITY",
+      "to": "日志留存",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "PIPL-051-SECURITY",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-016-RETAIN",
+      "to": "ai_generated_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-016-RETAIN",
+      "to": "guarantee_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-016-RETAIN",
+      "to": "直播视频回放",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-016-RETAIN",
+      "to": "互动记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-016-RETAIN",
+      "to": "商品详情页快照",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-016-RETAIN",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-017-AI",
+      "to": "ai_generated_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-017-AI",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-017-AI",
+      "to": "AI 标识记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-017-AI",
+      "to": "主播身份说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-017-AI",
+      "to": "内容生成说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-017-AI",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-027-PRESCREEN",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-027-PRESCREEN",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-027-PRESCREEN",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-027-PRESCREEN",
+      "to": "选品审核表",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-027-PRESCREEN",
+      "to": "供应商资质",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-027-PRESCREEN",
+      "to": "行政许可",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-027-PRESCREEN",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-031-CORRECT",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-031-CORRECT",
+      "to": "纠错记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-031-CORRECT",
+      "to": "直播回放片段",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-031-CORRECT",
+      "to": "整改话术",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-031-CORRECT",
+      "to": "P2",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-032-PRICE",
+      "to": "price_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-032-PRICE",
+      "to": "商品卡截图",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-032-PRICE",
+      "to": "价格基准说明",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-032-PRICE",
+      "to": "计价单位",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-032-PRICE",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-033-ILLEGAL-GOODS",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-033-ILLEGAL-GOODS",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-033-ILLEGAL-GOODS",
+      "to": "质检报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-033-ILLEGAL-GOODS",
+      "to": "鉴定证书",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-033-ILLEGAL-GOODS",
+      "to": "品牌授权",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-033-ILLEGAL-GOODS",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "efficacy_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "authority_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "qualification_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "quality_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "经营主体信息",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "检测报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "真实订单",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-034-FAKE",
+      "to": "P0",
+      "relation": "leads_to",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-036-COMPETE",
+      "to": "comparison_claim",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-036-COMPETE",
+      "to": "chat_signal",
+      "relation": "targets",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-036-COMPETE",
+      "to": "客观对比报告",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-036-COMPETE",
+      "to": "评价日志",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-036-COMPETE",
+      "to": "交易记录",
+      "relation": "requires",
+      "weight": 0.8
+    },
+    {
+      "from": "LCE-036-COMPETE",
+      "to": "P1",
+      "relation": "leads_to",
+      "weight": 0.8
     }
-  ]
+  ],
+  "meta": {
+    "generated_from": "streamguard-web/src/data/complianceRules.js",
+    "generated_at": "2026-05-03T00:58:48.000Z",
+    "rule_count": 77
+  }
 }

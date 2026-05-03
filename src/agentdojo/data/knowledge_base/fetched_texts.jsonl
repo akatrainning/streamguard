@@ -4,3 +4,4 @@
 {"text_id": "captured_text_004", "content": "这个商品全网最低价，只剩最后10件！", "confidence": 0.9, "related_claim_types": ["price_claim", "scarcity_claim"]}
 {"text_id": "captured_text_68709591", "content": "这个商品全网最低价，只剩最后50件！", "confidence": 0.83, "related_claim_types": ["price_claim", "scarcity_claim"]}
 {"text_id": "captured_text_677fb556", "content": "这个商品全网最低价，只剩最后50件！", "confidence": 0.83, "related_claim_types": ["price_claim", "scarcity_claim"]}
+{"text_id": "captured_text_evt_test", "content": "这个价格全网最低，只剩最后100单", "confidence": 0.95, "related_claim_types": []}

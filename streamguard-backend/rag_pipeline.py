@@ -15,6 +15,7 @@ class RAGPipeline:
         self.evidence_db = self.load_evidence_db()
         self.fetched_texts = self.load_fetched_texts()
         self.rule_graph = self.load_rule_graph()
+        self.historical_cases = self.load_historical_cases()
         self.rebuild_vector_spaces()
         # LLM not used for now, simplified
 
@@ -44,6 +45,19 @@ class RAGPipeline:
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
 
+    def load_historical_cases(self) -> List[Dict]:
+        path = os.path.join(os.path.dirname(__file__), '..', 'src', 'agentdojo', 'data', 'knowledge_base', 'historical_cases.jsonl')
+        cases: List[Dict[str, Any]] = []
+        if not os.path.exists(path):
+            return cases
+        with open(path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                cases.append(json.loads(line))
+        return cases
+
     def _get_kb_path(self, filename: str) -> str:
         return os.path.join(os.path.dirname(__file__), '..', 'src', 'agentdojo', 'data', 'knowledge_base', filename)
 
@@ -52,12 +66,14 @@ class RAGPipeline:
         all_text_contents += [ev['content'] for ev in self.evidence_db]
         all_text_contents += [ft['content'] for ft in self.fetched_texts]
         all_text_contents += [node['content'] for node in self.rule_graph.get('nodes', [])]
+        all_text_contents += [hc.get('content', '') for hc in self.historical_cases if hc.get('content')]
 
         self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
         self.vectorizer.fit(all_text_contents)
         self.claim_matrix = self.vectorizer.transform([case['current_utterance'] for case in self.claim_cases])
         self.evidence_matrix = self.vectorizer.transform([ev['content'] for ev in self.evidence_db])
         self.fetched_texts_matrix = self.vectorizer.transform([ft['content'] for ft in self.fetched_texts])
+        self.historical_cases_matrix = self.vectorizer.transform([hc.get('content', '') for hc in self.historical_cases]) if self.historical_cases else None
 
     def append_fetched_text(self, entry: Dict[str, Any], persist: bool = True) -> None:
         if persist:
@@ -78,7 +94,52 @@ class RAGPipeline:
         self.evidence_db = self.load_evidence_db()
         self.fetched_texts = self.load_fetched_texts()
         self.rule_graph = self.load_rule_graph()
+        self.historical_cases = self.load_historical_cases()
         self.rebuild_vector_spaces()
+
+    def _has_fetched_text(self, content: str) -> bool:
+        normalized = content.strip()
+        return any(ft.get('content', '').strip() == normalized for ft in self.fetched_texts)
+
+    def _has_claim_case(self, current_utterance: str) -> bool:
+        normalized = current_utterance.strip()
+        return any(case.get('current_utterance', '').strip() == normalized for case in self.claim_cases)
+
+    def auto_discover_fetched_text(self, event: LiveSemanticEvent, persist: bool = True) -> None:
+        content = event.raw_content.strip()
+        if not content:
+            return
+        if self._has_fetched_text(content):
+            return
+
+        entry = {
+            "text_id": f"captured_text_{event.event_id}",
+            "content": content,
+            "confidence": float(event.confidence or 0.0),
+            "related_claim_types": []
+        }
+        self.append_fetched_text(entry, persist=persist)
+
+    def auto_discover_claim_case(self, event: LiveSemanticEvent, claim: Claim, persist: bool = True) -> None:
+        if not claim:
+            return
+        current_utterance = event.raw_content.strip()
+        if not current_utterance or self._has_claim_case(current_utterance):
+            return
+
+        entry = {
+            "case_id": f"case_{event.event_id}",
+            "history_utterances": [],
+            "current_utterance": current_utterance,
+            "claim_type": [ct.value for ct in claim.claim_type],
+            "slots": {
+                "subject": claim.subject,
+                "value": claim.value[0] if claim.value else ""
+            },
+            "required_evidence": claim.required_evidence,
+            "risk_hint": f"自动采集案例：检测到{','.join([ct.value for ct in claim.claim_type])}。"
+        }
+        self.append_claim_case(entry, persist=persist)
 
     def rule_gate(self, event: LiveSemanticEvent) -> bool:
         # Simple rule gate: check for high-risk keywords
@@ -119,6 +180,7 @@ class RAGPipeline:
 
     def evidence_rag(self, claim: Claim) -> List[Evidence]:
         evidences = []
+        valid_claim_type_values = {c.value for c in ClaimType}
         for req_ev in claim.required_evidence:
             # Search for evidence related to required type
             query = f"{req_ev} {claim.subject}"
@@ -147,27 +209,51 @@ class RAGPipeline:
             best_text = self.fetched_texts[best_idx]
             evidences.append(Evidence(
                 evidence_id=best_text['text_id'],
-                source='captured_text',
+                source='asr_context',
                 title='抓取文本片段',
                 content=best_text['content'],
                 stance=EvidenceStance.NEUTRAL,
                 score=best_text.get('confidence', 0.8),
-                related_claim_types=[ClaimType(ct) for ct in best_text.get('related_claim_types', [])]
+                related_claim_types=[ClaimType(ct) for ct in best_text.get('related_claim_types', []) if ct in valid_claim_type_values]
             ))
 
         # Add rule graph evidence directly
         matched_nodes = [node for node in self.rule_graph.get('nodes', [])
                          if any(ct.value in node.get('related_claim_types', []) for ct in claim.claim_type)]
         for node in matched_nodes:
+            related = node.get('related_claim_types', []) or []
             evidences.append(Evidence(
                 evidence_id=node['node_id'],
-                source='rule_graph',
+                source='rule_db',
                 title=node.get('label', '规则图谱节点'),
                 content=node.get('content', ''),
                 stance=EvidenceStance.RISK_SUPPORTING,
                 score=node.get('score', 0.85),
-                related_claim_types=[ClaimType(ct) for ct in node.get('related_claim_types', [])]
+                related_claim_types=[ClaimType(ct) for ct in related if ct in valid_claim_type_values]
             ))
+
+        # Add historical cases evidence (structured)
+        if self.historical_cases and self.historical_cases_matrix is not None:
+            query_text = ' '.join(claim.predicate + claim.value + [claim.subject])
+            query_vector = self.vectorizer.transform([query_text])
+            similarities = cosine_similarity(query_vector, self.historical_cases_matrix)[0]
+            top_indices = np.argsort(similarities)[-2:][::-1]  # Top 2 similar cases
+            for idx in top_indices:
+                meta = self.historical_cases[int(idx)]
+                related = meta.get('related_claim_types') or []
+                evidences.append(Evidence(
+                    evidence_id=meta.get('case_id', f"historical_case_{idx}"),
+                    source='historical_case',
+                    title=meta.get('title', '历史案例'),
+                    content='\n'.join([
+                        meta.get('risk_type', ''),
+                        meta.get('summary', ''),
+                        meta.get('lesson', ''),
+                    ]).strip() or meta.get('content', ''),
+                    stance=EvidenceStance.RISK_SUPPORTING,
+                    score=float(similarities[int(idx)]) if similarities is not None else 0.75,
+                    related_claim_types=[ClaimType(ct) for ct in related if ct in valid_claim_type_values]
+                ))
 
         return evidences
 
@@ -253,6 +339,9 @@ class RAGPipeline:
         trace = []
         rag_debug = {}
 
+        # Auto-discover captured text from every live event
+        self.auto_discover_fetched_text(event)
+
         # Rule Gate
         if not self.rule_gate(event):
             return AnalysisResult(event=event, trace=trace, rag_debug=rag_debug)
@@ -282,6 +371,9 @@ class RAGPipeline:
         report = self.report_generator(claim, risk)
         trace.append({"step": "report_generator", "suggestions_count": len(report.suggestions)})
         graph = self.graph_for_claim(claim)
+
+        # Auto-discover cases for detected claims
+        self.auto_discover_claim_case(event, claim)
 
         return AnalysisResult(
             event=event,
