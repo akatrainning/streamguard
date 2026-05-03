@@ -26,6 +26,36 @@ from dotenv import load_dotenv
 
 # Import RAG Pipeline
 try:
+    def _compile_rule_graph_from_frontend() -> None:
+        """
+        Best-effort: compile frontend `complianceRules.js` into backend KB artifacts:
+        - `rule_graph.json`
+        - `historical_cases.jsonl`
+        Falls back silently if Node.js isn't available or export fails.
+        """
+        try:
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            out_path = os.path.join(repo_root, "src", "agentdojo", "data", "knowledge_base", "rule_graph.json")
+            out_cases = os.path.join(repo_root, "src", "agentdojo", "data", "knowledge_base", "historical_cases.jsonl")
+            exporter = os.path.join(os.path.dirname(__file__), "scripts", "export_rule_graph.mjs")
+
+            if not os.path.exists(exporter):
+                return
+
+            # Use `node` in PATH. If not available, this will fail and we fall back.
+            subprocess.run(
+                ["node", exporter, out_path, out_cases],
+                cwd=repo_root,
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            # Keep backend booting even if export fails.
+            return
+
+    _compile_rule_graph_from_frontend()
+
     from rag_pipeline import RAGPipeline
     from models import LiveSemanticEvent, RAGQuestion, Claim, ClaimType
     rag_pipeline = RAGPipeline()
