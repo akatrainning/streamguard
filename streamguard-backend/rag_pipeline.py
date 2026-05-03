@@ -80,6 +80,50 @@ class RAGPipeline:
         self.rule_graph = self.load_rule_graph()
         self.rebuild_vector_spaces()
 
+    def _has_fetched_text(self, content: str) -> bool:
+        normalized = content.strip()
+        return any(ft.get('content', '').strip() == normalized for ft in self.fetched_texts)
+
+    def _has_claim_case(self, current_utterance: str) -> bool:
+        normalized = current_utterance.strip()
+        return any(case.get('current_utterance', '').strip() == normalized for case in self.claim_cases)
+
+    def auto_discover_fetched_text(self, event: LiveSemanticEvent, persist: bool = True) -> None:
+        content = event.raw_content.strip()
+        if not content:
+            return
+        if self._has_fetched_text(content):
+            return
+
+        entry = {
+            "text_id": f"captured_text_{event.event_id}",
+            "content": content,
+            "confidence": float(event.confidence or 0.0),
+            "related_claim_types": []
+        }
+        self.append_fetched_text(entry, persist=persist)
+
+    def auto_discover_claim_case(self, event: LiveSemanticEvent, claim: Claim, persist: bool = True) -> None:
+        if not claim:
+            return
+        current_utterance = event.raw_content.strip()
+        if not current_utterance or self._has_claim_case(current_utterance):
+            return
+
+        entry = {
+            "case_id": f"case_{event.event_id}",
+            "history_utterances": [],
+            "current_utterance": current_utterance,
+            "claim_type": [ct.value for ct in claim.claim_type],
+            "slots": {
+                "subject": claim.subject,
+                "value": claim.value[0] if claim.value else ""
+            },
+            "required_evidence": claim.required_evidence,
+            "risk_hint": f"自动采集案例：检测到{','.join([ct.value for ct in claim.claim_type])}。"
+        }
+        self.append_claim_case(entry, persist=persist)
+
     def rule_gate(self, event: LiveSemanticEvent) -> bool:
         # Simple rule gate: check for high-risk keywords
         high_risk_keywords = ['全网最低', '只剩最后', '专家推荐', '三天见效']
@@ -253,6 +297,9 @@ class RAGPipeline:
         trace = []
         rag_debug = {}
 
+        # Auto-discover captured text from every live event
+        self.auto_discover_fetched_text(event)
+
         # Rule Gate
         if not self.rule_gate(event):
             return AnalysisResult(event=event, trace=trace, rag_debug=rag_debug)
@@ -282,6 +329,9 @@ class RAGPipeline:
         report = self.report_generator(claim, risk)
         trace.append({"step": "report_generator", "suggestions_count": len(report.suggestions)})
         graph = self.graph_for_claim(claim)
+
+        # Auto-discover cases for detected claims
+        self.auto_discover_claim_case(event, claim)
 
         return AnalysisResult(
             event=event,
