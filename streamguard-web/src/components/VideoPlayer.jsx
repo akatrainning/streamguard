@@ -44,7 +44,12 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
           httpBase = httpBase.replace("wss://", "https://");
         }
         
-        const apiUrl = `${httpBase}/media-url?roomId=${encodeURIComponent(roomId)}`;
+        const backendBase = httpBase.replace(/\/$/, "");
+        const useDevProxy = typeof window !== "undefined"
+          && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+          && /^https?:\/\/(localhost|127\.0\.0\.1):8011$/i.test(backendBase);
+        const apiBase = useDevProxy ? "" : backendBase;
+        const apiUrl = `${apiBase}/media-url?roomId=${encodeURIComponent(roomId)}`;
         console.log("Fetching media URL from:", apiUrl);
         
         const response = await fetch(apiUrl);
@@ -55,7 +60,10 @@ export default function VideoPlayer({ roomId: roomIdRaw, wsBase = "http://localh
         
         const data = await response.json();
         if (data.url) {
-          setVideoUrl(data.url);
+          const proxiedUrl = data.url.startsWith("http")
+            ? `${apiBase}/douyin/media-proxy?url=${encodeURIComponent(data.url)}`
+            : `${apiBase}${data.url}`;
+          setVideoUrl(proxiedUrl);
           console.log("Got video URL:", data.url);
         } else {
           setError("未找到直播流URL");

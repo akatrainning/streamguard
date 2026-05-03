@@ -19,10 +19,13 @@ import hmac
 import secrets
 import sqlite3
 from typing import Optional, List, Tuple
+from urllib.parse import quote, urljoin, urlparse
 from pydantic import BaseModel
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, HTTPException, Header
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, StreamingResponse
 from dotenv import load_dotenv
+import httpx
 
 # Import RAG Pipeline
 try:
@@ -2016,6 +2019,114 @@ async def get_media_url(roomId: str):
     if not url:
         raise HTTPException(status_code=404, detail="media url not found")
     return {"url": url, "cached": roomId in _media_url_cache}
+
+
+_MEDIA_PROXY_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Referer": "https://live.douyin.com/",
+    "Origin": "https://live.douyin.com",
+    "Accept": "*/*",
+}
+
+
+def _validate_media_proxy_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise HTTPException(status_code=400, detail="invalid media url")
+
+    host = parsed.hostname or ""
+    allowed_fragments = ("douyin", "douyinliving", "byte", "bytedance")
+    if not any(fragment in host for fragment in allowed_fragments):
+        raise HTTPException(status_code=400, detail="media host is not allowed")
+    return url
+
+
+def _media_proxy_url(url: str) -> str:
+    return f"/douyin/media-proxy?url={quote(url, safe='')}"
+
+
+def _rewrite_hls_playlist(text: str, base_url: str) -> str:
+    """Rewrite HLS child playlists/segments so the browser stays on our origin."""
+    def replace_uri_attr(match):
+        child = match.group(1)
+        return f'URI="{_media_proxy_url(urljoin(base_url, child))}"'
+
+    rewritten = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            rewritten.append(raw_line)
+            continue
+        if line.startswith("#"):
+            rewritten.append(re.sub(r'URI="([^"]+)"', replace_uri_attr, raw_line))
+            continue
+        rewritten.append(_media_proxy_url(urljoin(base_url, line)))
+    return "\n".join(rewritten) + ("\n" if text.endswith("\n") else "")
+
+
+@app.get("/douyin/media-proxy")
+async def proxy_douyin_media(url: str, request: Request):
+    """Proxy Douyin media through the backend to avoid browser CORS/Referer blocks."""
+    url = _validate_media_proxy_url(url)
+    headers = dict(_MEDIA_PROXY_HEADERS)
+    range_header = request.headers.get("range")
+    if range_header:
+        headers["Range"] = range_header
+
+    lower_url = url.lower()
+    try:
+        if ".m3u8" in lower_url:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                resp = await client.get(url, headers=headers)
+            if resp.status_code >= 400:
+                raise HTTPException(status_code=resp.status_code, detail="upstream media request failed")
+            body = _rewrite_hls_playlist(resp.text, url)
+            return Response(
+                body,
+                media_type="application/vnd.apple.mpegurl",
+                headers={"Cache-Control": "no-store"},
+            )
+
+        client = httpx.AsyncClient(timeout=None, follow_redirects=True)
+        upstream = await client.send(
+            client.build_request("GET", url, headers=headers),
+            stream=True,
+        )
+        if upstream.status_code >= 400:
+            await upstream.aclose()
+            await client.aclose()
+            raise HTTPException(status_code=upstream.status_code, detail="upstream media request failed")
+
+        async def stream_body():
+            try:
+                async for chunk in upstream.aiter_bytes():
+                    yield chunk
+            finally:
+                await upstream.aclose()
+                await client.aclose()
+
+        response_headers = {"Cache-Control": "no-store"}
+        for key in ("content-range", "accept-ranges"):
+            if key in upstream.headers:
+                response_headers[key] = upstream.headers[key]
+
+        media_type = upstream.headers.get("content-type")
+        if not media_type:
+            media_type = "video/x-flv" if ".flv" in lower_url else "application/octet-stream"
+
+        return StreamingResponse(
+            stream_body(),
+            status_code=upstream.status_code,
+            media_type=media_type,
+            headers=response_headers,
+        )
+    except HTTPException:
+        raise
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"media proxy failed: {exc}") from exc
 
 
 @app.delete("/media-url/cache")

@@ -91,8 +91,7 @@ export default function RulesPage() {
     <section className="sg-rules-page">
       <header className="sg-rules-hero">
         <div>
-          <div className="sg-ui-eyebrow">Compliance Library</div>
-          <h1>直播合规规则库</h1>
+          <h1>规则中心</h1>
           <p>把法规、风险类型、证据要求和安全改写收束成一套审查路径，减少主观判断漂移。</p>
         </div>
         <div className="sg-rules-stats">

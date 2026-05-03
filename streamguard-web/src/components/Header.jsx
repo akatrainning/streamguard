@@ -5,9 +5,9 @@ export const NAV_TABS = [
   { id: "discover", label: "直播发现", description: "搜索直播间并横向对比，快速切换目标房间。" },
   { id: "consumer", label: "消费建议", description: "结合直播内容和用户需求，给出购买与避坑建议。" },
   { id: "history", label: "历史记录", description: "回看往期会话，追踪风险变化与关键证据片段。" },
+  { id: "rules", label: "规则中心", description: "查看合规规则、证据要求和安全改写口径。" },
   { id: "analytics", label: "深度分析", description: "从统计维度观察趋势、分布和模型判定稳定性。" },
-  { id: "rules", label: "规则中心", description: "查看判定规则与阈值，校准风控策略和解释口径。" },
-  { id: "profile", label: "个人主页", description: "管理账号资料、头像和个性签名。" },
+  { id: "profile", label: "个人主页", description: "管理账号资料、头像和个人信息。" },
 ];
 
 export default function Header({
@@ -51,10 +51,10 @@ export default function Header({
 
         <div className="sg-app-header-stats">
           <StatPill label="观众" value={viewerCount.toLocaleString()} />
-          <StatPill label="话术" value={utteranceCount} />
-          <Stat color="var(--fact)" value={sessionStats.fact || 0} label="事实" />
-          <Stat color="var(--hype)" value={sessionStats.hype || 0} label="夸大" />
-          <Stat color="var(--trap)" value={sessionStats.trap || 0} label="陷阱" />
+          <StatPill label="语义" value={utteranceCount} />
+          <Stat color="var(--fact)" value={sessionStats.fact || 0} label="FACT" />
+          <Stat color="var(--hype)" value={sessionStats.hype || 0} label="HYPE" />
+          <Stat color="var(--trap)" value={sessionStats.trap || 0} label="TRAP" />
           {trapRate > 0 && (
             <span
               className="sg-app-header-risk"

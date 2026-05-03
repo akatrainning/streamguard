@@ -26,6 +26,10 @@ export default defineConfig({
         target: "ws://localhost:8011",
         ws: true,
       },
+      "/media-url": {
+        target: "http://localhost:8011",
+        changeOrigin: true,
+      },
       "/consumer": {
         target: "http://localhost:8011",
         changeOrigin: true,
