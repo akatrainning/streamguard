@@ -146,11 +146,11 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
             等待弹幕数据…
           </div>
         )}
-        {chatMessages.slice(0, 60).map(msg => {
+        {chatMessages.slice(0, 60).map((msg, index) => {
           const risk = msg.risk_score || 0;
           const isRisky = risk >= 0.5;
           return (
-            <div key={msg.id} style={{
+            <div key={`${msg.id || "chat"}-${index}`} style={{
               padding: "4px 6px", marginBottom: 3, borderRadius: 5, fontSize: 12,
               background: isRisky ? "rgba(255,51,102,0.06)" : "transparent",
               borderLeft: isRisky ? "2px solid rgba(255,51,102,0.5)" : "2px solid transparent",

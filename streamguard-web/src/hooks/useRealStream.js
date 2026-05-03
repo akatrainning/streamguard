@@ -38,6 +38,7 @@ export function useRealStream({
 
   const wsRef       = useRef(null);
   const alertId     = useRef(0);
+  const chatIdRef   = useRef(0);
   const isPausedRef = useRef(false);
   const reconnectTimerRef = useRef(null);
   const backoffRef  = useRef(1000);   // 初始1s，指数增长至30s
@@ -182,13 +183,14 @@ export function useRealStream({
       }
 
       if (msg.event === "chat") {
-        const chatId = msg.id || Date.now();
+        const fallbackId = `${Date.now()}-${chatIdRef.current++}`;
+        const chatId = msg.id ?? fallbackId;
         setChatMessages(prev => {
           // 去重：如果 ID 已存在则跳过
           if (msg.id && prev.some(c => c.id === chatId)) return prev;
           return [
             {
-              id: chatId,
+              id: String(chatId),
               user: msg.user,
               text: msg.text,
               timestamp: msg.timestamp,

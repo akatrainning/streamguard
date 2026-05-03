@@ -464,7 +464,9 @@ export default function App() {
           {page === "consumer" && !activePageLocked && (
             <ConsumerAdvisorPage apiBase={apiBase} utterances={utterances} chatMessages={chatMessages} />
           )}
-          {!activePageLocked && page === "analytics" && <AnalyticsPage />}
+          {!activePageLocked && page === "analytics" && (
+            <AnalyticsPage apiBase={apiBase} token={authToken} />
+          )}
           {page === "rules" && (
             <Suspense fallback={<PageFallback title="正在载入规则知识图谱" detail="拆分后的图谱模块会按需加载，不再占用主工作台首屏体积。" />}>
               <RulesPage />
