@@ -1,13 +1,13 @@
 import { Button, StatusBadge, StreamGuardMark } from "./ui";
 
 export const NAV_TABS = [
-  { id: "dashboard", label: "实时总览", description: "查看直播监控、语义风险、关系拓扑和告警状态。" },
-  { id: "discover", label: "直播发现", description: "搜索直播间并进行横向对比，快速切换目标房间。" },
-  { id: "consumer", label: "消费建议", description: "结合直播内容和用户需求给出购买与避坑建议。" },
-  { id: "history", label: "历史记录", description: "回顾往期会话，追踪风险变化与关键证据片段。" },
-  { id: "analytics", label: "深度分析", description: "从统计维度观察趋势、分布、模型判定稳定性。" },
+  { id: "dashboard", label: "实时总览", description: "查看直播监控、语义风险、告警状态和处置线索。" },
+  { id: "discover", label: "直播发现", description: "搜索直播间并横向对比，快速切换目标房间。" },
+  { id: "consumer", label: "消费建议", description: "结合直播内容和用户需求，给出购买与避坑建议。" },
+  { id: "history", label: "历史记录", description: "回看往期会话，追踪风险变化与关键证据片段。" },
+  { id: "analytics", label: "深度分析", description: "从统计维度观察趋势、分布和模型判定稳定性。" },
   { id: "rules", label: "规则中心", description: "查看判定规则与阈值，校准风控策略和解释口径。" },
-  { id: "profile", label: "个人主页", description: "管理账号资料、头像与个性签名。" },
+  { id: "profile", label: "个人主页", description: "管理账号资料、头像和个性签名。" },
 ];
 
 export default function Header({
@@ -45,7 +45,7 @@ export default function Header({
           <StatusBadge tone={connectionStatus.connected ? "success" : connectionStatus.error ? "danger" : "neutral"}>
             {connectionStatus.connected
               ? `已连接 ${connectionStatus.roomId}`
-              : connectionStatus.error ? "连接失败" : "连接中..."}
+              : connectionStatus.error ? "连接失败" : "连接中"}
           </StatusBadge>
         )}
 
@@ -63,7 +63,7 @@ export default function Header({
               风险 {trapRate}%
             </span>
           )}
-          {isPaused && <span className="sg-app-header-paused">暂停中</span>}
+          {isPaused && <span className="sg-app-header-paused">已暂停</span>}
         </div>
 
         <div className="sg-app-header-actions">

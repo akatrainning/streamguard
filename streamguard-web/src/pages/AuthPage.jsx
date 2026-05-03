@@ -20,12 +20,12 @@ export default function AuthPage({ apiBase, onAuthSuccess, onCancel, modal = fal
   };
 
   const validate = () => {
-    if (!form.email.trim()) return "Email is required";
-    if (!form.password.trim()) return "Password is required";
-    if (form.password.length < 8) return "Password must be at least 8 characters";
+    if (!form.email.trim()) return "请输入邮箱";
+    if (!form.password.trim()) return "请输入密码";
+    if (form.password.length < 8) return "密码至少 8 位";
     if (isRegister) {
-      if (!form.nickname.trim()) return "Display name is required";
-      if (form.confirm !== form.password) return "Passwords do not match";
+      if (!form.nickname.trim()) return "请输入显示名称";
+      if (form.confirm !== form.password) return "两次密码不一致";
     }
     return "";
   };
@@ -61,7 +61,7 @@ export default function AuthPage({ apiBase, onAuthSuccess, onCancel, modal = fal
         onAuthSuccess?.(payload);
       }
     } catch (err) {
-      setError(err?.message || "Request failed. Please try again.");
+      setError(err?.message || "请求失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -71,14 +71,14 @@ export default function AuthPage({ apiBase, onAuthSuccess, onCancel, modal = fal
     <div className={modal ? "sg-auth-modal-shell" : "sg-auth-shell"}>
       <div className="sg-auth-card">
         {modal && (
-          <button className="sg-auth-close" onClick={onCancel} type="button" aria-label="Close">
+          <button className="sg-auth-close" onClick={onCancel} type="button" aria-label="关闭">
             x
           </button>
         )}
         <div className="sg-auth-header">
-          <div className="sg-auth-title">StreamGuard Account</div>
+          <div className="sg-auth-title">StreamGuard 账号</div>
           <div className="sg-auth-subtitle">
-            {isRegister ? "Create an account to unlock this feature" : "Sign in to unlock this feature"}
+            {isRegister ? "创建账号后继续使用受保护工作区" : "登录后继续使用受保护工作区"}
           </div>
         </div>
 
@@ -91,7 +91,7 @@ export default function AuthPage({ apiBase, onAuthSuccess, onCancel, modal = fal
             }}
             type="button"
           >
-            Sign In
+            登录
           </button>
           <button
             className={`sg-auth-tab ${isRegister ? "is-active" : ""}`}
@@ -101,55 +101,55 @@ export default function AuthPage({ apiBase, onAuthSuccess, onCancel, modal = fal
             }}
             type="button"
           >
-            Register
+            注册
           </button>
         </div>
 
         <form className="sg-auth-form" onSubmit={handleSubmit}>
           {isRegister && (
             <label className="sg-auth-field">
-              <span>Display Name</span>
+              <span>显示名称</span>
               <input
                 value={form.nickname}
                 onChange={(e) => updateField("nickname", e.target.value)}
-                placeholder="Your name" />
+                placeholder="用于审查记录署名" />
             </label>
           )}
           <label className="sg-auth-field">
-            <span>Email</span>
+            <span>邮箱</span>
             <input
               value={form.email}
               onChange={(e) => updateField("email", e.target.value)}
               placeholder="name@example.com" />
           </label>
           <label className="sg-auth-field">
-            <span>Password</span>
+            <span>密码</span>
             <input
               type="password"
               value={form.password}
               onChange={(e) => updateField("password", e.target.value)}
-              placeholder="At least 8 characters" />
+              placeholder="至少 8 位" />
           </label>
           {isRegister && (
             <label className="sg-auth-field">
-              <span>Confirm Password</span>
+                <span>确认密码</span>
               <input
                 type="password"
                 value={form.confirm}
                 onChange={(e) => updateField("confirm", e.target.value)}
-                placeholder="Repeat your password" />
+                placeholder="再次输入密码" />
             </label>
           )}
 
           {error && <div className="sg-auth-error">{error}</div>}
 
           <button className="sg-auth-submit" type="submit" disabled={loading}>
-            {loading ? "Working..." : isRegister ? "Create Account" : "Sign In"}
+            {loading ? "处理中..." : isRegister ? "创建账号" : "登录"}
           </button>
         </form>
 
         <div className="sg-auth-footnote">
-          By continuing you agree to the terms and privacy policy.
+          登录后可访问历史、分析和直播发现等合规工作区。
         </div>
       </div>
     </div>

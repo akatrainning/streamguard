@@ -3,15 +3,22 @@ import StreamGuardMark from "../components/ui/StreamGuardMark";
 import "./WelcomePage.css";
 
 const ALERTS = [
-  ["A1", "价格刺激", "HIGH"],
-  ["B3", "弹幕质疑", "WATCH"],
-  ["C2", "节奏升温", "LIVE"],
+  ["P0", "绝对化承诺", "trap"],
+  ["P1", "价格刺激", "hype"],
+  ["OK", "证据补全", "fact"],
 ];
 
 const METRICS = [
   ["82", "理性指数"],
   ["12", "风险片段"],
   ["3.2k", "弹幕采样"],
+];
+
+const PACKETS = [
+  "room.connect / 646454278948",
+  "semantic.feed / 24ms",
+  "claim.guard / 12 hits",
+  "evidence.rag / synced",
 ];
 
 export default function WelcomePage({ onEnter }) {
@@ -28,9 +35,9 @@ export default function WelcomePage({ onEnter }) {
       <header className="welcome-topbar">
         <div className="welcome-brand">
           <StreamGuardMark gradientId="sgWelcomeMark" />
-          <div className="sg-lockup-copy">
-            <span className="sg-lockup-title">StreamGuard</span>
-            <small className="sg-lockup-subtitle">Live Monitoring Console</small>
+          <div>
+            <span>StreamGuard</span>
+            <small>Live Risk Cockpit</small>
           </div>
         </div>
         <div className="welcome-live">
@@ -40,20 +47,26 @@ export default function WelcomePage({ onEnter }) {
       </header>
 
       <section className="welcome-command">
-        <div className="welcome-copy">
+        <aside className="welcome-copy">
           <span className="welcome-eyebrow">STREAM RISK INTELLIGENCE</span>
-          <h1>直播风险主屏</h1>
-          <p>把主播话术、弹幕情绪和异常信号压缩到一个可行动的实时视图。</p>
+          <h1>把直播风险压缩成一张可执行的主屏。</h1>
+          <p>接入直播间，实时识别话术、弹幕情绪、夸大承诺与证据缺口。</p>
           <button className="welcome-enter" onClick={handleEnter} disabled={isExiting}>
             进入控制台
           </button>
-        </div>
+        </aside>
 
         <div className="ops-screen" aria-label="实时监测主屏预览">
           <SignalField />
           <div className="ops-screen-header">
             <span className="mono">ROOM 646454278948</span>
-            <span className="ops-screen-status">ON AIR</span>
+            <span className="ops-screen-status">SIGNAL LOCKED</span>
+          </div>
+
+          <div className="ops-grid-map" aria-hidden="true">
+            {Array.from({ length: 56 }).map((_, index) => (
+              <span key={index} style={{ "--i": index }} />
+            ))}
           </div>
 
           <div className="ops-visual">
@@ -76,12 +89,20 @@ export default function WelcomePage({ onEnter }) {
             </div>
 
             <div className="alert-column">
-              {ALERTS.map(([id, title, level], index) => (
-                <div key={id} className="alert-chip" style={{ "--delay": `${index * 170}ms` }}>
+              {ALERTS.map(([id, title, tone], index) => (
+                <div key={id} className={`alert-chip is-${tone}`} style={{ "--delay": `${index * 170}ms` }}>
                   <span className="mono">{id}</span>
                   <strong>{title}</strong>
-                  <em>{level}</em>
+                  <em>{tone.toUpperCase()}</em>
                 </div>
+              ))}
+            </div>
+
+            <div className="packet-console">
+              {PACKETS.map((packet, index) => (
+                <span key={packet} className="mono" style={{ "--delay": `${index * 120}ms` }}>
+                  {packet}
+                </span>
               ))}
             </div>
           </div>
@@ -117,27 +138,23 @@ function SignalField() {
     const ctx = canvas.getContext("2d");
     let frame = 0;
     let raf = 0;
-    let width = 0;
-    let height = 0;
     let particles = [];
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
       const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      width = Math.max(1, Math.floor(rect.width * ratio));
-      height = Math.max(1, Math.floor(rect.height * ratio));
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+      canvas.height = Math.max(1, Math.floor(rect.height * ratio));
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 
-      const count = Math.round(Math.min(180, Math.max(90, rect.width / 7)));
+      const count = Math.round(Math.min(170, Math.max(84, rect.width / 7)));
       particles = Array.from({ length: count }, (_, index) => ({
         x: Math.random() * rect.width,
         y: Math.random() * rect.height,
-        r: 0.7 + Math.random() * 1.7,
-        speed: 0.18 + Math.random() * 0.5,
+        r: 0.6 + Math.random() * 1.7,
+        speed: 0.16 + Math.random() * 0.46,
         phase: Math.random() * Math.PI * 2,
-        tone: index % 9 === 0 ? "risk" : index % 5 === 0 ? "fact" : "base",
+        tone: index % 11 === 0 ? "risk" : index % 5 === 0 ? "fact" : "base",
       }));
     };
 
@@ -151,7 +168,7 @@ function SignalField() {
 
       particles.forEach((particle, index) => {
         particle.x += particle.speed;
-        particle.y += Math.sin(frame * 0.012 + particle.phase) * 0.24;
+        particle.y += Math.sin(frame * 0.012 + particle.phase) * 0.22;
         if (particle.x > rect.width + 20) {
           particle.x = -20;
           particle.y = Math.random() * rect.height;
@@ -162,19 +179,19 @@ function SignalField() {
         const distance = Math.sqrt(dx * dx + dy * dy);
         const alpha = Math.max(0.12, 1 - distance / rect.width);
         const color = particle.tone === "risk"
-          ? `rgba(215, 155, 48, ${0.36 * alpha})`
+          ? `rgba(246, 255, 95, ${0.32 * alpha})`
           : particle.tone === "fact"
-            ? `rgba(47, 180, 122, ${0.32 * alpha})`
-            : `rgba(63, 140, 255, ${0.28 * alpha})`;
+            ? `rgba(0, 217, 146, ${0.34 * alpha})`
+            : `rgba(200, 197, 187, ${0.13 * alpha})`;
 
         ctx.beginPath();
         ctx.fillStyle = color;
         ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
         ctx.fill();
 
-        if (index % 4 === 0 && distance < 240) {
+        if (index % 5 === 0 && distance < 230) {
           ctx.beginPath();
-          ctx.strokeStyle = `rgba(63, 140, 255, ${0.09 * alpha})`;
+          ctx.strokeStyle = `rgba(0, 217, 146, ${0.08 * alpha})`;
           ctx.lineWidth = 1;
           ctx.moveTo(particle.x, particle.y);
           ctx.lineTo(focusX, focusY);

@@ -3,8 +3,8 @@ import { Button, SegmentedControl, TextField } from "./ui";
 import "./DataSourceSelector.css";
 
 const QUICK_ROOMS = [
-  { label: "与辉同行", id: "646454278948" },
-  { label: "东方甄选", id: "208823316033" },
+  { label: "同行示例", id: "646454278948" },
+  { label: "品牌专场", id: "208823316033" },
 ];
 
 const MODE_OPTIONS = [
@@ -137,7 +137,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
                 placeholder="粘贴链接或输入房间号"
                 action={(
                   <Button variant="primary" onClick={handleConnect} disabled={!canConnect}>
-                  连接
+                    连接
                   </Button>
                 )}
               />

@@ -12,7 +12,7 @@ const BASE_RISK = [
 export function useRealStream({
   mode = "douyin",
   roomId = "",
-  wsBase = "ws://localhost:8010",
+  wsBase = "ws://localhost:8011",
   enabled = true,
   recentUtteranceLimit = 80,
   recentChatLimit = 120,

@@ -12,7 +12,7 @@ export default function StreamGuardMark({ size = 32, gradientId = "sgMarkStroke"
         <linearGradient id={gradientId} x1="2" y1="22" x2="22" y2="2" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="var(--fact)" stopOpacity="0.95" />
           <stop offset="0.45" stopColor="var(--accent)" stopOpacity="0.95" />
-          <stop offset="1" stopColor="var(--purple)" stopOpacity="0.9" />
+          <stop offset="1" stopColor="var(--text-primary)" stopOpacity="0.78" />
         </linearGradient>
       </defs>
       <path

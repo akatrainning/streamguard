@@ -4,36 +4,43 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0a101a;
-  --bg-secondary: #101a29;
-  --bg-tertiary: #172437;
-  --border: #26364d;
-  --accent: #3f8cff;
-  --accent-hover: #2f80ff;
-  --accent-soft: rgba(63, 140, 255, 0.15);
-  --purple: #7a95ff;
-  --cyan: #3f8cff;
-  --fact: #2fb47a;
-  --fact-bg: rgba(47, 180, 122, 0.12);
-  --fact-border: rgba(47, 180, 122, 0.32);
-  --hype: #d79b30;
-  --hype-bg: rgba(215, 155, 48, 0.12);
-  --hype-border: rgba(215, 155, 48, 0.3);
-  --trap: #e35b5b;
-  --trap-bg: rgba(227, 91, 91, 0.12);
-  --trap-border: rgba(227, 91, 91, 0.3);
-  --text-primary: #f1f6ff;
+  --bg: #050608;
+  --bg-secondary: #101112;
+  --bg-tertiary: #17191a;
+  --border: #30332f;
+  --accent: #f6ff5f;
+  --accent-hover: #e6ef4d;
+  --accent-soft: rgba(246, 255, 95, 0.12);
+  --purple: #8d82ff;
+  --cyan: #00d992;
+  --fact: #00d992;
+  --fact-bg: rgba(0, 217, 146, 0.11);
+  --fact-border: rgba(0, 217, 146, 0.32);
+  --hype: #e2a93b;
+  --hype-bg: rgba(226, 169, 59, 0.12);
+  --hype-border: rgba(226, 169, 59, 0.3);
+  --trap: #ff5c68;
+  --trap-bg: rgba(255, 92, 104, 0.12);
+  --trap-border: rgba(255, 92, 104, 0.32);
+  --text-primary: #f4f2ec;
   /* Higher contrast for readability */
-  --text-secondary: #d0ddf0;
-  --text-muted: #aabbd2;
-  --neon-cyan: #3f8cff;
-  --neon-green: #2fb47a;
-  --neon-blue: #3f8cff;
-  --panel-glass: rgba(16, 26, 41, 0.84);
-  --panel-border: rgba(63, 140, 255, 0.22);
-  --shadow-sm: 0 6px 16px rgba(3, 7, 14, 0.22);
-  --shadow-md: 0 14px 36px rgba(3, 7, 14, 0.28);
-  --shadow-lg: 0 26px 58px rgba(3, 7, 14, 0.34);
+  --text-secondary: #c8c5bb;
+  --text-muted: #8d918d;
+  --neon-cyan: #00d992;
+  --neon-green: #00d992;
+  --neon-blue: #f6ff5f;
+  --panel-glass: rgba(16, 17, 18, 0.86);
+  --panel-border: rgba(246, 255, 95, 0.18);
+  --shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.26);
+  --shadow-md: 0 16px 42px rgba(0, 0, 0, 0.34);
+  --shadow-lg: 0 32px 80px rgba(0, 0, 0, 0.46);
+  --font-caption: 0.6875rem;
+  --font-small: 0.75rem;
+  --font-body-sm: 0.8125rem;
+  --font-body: 0.9375rem;
+  --font-title: 1.125rem;
+  --font-heading: 1.5rem;
+  --font-display: 2rem;
 }
 
 html { font-size: 15px; }
@@ -41,13 +48,15 @@ html { font-size: 15px; }
 body {
   font-family: "Manrope", "Noto Sans SC", sans-serif;
   background:
-    radial-gradient(1200px 800px at 85% -10%, rgba(63, 140, 255, 0.14), transparent 60%),
-    radial-gradient(900px 700px at 0% 100%, rgba(98, 167, 255, 0.1), transparent 60%),
-    linear-gradient(180deg, #09111c 0%, #0a101a 42%, #090f19 100%);
+    radial-gradient(1000px 680px at 86% -12%, rgba(246, 255, 95, 0.12), transparent 58%),
+    radial-gradient(900px 640px at 0% 100%, rgba(0, 217, 146, 0.08), transparent 60%),
+    linear-gradient(180deg, #050608 0%, #080a0e 48%, #050608 100%);
   color: var(--text-primary);
   line-height: 1.58;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  font-kerning: normal;
+  font-feature-settings: "kern", "tnum";
   letter-spacing: 0.1px;
 }
 
@@ -59,6 +68,7 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #3c5676; }
 
 .mono { font-family: "JetBrains Mono", Consolas, 'Courier New', monospace; }
+.mono, .sg-app-stat strong, .sg-ui-metric strong { font-variant-numeric: tabular-nums; }
 
 .section-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
 

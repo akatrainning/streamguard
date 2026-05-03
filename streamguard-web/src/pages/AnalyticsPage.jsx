@@ -1,158 +1,160 @@
-﻿import { motion } from "framer-motion";
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
+import { MetricTile, Panel, StatusBadge } from "../components/ui";
 
 const TREND = [
-  { day:"02-24", ri:82, trap:3,  hype:10, fact:28 },
-  { day:"02-25", ri:75, trap:5,  hype:14, fact:22 },
-  { day:"02-26", ri:68, trap:7,  hype:16, fact:19 },
-  { day:"02-27", ri:44, trap:14, hype:12, fact:18 },
-  { day:"02-28", ri:79, trap:4,  hype:9,  fact:31 },
-  { day:"03-01", ri:58, trap:9,  hype:18, fact:15 },
-  { day:"03-02", ri:72, trap:6,  hype:11, fact:24 },
+  { day: "02-24", ri: 82, trap: 3, hype: 10, fact: 28 },
+  { day: "02-25", ri: 75, trap: 5, hype: 14, fact: 22 },
+  { day: "02-26", ri: 68, trap: 7, hype: 16, fact: 19 },
+  { day: "02-27", ri: 44, trap: 14, hype: 12, fact: 18 },
+  { day: "02-28", ri: 79, trap: 4, hype: 9, fact: 31 },
+  { day: "03-01", ri: 58, trap: 9, hype: 18, fact: 15 },
+  { day: "03-02", ri: 72, trap: 6, hype: 11, fact: 24 },
 ];
+
 const PIE = [
-  { name:"事实话术", value:157, color:"#00FF88" },
-  { name:"夸大话术", value:90,  color:"#FFD700" },
-  { name:"陷阱话术", value:48,  color:"#FF3366" },
+  { name: "事实话术", value: 157, color: "var(--fact)" },
+  { name: "夸大话术", value: 90, color: "var(--hype)" },
+  { name: "陷阱话术", value: 48, color: "var(--trap)" },
 ];
+
 const RADAR_AVG = [
-  { subject:"价格透明度", value:76 },
-  { subject:"话术压力值", value:48 },
-  { subject:"描述真实度", value:64 },
-  { subject:"时间紧迫感", value:58 },
-  { subject:"证据充分性", value:71 },
-  { subject:"合规得分",   value:68 },
+  { subject: "价格透明", value: 76 },
+  { subject: "话术压力", value: 48 },
+  { subject: "描述真实", value: 64 },
+  { subject: "限时刺激", value: 58 },
+  { subject: "证据充分", value: 71 },
+  { subject: "合规得分", value: 68 },
 ];
 
 const tipStyle = {
-  background: "rgba(2,8,16,0.92)",
-  border: "1px solid rgba(0,255,224,0.2)",
-  borderRadius: "8px",
+  background: "#101112",
+  border: "1px solid #30332f",
+  borderRadius: 6,
   color: "var(--text-primary)",
-  fontSize: "11px",
+  fontSize: 12,
 };
 
-function KpiCard({ icon, label, value, sub, color, delay=0 }) {
-  return (
-    <motion.div initial={{ opacity:0, y:18 }} animate={{ opacity:1, y:0 }} transition={{ delay, duration:0.45 }}
-      style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,255,224,0.08)",
-        borderRadius:"14px", padding:"18px 16px" }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:"12px" }}>
-        <span style={{ fontSize:"22px" }}>{icon}</span>
-        <span style={{ fontSize:"9px", color:"var(--text-muted)", letterSpacing:"1px" }}>{label}</span>
-      </div>
-      <div className="mono" style={{ fontSize:"30px", fontWeight:700, color, lineHeight:1, marginBottom:"5px" }}>{value}</div>
-      <div style={{ fontSize:"10px", color:"var(--text-muted)" }}>{sub}</div>
-    </motion.div>
-  );
-}
-
-function Panel({ title, children, style={} }) {
-  return (
-      <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,255,224,0.08)",
-      borderRadius:"14px", padding:"16px 14px", ...style }}>
-      <div style={{ fontSize:"10px", letterSpacing:"2px", color:"var(--text-muted)", marginBottom:"14px" }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
 export default function AnalyticsPage() {
-  const avgRI = Math.round(TREND.reduce((a,b) => a+b.ri, 0) / TREND.length);
-  const totalTrap = TREND.reduce((a,b) => a+b.trap, 0);
-  const totalAll  = TREND.reduce((a,b) => a+b.trap+b.hype+b.fact, 0);
-  const trapRate  = ((totalTrap/totalAll)*100).toFixed(1);
-  const riColor   = avgRI >= 70 ? "#00FF88" : avgRI >= 50 ? "#FFD700" : "#FF3366";
+  const avgRI = Math.round(TREND.reduce((sum, row) => sum + row.ri, 0) / TREND.length);
+  const totalTrap = TREND.reduce((sum, row) => sum + row.trap, 0);
+  const totalAll = TREND.reduce((sum, row) => sum + row.trap + row.hype + row.fact, 0);
+  const trapRate = ((totalTrap / totalAll) * 100).toFixed(1);
+  const avgTone = avgRI >= 70 ? "success" : avgRI >= 50 ? "warning" : "danger";
 
   return (
-    <div style={{ padding:"24px", maxWidth:"1200px", margin:"0 auto" }}>
-      <div style={{ marginBottom:"22px" }}>
-        <h1 style={{ fontSize:"20px", fontWeight:700, color:"#00FFE0", margin:0, letterSpacing:"1px" }}>数据洞察</h1>
-        <div style={{ fontSize:"12px", color:"var(--text-secondary)", marginTop:"4px" }}>近 7 日综合分析报告</div>
-      </div>
+    <main className="sg-analytics-page">
+      <header className="sg-analytics-head">
+        <div>
+          <div className="sg-ui-eyebrow">Analytics</div>
+          <h1>数据洞察</h1>
+          <p>近 7 日风险走势、话术结构与合规维度。只保留运营判断需要的指标。</p>
+        </div>
+        <StatusBadge tone={avgTone}>平均理性指数 {avgRI}</StatusBadge>
+      </header>
 
-      {/* KPI row */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:"14px", marginBottom:"20px" }}>
-        <KpiCard icon="📊" label="分析场次" value="288"         sub="近7日"        color="#00FFE0" delay={0.05}/>
-        <KpiCard icon="🧠" label="平均理性指数" value={avgRI}    sub="满分100"     color={riColor} delay={0.10}/>
-        <KpiCard icon="⛔" label="陷阱话术率"  value={trapRate+"%"} sub={"共"+totalTrap+"条"} color="#FF3366" delay={0.15}/>
-        <KpiCard icon="⚠" label="预警触发"    value="47"        sub="次"          color="#FFD700" delay={0.20}/>
-      </div>
+      <section className="sg-analytics-kpis">
+        <MetricTile label="分析场次" value="288" />
+        <MetricTile label="平均理性指数" value={avgRI} tone={avgTone} />
+        <MetricTile label="陷阱话术率" value={`${trapRate}%`} tone="danger" />
+        <MetricTile label="预警触发" value="47" tone="warning" />
+      </section>
 
-      {/* Row 1: Area + Pie */}
-      <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:"16px", marginBottom:"16px" }}>
-        <Panel title="近 7 日理性指数趋势">
-          <ResponsiveContainer width="100%" height={200}>
+      <section className="sg-analytics-grid is-primary">
+        <Panel title="近 7 日理性指数" eyebrow="Rationality Trend" bodyClassName="sg-chart-panel">
+          <ResponsiveContainer width="100%" height={230}>
             <AreaChart data={TREND}>
               <defs>
-                <linearGradient id="riG" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#00FFE0" stopOpacity={0.3}/>
-                  <stop offset="95%" stopColor="#00FFE0" stopOpacity={0}/>
+                <linearGradient id="analyticsRiFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="day" tick={{ fill:"var(--text-secondary)", fontSize:10 }} tickLine={false} axisLine={false}/>
-              <YAxis domain={[0,100]} tick={{ fill:"var(--text-muted)", fontSize:9 }} tickLine={false} axisLine={false}/>
-              <Tooltip contentStyle={tipStyle}/>
-              <Area type="monotone" dataKey="ri" name="理性指数" stroke="#00FFE0" strokeWidth={2}
-                fill="url(#riG)" dot={{ fill:"#00FFE0", r:3, strokeWidth:0 }}/>
+              <XAxis dataKey="day" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fill: "var(--text-muted)", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={tipStyle} />
+              <Area
+                type="monotone"
+                dataKey="ri"
+                name="理性指数"
+                stroke="var(--accent)"
+                strokeWidth={2}
+                fill="url(#analyticsRiFill)"
+                dot={{ fill: "var(--accent)", r: 3, strokeWidth: 0 }}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </Panel>
 
-        <Panel title="话术类型分布">
-          <ResponsiveContainer width="100%" height={140}>
+        <Panel title="话术类型占比" eyebrow="Speech Mix" bodyClassName="sg-chart-panel">
+          <ResponsiveContainer width="100%" height={164}>
             <PieChart>
-              <Pie data={PIE} cx="50%" cy="50%" innerRadius={38} outerRadius={62}
-                dataKey="value" paddingAngle={3}>
-                {PIE.map((e,i) => <Cell key={i} fill={e.color} fillOpacity={0.85}/>)}
+              <Pie data={PIE} cx="50%" cy="50%" innerRadius={42} outerRadius={68} dataKey="value" paddingAngle={3}>
+                {PIE.map((entry) => <Cell key={entry.name} fill={entry.color} fillOpacity={0.86} />)}
               </Pie>
-              <Tooltip contentStyle={tipStyle}/>
+              <Tooltip contentStyle={tipStyle} />
             </PieChart>
           </ResponsiveContainer>
-          <div style={{ display:"flex", flexDirection:"column", gap:"5px", marginTop:"6px" }}>
-            {PIE.map((d,i) => (
-              <div key={i} style={{ display:"flex", alignItems:"center", gap:"6px" }}>
-                <div style={{ width:"8px", height:"8px", borderRadius:"2px", background:d.color, flexShrink:0 }}/>
-                <span style={{ fontSize:"10px", color:"var(--text-secondary)", flex:1 }}>{d.name}</span>
-                <span className="mono" style={{ fontSize:"10px", color:d.color }}>{d.value}</span>
+          <div className="sg-analytics-legend">
+            {PIE.map((item) => (
+              <div key={item.name}>
+                <i style={{ background: item.color }} />
+                <span>{item.name}</span>
+                <strong className="mono" style={{ color: item.color }}>{item.value}</strong>
               </div>
             ))}
           </div>
         </Panel>
-      </div>
+      </section>
 
-      {/* Row 2: Stacked Bar + Radar */}
-      <div style={{ display:"grid", gridTemplateColumns:"3fr 2fr", gap:"16px" }}>
-        <Panel title="近 7 日话术类型分布（堆叠）">
-          <ResponsiveContainer width="100%" height={170}>
-            <BarChart data={TREND} margin={{ top:5, right:20, bottom:5, left:-10 }}>
-              <XAxis dataKey="day" tick={{ fill:"var(--text-secondary)", fontSize:10 }} tickLine={false} axisLine={false}/>
-              <YAxis tick={{ fill:"var(--text-muted)", fontSize:9 }} tickLine={false} axisLine={false}/>
-              <Tooltip contentStyle={tipStyle}/>
-              <Legend iconSize={8} wrapperStyle={{ fontSize:"10px", color:"var(--text-secondary)" }}/>
-              <Bar dataKey="fact" name="事实" stackId="a" fill="#00FF88" fillOpacity={0.7}/>
-              <Bar dataKey="hype" name="夸大" stackId="a" fill="#FFD700" fillOpacity={0.7}/>
-              <Bar dataKey="trap" name="陷阱" stackId="a" fill="#FF3366" fillOpacity={0.85} radius={[3,3,0,0]}/>
+      <section className="sg-analytics-grid is-secondary">
+        <Panel title="每日话术分布" eyebrow="Stacked Distribution" bodyClassName="sg-chart-panel">
+          <ResponsiveContainer width="100%" height={196}>
+            <BarChart data={TREND} margin={{ top: 5, right: 20, bottom: 5, left: -10 }}>
+              <XAxis dataKey="day" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: "var(--text-muted)", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={tipStyle} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize: 11, color: "var(--text-secondary)" }} />
+              <Bar dataKey="fact" name="事实" stackId="a" fill="var(--fact)" fillOpacity={0.72} />
+              <Bar dataKey="hype" name="夸大" stackId="a" fill="var(--hype)" fillOpacity={0.72} />
+              <Bar dataKey="trap" name="陷阱" stackId="a" fill="var(--trap)" fillOpacity={0.86} radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Panel>
 
-        <Panel title="综合风险维度均值">
-          <ResponsiveContainer width="100%" height={170}>
-              <RadarChart data={RADAR_AVG} margin={{ top:10, right:20, bottom:10, left:20 }}>
-              <PolarGrid stroke="rgba(0,255,224,0.08)" gridType="polygon"/>
-              <PolarAngleAxis dataKey="subject" tick={{ fill:"var(--text-secondary)", fontSize:9 }}/>
-              <Radar dataKey="value" stroke="#00FFE0" fill="rgba(0,255,224,0.08)" strokeWidth={1.5}
-                dot={{ fill:"#00FFE0", r:2, strokeWidth:0 }}/>
-              <Tooltip contentStyle={tipStyle}/>
+        <Panel title="风险维度均值" eyebrow="Risk Dimensions" bodyClassName="sg-chart-panel">
+          <ResponsiveContainer width="100%" height={196}>
+            <RadarChart data={RADAR_AVG} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
+              <PolarGrid stroke="rgba(246,255,95,0.14)" gridType="polygon" />
+              <PolarAngleAxis dataKey="subject" tick={{ fill: "var(--text-secondary)", fontSize: 10 }} />
+              <Radar
+                dataKey="value"
+                stroke="var(--accent)"
+                fill="rgba(246,255,95,0.1)"
+                strokeWidth={1.5}
+                dot={{ fill: "var(--accent)", r: 2, strokeWidth: 0 }}
+              />
+              <Tooltip contentStyle={tipStyle} />
             </RadarChart>
           </ResponsiveContainer>
         </Panel>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

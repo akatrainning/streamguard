@@ -1,6 +1,6 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-const TC = { fact: "#2fb47a", hype: "#d79b30", trap: "#e35b5b" };
+const TC = { fact: "var(--fact)", hype: "var(--hype)", trap: "var(--trap)" };
 const TL = { fact: "FACT", hype: "HYPE", trap: "TRAP" };
 const LANE_Y = { fact: 0.22, hype: 0.52, trap: 0.82 };
 
@@ -9,7 +9,7 @@ const DRIFT_REASON = {
   "hype-fact": "情绪拉动后切回事实",
   "fact-trap": "以事实铺垫植入陷阱",
   "trap-fact": "陷阱后用事实降低戒备",
-  "hype-trap": "催促话术升级为陷阱",
+  "hype-trap": "催促话术升级为风险陷阱",
   "trap-hype": "陷阱伴随促购强化",
 };
 
@@ -58,7 +58,7 @@ export default function TopologyGraph({ utterances = [] }) {
   function edgeColor(e) {
     if (e.isTrap) return TC.trap;
     if (showDrift && e.isDrift) return TC.hype;
-    return "#304865";
+    return "var(--sg-border-muted)";
   }
 
   const driftCount = edges.filter((e) => e.isDrift).length;
@@ -70,9 +70,7 @@ export default function TopologyGraph({ utterances = [] }) {
       acc[n.type] = (acc[n.type] || 0) + 1;
       return acc;
     }, { fact: 0, hype: 0, trap: 0 });
-    const avgScore = total
-      ? Math.round((nodes.reduce((s, n) => s + (n.score || 0), 0) / total) * 100)
-      : 0;
+    const avgScore = total ? Math.round((nodes.reduce((s, n) => s + (n.score || 0), 0) / total) * 100) : 0;
     const driftNodes = new Set();
     edges.forEach((e) => {
       if (e.isDrift) {
@@ -82,35 +80,21 @@ export default function TopologyGraph({ utterances = [] }) {
     });
 
     const windowStats = (size, offset) => {
-      if (!total) return { driftRate: 0, trapRate: 0, edgeCount: 0 };
+      if (!total) return { driftRate: 0, edgeCount: 0 };
       const end = Math.max(0, total - offset);
       const start = Math.max(0, end - size);
       const inRange = new Set();
       for (let i = start; i < end; i += 1) inRange.add(i);
       const wEdges = edges.filter((e) => inRange.has(e.from.idx) && inRange.has(e.to.idx));
-      const wDrift = wEdges.filter((e) => e.isDrift).length;
-      const wTrap = wEdges.filter((e) => e.isTrap).length;
       const edgeCount = wEdges.length || 1;
-      return {
-        driftRate: wDrift / edgeCount,
-        trapRate: wTrap / edgeCount,
-        edgeCount: wEdges.length,
-      };
+      return { driftRate: wEdges.filter((e) => e.isDrift).length / edgeCount, edgeCount: wEdges.length };
     };
 
     const cur = windowStats(windowSize, 0);
     const prev = windowStats(windowSize, windowSize);
-    const driftDelta = prev.edgeCount
-      ? Math.round((cur.driftRate - prev.driftRate) * 100)
-      : null;
+    const driftDelta = prev.edgeCount ? Math.round((cur.driftRate - prev.driftRate) * 100) : null;
 
-    return {
-      total,
-      counts,
-      avgScore,
-      driftNodeCount: driftNodes.size,
-      driftDelta,
-    };
+    return { total, counts, avgScore, driftNodeCount: driftNodes.size, driftDelta };
   }, [nodes, edges, windowSize]);
 
   const ranking = useMemo(() => {
@@ -128,53 +112,30 @@ export default function TopologyGraph({ utterances = [] }) {
         recent: idx,
       };
     });
-    return items
-      .sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0))
-      .slice(0, 6);
+    return items.sort((a, b) => (b[sortKey] || 0) - (a[sortKey] || 0)).slice(0, 6);
   }, [nodes, edges, sortKey]);
 
   return (
-    <div style={{
-      background: "linear-gradient(180deg, rgba(18,29,45,0.94), rgba(15,24,37,0.95))",
-      border: "1px solid #2b3f5c",
-      borderRadius: 14,
-      overflow: "hidden",
-      minHeight: 320,
-      height: "100%",
-      display: "flex",
-      flexDirection: "column",
-      boxShadow: "0 12px 28px rgba(4,9,16,0.24)",
-    }}>
-      <div style={{
-        padding: "14px 18px",
-        borderBottom: "1px solid #2b3f5c",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 15, fontWeight: 700 }}>语义漂移拓扑图</span>
-          {/* <span style={{ fontSize: 11, color: "var(--text-muted)" }}>← 旧  新 →</span> */}
+    <section className="sg-ui-panel sg-topology">
+      <header className="sg-ui-panel-head">
+        <div>
+          <div className="sg-ui-eyebrow">Semantic Topology</div>
+          <h2>语义漂移拓扑</h2>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <TogBtn active={showDrift} color={TC.hype} onClick={() => setShowDrift((p) => !p)}>
-            跨类高亮
-          </TogBtn>
-          <TogBtn active={onlyTrap} color={TC.trap} onClick={() => setOnlyTrap((p) => !p)}>
-            仅陷阱
-          </TogBtn>
-          <span style={{ width: 1, height: 14, background: "#2b3f5c", margin: "0 4px" }} />
+        <div className="sg-topology-actions">
+          <TogBtn active={showDrift} color={TC.hype} onClick={() => setShowDrift((p) => !p)}>跨类高亮</TogBtn>
+          <TogBtn active={onlyTrap} color={TC.trap} onClick={() => setOnlyTrap((p) => !p)}>仅看陷阱</TogBtn>
           {Object.entries(TC).map(([t, c]) => (
-            <div key={t} style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: c }} />
-              <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{TL[t]}</span>
-            </div>
+            <span key={t} className="sg-topology-legend">
+              <i style={{ background: c }} />
+              {TL[t]}
+            </span>
           ))}
         </div>
-      </div>
+      </header>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        <div style={{ position: "relative" }}>
+      <div className="sg-topology-body">
+        <div className="sg-topology-canvas">
           <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: "block" }}>
             <defs>
               {Object.entries(TC).map(([t, c]) => (
@@ -188,17 +149,20 @@ export default function TopologyGraph({ utterances = [] }) {
               <g key={type}>
                 <rect x={0} y={ly * H - 30} width={W} height={60} fill={TC[type]} fillOpacity={0.03} />
                 <line x1={0} y1={ly * H - 30} x2={W} y2={ly * H - 30} stroke={TC[type]} strokeOpacity={0.08} />
-                <text x={12} y={ly * H + 4} fill={TC[type]} fillOpacity={0.45} fontSize={9} fontWeight={700} fontFamily="Consolas,monospace">
-                  {TL[type]}
-                </text>
+                <text x={12} y={ly * H + 4} fill={TC[type]} fillOpacity={0.5} fontSize={9} fontWeight={800} fontFamily="Consolas, monospace">{TL[type]}</text>
               </g>
             ))}
 
             {visEdges.map((e, i) => (
-              <path key={i} d={edgePath(e)} stroke={edgeColor(e)}
+              <path
+                key={i}
+                d={edgePath(e)}
+                stroke={edgeColor(e)}
                 strokeWidth={e.isTrap ? 2 : 1.2}
                 strokeDasharray={e.isTrap ? "6 3" : "none"}
-                fill="none" markerEnd={`url(#arr-${e.to.type})`} />
+                fill="none"
+                markerEnd={`url(#arr-${e.to.type})`}
+              />
             ))}
 
             {visNodes.map((node) => {
@@ -207,242 +171,116 @@ export default function TopologyGraph({ utterances = [] }) {
               const r = 12;
               return (
                 <g key={node.idx} style={{ cursor: "pointer" }} onClick={() => setActiveNode(isActive ? null : node)}>
-                  {isActive && (
-                    <circle cx={node.nx} cy={node.ny} r={r + 4} fill="none" stroke={c} strokeWidth={1.5} opacity={0.65} />
-                  )}
+                  {isActive && <circle cx={node.nx} cy={node.ny} r={r + 4} fill="none" stroke={c} strokeWidth={1.5} opacity={0.65} />}
                   <circle cx={node.nx} cy={node.ny} r={r} fill={isActive ? `${c}44` : `${c}22`} stroke={c} strokeWidth={isActive ? 2 : 1.2} />
-                  <text x={node.nx} y={node.ny + 1} textAnchor="middle" dominantBaseline="middle" fill={c} fontSize={8} fontWeight={700} fontFamily="Consolas,monospace">
-                    {TL[node.type]}
-                  </text>
-                  <text x={node.nx} y={node.ny - r - 4} textAnchor="middle" fill={c} fillOpacity={0.6} fontSize={8} fontFamily="Consolas,monospace">
-                    {Math.round((node.score || 0) * 100)}
-                  </text>
+                  <text x={node.nx} y={node.ny + 1} textAnchor="middle" dominantBaseline="middle" fill={c} fontSize={8} fontWeight={800} fontFamily="Consolas, monospace">{TL[node.type]}</text>
+                  <text x={node.nx} y={node.ny - r - 4} textAnchor="middle" fill={c} fillOpacity={0.64} fontSize={8} fontFamily="Consolas, monospace">{Math.round((node.score || 0) * 100)}</text>
                 </g>
               );
             })}
           </svg>
 
           {activeNode && (
-            <div style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              width: 280,
-              background: "linear-gradient(180deg, rgba(24,37,56,0.94), rgba(19,30,45,0.96))",
-              border: `1px solid ${TC[activeNode.type]}66`,
-              borderRadius: 8,
-              padding: 13,
-              zIndex: 10,
-              boxShadow: "0 14px 26px rgba(0,0,0,0.25)",
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: TC[activeNode.type] }}>
-                  {TL[activeNode.type]} #{activeNode.idx + 1}
-                </span>
-                <button onClick={() => setActiveNode(null)} style={{
-                  background: "none",
-                  border: "none",
-                  color: "var(--text-muted)",
-                  cursor: "pointer",
-                }}>{"\u2715"}</button>
+            <aside className="sg-topology-popover" style={{ "--node-color": TC[activeNode.type] }}>
+              <div>
+                <strong>{TL[activeNode.type]} #{activeNode.idx + 1}</strong>
+                <button onClick={() => setActiveNode(null)} type="button" aria-label="关闭">x</button>
               </div>
-              <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.55, marginBottom: 8 }}>
-                {activeNode.text}
-              </div>
-              <div className="mono" style={{ fontSize: 12, color: TC[activeNode.type] }}>
-                Score: {Math.round((activeNode.score || 0) * 100)}
-              </div>
+              <p>{activeNode.text}</p>
+              <span className="mono">Score: {Math.round((activeNode.score || 0) * 100)}</span>
               {edges
                 .filter((e) => (e.from.idx === activeNode.idx || e.to.idx === activeNode.idx) && e.isDrift)
                 .slice(0, 2)
                 .map((e, i) => (
-                  <div key={i} style={{
-                    fontSize: 11,
-                    color: TC.hype,
-                    marginTop: 5,
-                    padding: "4px 6px",
-                    background: "rgba(215,155,48,0.1)",
-                    border: "1px solid rgba(215,155,48,0.3)",
-                    borderRadius: 4,
-                  }}>
-                    {"\u21c4"} {DRIFT_REASON[e.key] || "语义类型转变"}
-                  </div>
+                  <em key={i}>{DRIFT_REASON[e.key] || "语义类型转变"}</em>
                 ))}
-              {activeNode.timestamp && (
-              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                  {activeNode.timestamp}
-                </div>
-              )}
-            </div>
+              {activeNode.timestamp && <small>{activeNode.timestamp}</small>}
+            </aside>
           )}
 
-          {!nodes.length && (
-            <div style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--text-muted)",
-              fontSize: 13,
-            }}>
-              等待数据…
-            </div>
-          )}
+          {!nodes.length && <div className="sg-topology-empty">等待语义数据</div>}
         </div>
 
-        <div style={{
-          marginTop: 8,
-          background: "linear-gradient(180deg, rgba(22,35,52,0.88), rgba(18,29,44,0.92))",
-          borderTop: "1px solid #2b3f5c",
-          padding: "12px 14px 14px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1.4fr",
-          gap: 12,
-          fontSize: 12,
-          color: "var(--text-secondary)",
-        }}>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 14, color: "var(--text-primary)", fontWeight: 700 }}>统计概览</span>
-              <div style={{ display: "flex", gap: 6 }}>
+        <div className="sg-topology-lower">
+          <section>
+            <div className="sg-topology-section-head">
+              <h3>统计概览</h3>
+              <div>
                 {[6, 12, 16].map((n) => (
-                  <TogBtn key={n} active={windowSize === n} color="var(--accent)" onClick={() => setWindowSize(n)}>
-                    近{n}
-                  </TogBtn>
+                  <TogBtn key={n} active={windowSize === n} color="var(--accent)" onClick={() => setWindowSize(n)}>近{n}</TogBtn>
                 ))}
               </div>
             </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <div className="sg-topology-metrics">
               <MetricCard label="样本节点" value={stats.total} />
               <MetricCard label="漂移节点" value={stats.driftNodeCount} accent={TC.hype} />
               <MetricCard label="陷阱边" value={trapCount} accent={TC.trap} />
               <MetricCard label="平均置信" value={`${stats.avgScore}%`} accent={TC.fact} />
             </div>
-
-            <div style={{ marginTop: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>FACT / HYPE / TRAP 占比</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                  漂移变化
-                  <span style={{ marginLeft: 6, color: stats.driftDelta == null ? "var(--text-muted)" : (stats.driftDelta >= 0 ? TC.hype : TC.fact) }}>
-                    {stats.driftDelta == null ? "--" : `${stats.driftDelta > 0 ? "+" : ""}${stats.driftDelta}%`}
-                  </span>
-                </span>
-              </div>
-              <div style={{
-                height: 10,
-                borderRadius: 6,
-                overflow: "hidden",
-                display: "flex",
-                background: "var(--bg-secondary)",
-                border: "1px solid var(--border)",
-              }}>
+            <div className="sg-topology-ratio">
+              <span>FACT / HYPE / TRAP 占比</span>
+              <strong style={{ color: stats.driftDelta == null ? "var(--text-muted)" : (stats.driftDelta >= 0 ? TC.hype : TC.fact) }}>
+                漂移变化 {stats.driftDelta == null ? "--" : `${stats.driftDelta > 0 ? "+" : ""}${stats.driftDelta}%`}
+              </strong>
+              <div>
                 <RatioSeg color={TC.fact} value={stats.counts.fact} total={stats.total} />
                 <RatioSeg color={TC.hype} value={stats.counts.hype} total={stats.total} />
                 <RatioSeg color={TC.trap} value={stats.counts.trap} total={stats.total} />
               </div>
             </div>
-          </div>
+          </section>
 
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 10 }}>
-              <span style={{ fontSize: 14, color: "var(--text-primary)", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>高风险节点排行</span>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                {[
-                  { key: "driftMagnitude", label: "漂移强度" },
-                  { key: "crossClassStrength", label: "跨类次数" },
-                  { key: "trapDensity", label: "陷阱密度" },
-                  { key: "confDrop", label: "置信下降" },
-                  { key: "recent", label: "时间靠近" },
-                ].map((opt) => (
-                  <TogBtn key={opt.key} active={sortKey === opt.key} color={TC.hype} onClick={() => setSortKey(opt.key)}>
-                    {opt.label}
-                  </TogBtn>
-                ))}
-              </div>
+          <section>
+            <div className="sg-topology-section-head">
+              <h3>高风险节点排行</h3>
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {ranking.map(({ node }) => (
-                <div key={node.idx} style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  alignItems: "center",
-                    padding: "8px 10px",
-                  borderRadius: 7,
-                  background: "rgba(11,19,30,0.44)",
-                  border: `1px solid ${TC[node.type]}44`,
-                }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ color: TC[node.type], fontWeight: 700, fontSize: 12 }}>
-                        {TL[node.type]} #{node.idx + 1}
-                      </span>
-                      <span className="mono" style={{ color: TC[node.type] }}>
-                        {Math.round((node.score || 0) * 100)}%
-                      </span>
-                      {node.timestamp && (
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{node.timestamp}</span>
-                      )}
-                    </div>
-                    <div style={{ marginTop: 2, fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {node.text}
-                    </div>
-                  </div>
-                  <button onClick={() => setActiveNode(node)} style={{
-                    marginLeft: 8,
-                    padding: "4px 8px",
-                    borderRadius: 6,
-                    background: "transparent",
-                    border: `1px solid ${TC[node.type]}66`,
-                    color: TC[node.type],
-                    cursor: "pointer",
-                    fontSize: 11,
-                    fontWeight: 600,
-                  }}>
-                    定位
-                  </button>
-                </div>
+            <div className="sg-topology-sort">
+              {[
+                { key: "driftMagnitude", label: "漂移强度" },
+                { key: "crossClassStrength", label: "跨类次数" },
+                { key: "trapDensity", label: "陷阱密度" },
+                { key: "confDrop", label: "置信下降" },
+                { key: "recent", label: "时间靠近" },
+              ].map((opt) => (
+                <TogBtn key={opt.key} active={sortKey === opt.key} color={TC.hype} onClick={() => setSortKey(opt.key)}>{opt.label}</TogBtn>
               ))}
-              {!ranking.length && (
-            <div style={{ padding: "10px 8px", color: "var(--text-muted)", fontSize: 12 }}>暂无可分析节点</div>
-              )}
             </div>
-          </div>
+            <div className="sg-topology-ranking">
+              {ranking.map(({ node }) => (
+                <article key={node.idx} style={{ "--node-color": TC[node.type] }}>
+                  <div>
+                    <strong>{TL[node.type]} #{node.idx + 1}</strong>
+                    <span className="mono">{Math.round((node.score || 0) * 100)}%</span>
+                    {node.timestamp && <small>{node.timestamp}</small>}
+                    <p>{node.text}</p>
+                  </div>
+                  <button onClick={() => setActiveNode(node)} type="button">定位</button>
+                </article>
+              ))}
+              {!ranking.length && <div className="sg-topology-none">暂无可分析节点</div>}
+            </div>
+          </section>
         </div>
 
-        <div style={{
-          padding: "10px 16px",
-          borderTop: "1px solid #2b3f5c",
-          display: "flex",
-          gap: 16,
-          fontSize: 12,
-          color: "var(--text-muted)",
-        }}>
-          <span>节点 <span className="mono" style={{ color: "var(--accent)" }}>{visNodes.length}</span></span>
-          <span>跨类 <span className="mono" style={{ color: TC.hype }}>{driftCount}</span></span>
-          <span>陷阱边 <span className="mono" style={{ color: TC.trap }}>{trapCount}</span></span>
-          <span style={{ marginLeft: "auto", fontSize: 11 }}>点击榜单可定位拓扑节点</span>
-        </div>
+        <footer className="sg-topology-foot">
+          <span>节点 <b>{visNodes.length}</b></span>
+          <span>跨类 <b>{driftCount}</b></span>
+          <span>陷阱边 <b>{trapCount}</b></span>
+          <span>点击榜单可定位拓扑节点</span>
+        </footer>
       </div>
-    </div>
+    </section>
   );
 }
 
 function TogBtn({ active, color, onClick, children }) {
   return (
-    <button onClick={onClick} style={{
-      padding: "5px 10px",
-      borderRadius: 999,
-      cursor: "pointer",
-      fontSize: 11,
-      fontWeight: 600,
-      background: active ? `${color}22` : "transparent",
-      border: `1px solid ${active ? `${color}66` : "#304865"}`,
-      color: active ? color : "var(--text-muted)",
-    }}>
+    <button
+      className={active ? "is-active" : ""}
+      onClick={onClick}
+      style={{ "--toggle-color": color }}
+      type="button"
+    >
       {children}
     </button>
   );
@@ -450,23 +288,14 @@ function TogBtn({ active, color, onClick, children }) {
 
 function MetricCard({ label, value, accent = "var(--accent)" }) {
   return (
-    <div style={{
-      padding: "9px 11px",
-      borderRadius: 7,
-      background: "rgba(11,19,30,0.44)",
-      border: "1px solid #304865",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      gap: 8,
-    }}>
-      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{label}</span>
-      <span className="mono" style={{ fontSize: 13, color: accent }}>{value}</span>
+    <div className="sg-topology-metric">
+      <span>{label}</span>
+      <strong className="mono" style={{ color: accent }}>{value}</strong>
     </div>
   );
 }
 
 function RatioSeg({ color, value, total }) {
   const pct = total ? (value / total) * 100 : 0;
-  return <div style={{ width: `${pct}%`, background: color, opacity: 0.6 }} />;
+  return <i style={{ width: `${pct}%`, background: color }} />;
 }

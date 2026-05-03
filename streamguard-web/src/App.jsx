@@ -1,4 +1,4 @@
-﻿import { useRef, useCallback, useState, useMemo, useEffect } from "react";
+import { useRef, useCallback, useState, useMemo, useEffect } from "react";
 import "./App.css";
 import { useSimulatedStream } from "./hooks/useSimulatedStream";
 import { useRealStream } from "./hooks/useRealStream";
@@ -25,6 +25,24 @@ import { buildHistoryEntry } from "./utils/historyStorage";
 import { getStoredToken, setStoredToken, clearStoredToken, requestJson } from "./utils/authClient";
 import { saveHistorySession } from "./utils/historyApi";
 
+const NAV_ICONS = {
+  dashboard: "D",
+  discover: "F",
+  consumer: "C",
+  history: "H",
+  analytics: "A",
+  rules: "R",
+  profile: "P",
+};
+
+const LOCKED_FEATURE_NAMES = {
+  discover: "直播发现",
+  consumer: "消费建议",
+  history: "历史记录",
+  analytics: "深度分析",
+  profile: "个人主页",
+};
+
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
   const [sourceConfig, setSourceConfig] = useState({});
@@ -38,15 +56,13 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [intendedPage, setIntendedPage] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  // 蝥???詨?嗆?
-  const [sessionSnapshot, setSessionSnapshot] = useState(null); // ??null ????????
+  const [sessionSnapshot, setSessionSnapshot] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
-  const sessionStartRef = useRef(null); // ????????????
+  const [pendingRoomId, setPendingRoomId] = useState(null);
+  const sessionStartRef = useRef(null);
   const endingRef = useRef(false);
   const feedRef = useRef(null);
-  // ??湔?渡＆霈文撕蝒?
-  const [pendingRoomId, setPendingRoomId] = useState(null); // 撘寧?銝剜蝷箇
-  const pendingRoomIdRef = useRef(null);                    // handleReportClose 霂餃???
+  const pendingRoomIdRef = useRef(null);
 
   const simulated = useSimulatedStream();
   const realStream = useRealStream({
@@ -56,37 +72,36 @@ export default function App() {
     enabled: dataSource === "douyin",
   });
 
-  // 需啣?擐活餈?園嚗鈭??輯恣蝞?
-  const isConnected = realStream.connected;
-  if (isConnected && !sessionStartRef.current) {
+  if (realStream.connected && !sessionStartRef.current) {
     sessionStartRef.current = Date.now();
   }
 
   const streamData = useMemo(() => {
     if (!dataSource) return null;
     if (dataSource === "mock") return simulated;
-    // Real data source should expose real connection state directly.
-    // Do not silently fall back to mock, otherwise connection issues are hidden.
     return realStream;
   }, [dataSource, simulated, realStream]);
 
   const {
-    utterances = [], chatMessages = [], rationalityIndex = 0,
-    riskData = [], alerts = [], viewerCount = 0,
-    showGate = false, setShowGate = () => {},
-    isPaused = false, setIsPaused = () => {},
-    reset = () => {}, exportReport = () => {},
+    utterances = [],
+    chatMessages = [],
+    rationalityIndex = 0,
+    riskData = [],
+    alerts = [],
+    viewerCount = 0,
+    showGate = false,
+    setShowGate = () => {},
+    isPaused = false,
+    setIsPaused = () => {},
+    reset = () => {},
+    exportReport = () => {},
     sessionStats = {},
     messageTotals = { utterances: 0, chats: 0, total: 0 },
     recentLimits = { utterances: 0, chats: 0 },
   } = streamData || {};
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
-
-  const protectedPages = useMemo(
-    () => new Set(["discover", "consumer", "history", "analytics", "profile"]),
-    [],
-  );
+  const protectedPages = useMemo(() => new Set(["discover", "consumer", "history", "analytics", "profile"]), []);
 
   const navigateTo = useCallback((nextPage) => {
     if (!authUser && protectedPages.has(nextPage)) {
@@ -142,7 +157,7 @@ export default function App() {
       try {
         await requestJson(apiBase, "/auth/logout", { method: "POST", token: authToken });
       } catch {
-        // ignore
+        // Logout should still clear local credentials if the server is unavailable.
       }
     }
     clearStoredToken();
@@ -175,8 +190,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [sessionSnapshot]);
 
-
-  /** ?孵"蝏??"嚗蝏翰?????剖?餈 ??撘孵?亙? */
   const handleEndSession = useCallback(async () => {
     if (endingRef.current) return;
     endingRef.current = true;
@@ -197,8 +210,8 @@ export default function App() {
       try {
         const entry = buildHistoryEntry(snap, viewerCount || 0);
         await saveHistorySession(apiBase, authToken, entry, snap);
-      } catch (e) {
-        console.error("[history] save failed:", e);
+      } catch {
+        // The local session report still opens if remote history persistence fails.
       }
     }
 
@@ -206,7 +219,6 @@ export default function App() {
     realStream.disconnect?.();
   }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, viewerCount, apiBase, realStream, authUser, authToken]);
 
-  /** 报告关闭 → 若有待切换房间则跳转，否则回到数据源选择 */
   const handleReportClose = useCallback(() => {
     setShowReportModal(false);
     setSessionSnapshot(null);
@@ -215,24 +227,16 @@ export default function App() {
 
     const nextRoom = pendingRoomIdRef.current;
     if (nextRoom) {
-      // 连接新直播间：返回到输入界面，跳过欢迎动画
       pendingRoomIdRef.current = null;
       setPendingRoomId(null);
-      setDataSource(null);
-      setSourceConfig({});
-      setEntryStep("app");  // 跳过欢迎页
-      setPage("entry");
-      return;
     }
 
-    // 没有待切换的房间，返回数据源选择界面
     setDataSource(null);
     setSourceConfig({});
-    setEntryStep("app");  // 跳过欢迎页
+    setEntryStep("app");
     setPage("entry");
   }, [reset]);
 
-  // Close report modal only, then resume live connection when possible.
   const handleReportDismiss = useCallback(() => {
     setShowReportModal(false);
     setSessionSnapshot(null);
@@ -258,8 +262,6 @@ export default function App() {
     setShowSourceSelector(false);
   }, []);
 
-  // Called from LiveDiscoverPage when user clicks "餈?湔??
-  /** 摰??扯??嚗?蝛箸?唳 ???剖??扯?????餈?輸 */
   const doSwitchRoom = useCallback((roomId) => {
     reset();
     realStream.disconnect?.();
@@ -273,11 +275,9 @@ export default function App() {
       wsBase: prev.wsBase || "ws://localhost:8011",
     }));
     setPage("dashboard");
-    // 显式触发重连：与 handleReportClose 保持一致，避免纯靠 state 变化触发 useEffect 时的时序问题
     setTimeout(() => realStream.reconnectNow?.(), 50);
   }, [reset, realStream]);
 
-  /** 隞??圈△?孵"餈?湔??嚗???唳?嗅撕蝖株恕獢??血??湔? */
   const handleConnectRoom = useCallback((roomId) => {
     const hasData = utterances.length > 0 || chatMessages.length > 0;
     const isSameRoom = sourceConfig.roomId === roomId;
@@ -289,7 +289,6 @@ export default function App() {
     }
   }, [utterances.length, chatMessages.length, dataSource, sourceConfig.roomId, doSwitchRoom]);
 
-  /** 靽??亙????ｇ??蝏翰?批撕?亙?撘寧?嚗endingRoomIdRef 靽???roomId 靥?handleReportClose 雿輻*/
   const handleSaveAndSwitch = useCallback(() => {
     setSessionSnapshot({
       utterances: [...utterances],
@@ -302,7 +301,6 @@ export default function App() {
       endTime: Date.now(),
     });
     realStream.disconnect?.();
-    // ?喲蝖株恕撘寧?嚗endingRoomIdRef 靽???roomId 靥?handleReportClose 雿輻
     setPendingRoomId(null);
   }, [utterances, chatMessages, sessionStats, rationalityIndex, riskData, sourceConfig.roomId, realStream]);
 
@@ -310,7 +308,6 @@ export default function App() {
     return <WelcomePage onEnter={() => setEntryStep("app")} />;
   }
 
-  // Source selection screen
   if (!dataSource) {
     return (
       <div className="sg-page-shell sg-entry-page">
@@ -321,48 +318,22 @@ export default function App() {
               <button onClick={handleLogout} type="button">退出登录</button>
             </>
           ) : (
-            <button onClick={() => setShowAuthModal(true)} type="button">
-              登录 / 注册
-            </button>
+            <button onClick={() => setShowAuthModal(true)} type="button">登录 / 注册</button>
           )}
         </div>
         <DataSourceSelector variant="page" onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
         {showAuthModal && (
-          <div
-            className="sg-auth-modal-backdrop"
-            onClick={(e) => e.target === e.currentTarget && setShowAuthModal(false)}
-          >
-            <AuthPage
-              apiBase={apiBase}
-              onAuthSuccess={handleAuthSuccess}
-              onCancel={() => setShowAuthModal(false)}
-              modal
-            />
-          </div>
+          <AuthModal onClose={() => setShowAuthModal(false)}>
+            <AuthPage apiBase={apiBase} onAuthSuccess={handleAuthSuccess} onCancel={() => setShowAuthModal(false)} modal />
+          </AuthModal>
         )}
       </div>
     );
   }
 
   const activeTab = NAV_TABS.find((tab) => tab.id === page) || NAV_TABS[0];
-  const lockDashboardHeight = dashboardSection === "stream"; // dashboard 始终挂载，不再依赖 page
-  const NAV_ICONS = {
-    dashboard: "▦",
-    discover: "⌕",
-    consumer: "◎",
-    history: "◷",
-    analytics: "◲",
-    rules: "⚑",
-    profile: "◈",
-  };
+  const lockDashboardHeight = dashboardSection === "stream";
   const activePageLocked = !authUser && protectedPages.has(page);
-  const lockedFeatureNames = {
-    discover: "直播发现",
-    consumer: "消费建议",
-    history: "历史记录",
-    analytics: "深度分析",
-    profile: "个人主页",
-  };
   const dashboardModuleLabel = dashboardSection === "ops" ? "运营指挥台" : "直播与话术";
   const dashboardModuleDescription = dashboardSection === "ops"
     ? "连接诊断、实时指标和告警处置"
@@ -371,10 +342,14 @@ export default function App() {
   return (
     <div className="app-shell sg-app">
       <Header
-        page={page} setPage={navigateTo}
-        viewerCount={viewerCount} utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
-        isPaused={isPaused} setIsPaused={setIsPaused}
-        onReset={reset} onExport={handleExport}
+        page={page}
+        setPage={navigateTo}
+        viewerCount={viewerCount}
+        utteranceCount={sessionStats.total || messageTotals.utterances || utterances.length}
+        isPaused={isPaused}
+        setIsPaused={setIsPaused}
+        onReset={reset}
+        onExport={handleExport}
         onEnd={handleEndSession}
         sessionStats={sessionStats}
         currentSource={dataSource}
@@ -390,7 +365,6 @@ export default function App() {
 
       <div className="sg-workspace">
         <aside className="sg-sidebar">
-          {/* <div className="sg-sidebar-title"></div> */}
           <div className="sg-sidebar-nav">
             {NAV_TABS.map((tab) => {
               if (tab.id === "dashboard") {
@@ -402,6 +376,7 @@ export default function App() {
                         navigateTo("dashboard");
                       }}
                       className={`sg-side-link sg-side-parent ${page === "dashboard" ? "is-active" : ""}`}
+                      type="button"
                     >
                       <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
                       <span className="sg-side-label">{tab.label}</span>
@@ -420,6 +395,7 @@ export default function App() {
                             setDashboardSection(item.id);
                             navigateTo("dashboard");
                           }}
+                          type="button"
                         >
                           <span>{item.label}</span>
                         </button>
@@ -433,6 +409,7 @@ export default function App() {
                   key={tab.id}
                   onClick={() => navigateTo(tab.id)}
                   className={`sg-side-link ${page === tab.id ? "is-active" : ""} ${!authUser && protectedPages.has(tab.id) ? "is-locked" : ""}`}
+                  type="button"
                 >
                   <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
                   <span className="sg-side-label">{tab.label}</span>
@@ -448,36 +425,147 @@ export default function App() {
         </aside>
 
         <main className="sg-main">
-      {/* Dashboard - 始终挂载，通过 display 控制可见性，防止 VideoPlayer 切换页面时断开连接 */}
-        <div
-          className="sg-dashboard"
-          style={{
-            padding: "20px 24px 20px",
-            display: page === "dashboard" ? "flex" : "none",
-            flexDirection: "column",
-            gap: 16,
-            ...(lockDashboardHeight ? { height: "100%", minHeight: 0, overflow: "auto" } : null),
-          }}
-        >
-          <div className="sg-dashboard-head">
-            <div className="sg-dashboard-heading">
-              <div className="sg-dashboard-title">{dashboardModuleLabel}</div>
-            </div>
-            <div className="sg-dashboard-context">{dashboardModuleDescription}</div>
-          </div>
+          <Dashboard
+            visible={page === "dashboard"}
+            lockHeight={lockDashboardHeight}
+            dashboardSection={dashboardSection}
+            dataSource={dataSource}
+            sourceConfig={sourceConfig}
+            realStream={realStream}
+            utterances={utterances}
+            chatMessages={chatMessages}
+            rationalityIndex={rationalityIndex}
+            riskData={riskData}
+            alerts={alerts}
+            viewerCount={viewerCount}
+            messageTotals={messageTotals}
+            recentLimits={recentLimits}
+            dashboardModuleLabel={dashboardModuleLabel}
+            dashboardModuleDescription={dashboardModuleDescription}
+            jumpToUtterance={jumpToUtterance}
+            feedRef={feedRef}
+          />
 
-          <div className="sg-dashboard-body">
-            <RiskInsightSidebar
-              rationalityIndex={rationalityIndex}
-              riskData={riskData}
-              alerts={alerts}
-              utterances={utterances}
-              messageTotals={messageTotals}
-              viewerCount={viewerCount}
-              onJumpTo={jumpToUtterance}
+          {activePageLocked && (
+            <LockedFeature
+              title={LOCKED_FEATURE_NAMES[page] || activeTab.label}
+              description={activeTab.description}
+              onLogin={() => {
+                setIntendedPage(page);
+                setShowAuthModal(true);
+              }}
             />
+          )}
+          {!activePageLocked && page === "history" && <HistoryPage apiBase={apiBase} token={authToken} />}
+          {page === "discover" && !activePageLocked && (
+            <LiveDiscoverPage apiBase={apiBase} onConnectRoom={handleConnectRoom} utterances={utterances} chatMessages={chatMessages} />
+          )}
+          {page === "consumer" && !activePageLocked && (
+            <ConsumerAdvisorPage apiBase={apiBase} utterances={utterances} chatMessages={chatMessages} />
+          )}
+          {!activePageLocked && page === "analytics" && <AnalyticsPage />}
+          {page === "rules" && <RulesPage />}
+          {!activePageLocked && page === "profile" && (
+            <ProfilePage apiBase={apiBase} token={authToken} user={authUser} onUserUpdate={handleUserUpdate} onLogout={handleLogout} />
+          )}
+        </main>
+      </div>
 
-            <section className="sg-dashboard-stage">
+      <AlertBanner alerts={alerts} onDismiss={() => {}} onJumpTo={jumpToUtterance} />
+
+      {showGate && (
+        <RationalityGate utterances={utterances} onConfirm={() => setShowGate(false)} onCancel={() => setShowGate(false)} />
+      )}
+
+      {showSourceSelector && (
+        <div
+          className="sg-modal-backdrop"
+          onClick={(event) => event.target === event.currentTarget && setShowSourceSelector(false)}
+        >
+          <DataSourceSelector variant="modal" onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
+        </div>
+      )}
+
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)}>
+          <AuthPage apiBase={apiBase} onAuthSuccess={handleAuthSuccess} onCancel={() => setShowAuthModal(false)} modal />
+        </AuthModal>
+      )}
+
+      {showReportModal && sessionSnapshot && (
+        <SessionReportModal snapshot={sessionSnapshot} apiBase={apiBase} onDismiss={handleReportDismiss} onClose={handleReportClose} />
+      )}
+
+      {pendingRoomId && !sessionSnapshot && (
+        <SwitchRoomModal
+          fromRoomId={sourceConfig.roomId}
+          toRoomId={pendingRoomId}
+          stats={sessionStats}
+          startTime={sessionStartRef.current}
+          onSaveAndSwitch={handleSaveAndSwitch}
+          onDirectSwitch={() => doSwitchRoom(pendingRoomId)}
+          onCancel={() => {
+            setPendingRoomId(null);
+            pendingRoomIdRef.current = null;
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Dashboard(props) {
+  const {
+    visible,
+    lockHeight,
+    dashboardSection,
+    dataSource,
+    sourceConfig,
+    realStream,
+    utterances,
+    chatMessages,
+    rationalityIndex,
+    riskData,
+    alerts,
+    viewerCount,
+    messageTotals,
+    recentLimits,
+    dashboardModuleLabel,
+    dashboardModuleDescription,
+    jumpToUtterance,
+    feedRef,
+  } = props;
+
+  return (
+    <div
+      className="sg-dashboard"
+      style={{
+        padding: "20px 24px 20px",
+        display: visible ? "flex" : "none",
+        flexDirection: "column",
+        gap: 16,
+        ...(lockHeight ? { height: "100%", minHeight: 0, overflow: "auto" } : null),
+      }}
+    >
+      <div className="sg-dashboard-head">
+        <div className="sg-dashboard-heading">
+          <div className="sg-dashboard-title">{dashboardModuleLabel}</div>
+        </div>
+        <div className="sg-dashboard-context">{dashboardModuleDescription}</div>
+      </div>
+
+      <div className="sg-dashboard-body">
+        <RiskInsightSidebar
+          rationalityIndex={rationalityIndex}
+          riskData={riskData}
+          alerts={alerts}
+          utterances={utterances}
+          messageTotals={messageTotals}
+          viewerCount={viewerCount}
+          onJumpTo={jumpToUtterance}
+        />
+
+        <section className="sg-dashboard-stage">
           {dashboardSection === "ops" && (
             <div className="sg-ops-grid">
               <CommandCenter
@@ -497,99 +585,22 @@ export default function App() {
                 recentLimits={recentLimits}
                 onReconnect={() => realStream.reconnectNow?.()}
               />
-
-              <div className="sg-ops-side">
-                <div className="sg-ops-card">
-                  <div className="sg-ops-card-head">
-                    <div className="sg-ops-card-title">关键指标</div>
-                    <div className="sg-ops-card-subtitle">
-                      <span className="mono">{new Date().toLocaleTimeString("zh-CN", { hour12: false })}</span>
-                    </div>
-                  </div>
-                  <div className="sg-ops-card-body">
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">在线观众</span>
-                      <span className="sg-ops-v mono">{viewerCount || 0}</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">理性指数</span>
-                      <span className="sg-ops-v mono">{Math.round(rationalityIndex || 0)}/100</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">累计语义</span>
-                      <span className="sg-ops-v mono">{messageTotals.utterances || utterances.length}</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">累计弹幕</span>
-                      <span className="sg-ops-v mono">{messageTotals.chats || chatMessages.length}</span>
-                    </div>
-                    <div className="sg-ops-kv">
-                      <span className="sg-ops-k">当前数据源</span>
-                      <span className="sg-ops-v">{dataSource || "--"}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="sg-ops-card" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                  <div className="sg-ops-card-head">
-                    <div className="sg-ops-card-title">最新告警</div>
-                    <div className="sg-ops-card-subtitle">
-                      {alerts?.length ? `${alerts.length} 条` : "暂无告警"}
-                    </div>
-                  </div>
-                  <div className="sg-ops-card-body" style={{ overflow: "auto", flex: 1, minHeight: 0 }}>
-                    <div className="sg-ops-alerts">
-                      {(alerts || []).slice(0, 6).map((a) => {
-                        const clickable = !!a.utteranceId;
-                        return (
-                          <div
-                            key={a.id}
-                            className={`sg-ops-alert ${clickable ? "is-clickable" : ""}`}
-                            onClick={() => clickable && jumpToUtterance(a.utteranceId)}
-                            role={clickable ? "button" : undefined}
-                            tabIndex={clickable ? 0 : undefined}
-                            onKeyDown={(e) => {
-                              if (!clickable) return;
-                              if (e.key === "Enter" || e.key === " ") jumpToUtterance(a.utteranceId);
-                            }}
-                          >
-                            <div className="sg-ops-alert-meta">
-                              <div className="sg-ops-alert-meta-left">
-                                <span className="sg-ops-pill mono">score {a.score}</span>
-                                <span className="mono" style={{ fontSize: 12, color: "var(--text-muted)" }}>{a.timestamp}</span>
-                              </div>
-                              <span style={{ fontSize: 12, color: "var(--trap)", fontWeight: 800 }}>TRAP</span>
-                            </div>
-                            <div className="sg-ops-alert-text">{a.text}</div>
-                          </div>
-                        );
-                      })}
-                      {(!alerts || alerts.length === 0) && (
-                        <div style={{ color: "var(--text-muted)", fontSize: 13, padding: "6px 2px" }}>
-                          直播中若出现高风险话术，会在这里沉淀为可回看条目。
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <OpsSide
+                alerts={alerts}
+                viewerCount={viewerCount}
+                rationalityIndex={rationalityIndex}
+                messageTotals={messageTotals}
+                utterances={utterances}
+                chatMessages={chatMessages}
+                dataSource={dataSource}
+                jumpToUtterance={jumpToUtterance}
+              />
             </div>
           )}
 
-          {/* VideoPlayer 容器 - 始终挂载，通过 display 控制可见性 */}
-          <div style={{
-            display: dashboardSection === "stream" ? "grid" : "none",
-            gridTemplateColumns: dataSource === "douyin"
-              ? "minmax(360px, 1.08fr) minmax(340px, 0.92fr)"
-              : "minmax(0, 1fr)",
-            gap: 18,
-            alignItems: "stretch",
-            flex: 1,
-            minHeight: 0,
-            overflow: "hidden",
-          }}>
+          <div className="sg-stream-grid" style={{ display: dashboardSection === "stream" ? "grid" : "none" }}>
             {dataSource === "douyin" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0 }}>
+              <div className="sg-video-column">
                 {sourceConfig.roomId ? (
                   <VideoPlayer
                     roomId={sourceConfig.roomId}
@@ -597,157 +608,104 @@ export default function App() {
                     isVisible={dashboardSection === "stream"}
                   />
                 ) : (
-                  <div style={{
-                    background: "var(--bg-secondary)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 10,
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                    height: "100%",
-                  }}>
-                    <div style={{
-                      padding: "12px 16px",
-                      borderBottom: "1px solid var(--border)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}>
-                      <span style={{ fontSize: 14, fontWeight: 700 }}>实时直播</span>
-                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>等待连接直播间</span>
-                    </div>
-                    <div style={{
-                      background: "#000",
-                      flex: 1,
-                      minHeight: 240,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--text-muted)",
-                      fontSize: 13,
-                    }}>
-                      请先在上方选择并连接直播间
-                    </div>
+                  <div className="sg-video-empty">
+                    <header>
+                      <strong>实时直播</strong>
+                      <span>等待连接直播间</span>
+                    </header>
+                    <div>请先在上方选择并连接直播间</div>
                   </div>
                 )}
               </div>
             )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, alignSelf: "stretch", minHeight: 0, height: "100%" }}>
-              <div style={{ flex: "0 0 300px", minHeight: 0, overflow: "hidden" }}>
+            <div className="sg-stream-column">
+              <div className="sg-stream-chat">
                 <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-                <SemanticFeed ref={feedRef} utterances={utterances} />
-              </div>
+              <SemanticFeed ref={feedRef} utterances={utterances} />
             </div>
           </div>
-            </section>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function OpsSide({ alerts, viewerCount, rationalityIndex, messageTotals, utterances, chatMessages, dataSource, jumpToUtterance }) {
+  return (
+    <div className="sg-ops-side">
+      <div className="sg-ops-card">
+        <div className="sg-ops-card-head">
+          <div className="sg-ops-card-title">关键指标</div>
+          <div className="sg-ops-card-subtitle">
+            <span className="mono">{new Date().toLocaleTimeString("zh-CN", { hour12: false })}</span>
           </div>
         </div>
-
-      {activePageLocked && (
-        <LockedFeature
-          title={lockedFeatureNames[page] || activeTab.label}
-          description={activeTab.description}
-          onLogin={() => {
-            setIntendedPage(page);
-            setShowAuthModal(true);
-          }}
-        />
-      )}
-      {!activePageLocked && page === "history" && <HistoryPage apiBase={apiBase} token={authToken} />}
-      {page === "discover" && (
-        !activePageLocked && <LiveDiscoverPage
-          apiBase={apiBase}
-          onConnectRoom={handleConnectRoom}
-          utterances={utterances}
-          chatMessages={chatMessages}
-        />
-      )}
-      {page === "consumer" && (
-        !activePageLocked && <ConsumerAdvisorPage
-          apiBase={apiBase}
-          utterances={utterances}
-          chatMessages={chatMessages}
-        />
-      )}
-      {!activePageLocked && page === "analytics" && <AnalyticsPage />}
-      {page === "rules" && <RulesPage />}
-      {!activePageLocked && page === "profile" && (
-        <ProfilePage
-          apiBase={apiBase}
-          token={authToken}
-          user={authUser}
-          onUserUpdate={handleUserUpdate}
-          onLogout={handleLogout}
-        />
-      )}
-        </main>
+        <div className="sg-ops-card-body">
+          <Kv label="在线观众" value={viewerCount || 0} mono />
+          <Kv label="理性指数" value={`${Math.round(rationalityIndex || 0)}/100`} mono />
+          <Kv label="累计语义" value={messageTotals.utterances || utterances.length} mono />
+          <Kv label="累计弹幕" value={messageTotals.chats || chatMessages.length} mono />
+          <Kv label="当前数据源" value={dataSource || "--"} />
+        </div>
       </div>
 
-      <AlertBanner alerts={alerts} onDismiss={() => {}} onJumpTo={jumpToUtterance} />
-
-      {showGate && (
-        <RationalityGate
-          utterances={utterances}
-          onConfirm={() => setShowGate(false)}
-          onCancel={() => setShowGate(false)}
-        />
-      )}
-
-      {showSourceSelector && (
-        <div
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-          }}
-          onClick={e => e.target === e.currentTarget && setShowSourceSelector(false)}
-        >
-          <DataSourceSelector variant="modal" onSelect={handleSourceSelect} onConnect={handleSourceSelect} />
+      <div className="sg-ops-card sg-ops-alert-card">
+        <div className="sg-ops-card-head">
+          <div className="sg-ops-card-title">最新告警</div>
+          <div className="sg-ops-card-subtitle">{alerts?.length ? `${alerts.length} 条` : "暂无告警"}</div>
         </div>
-      )}
-
-      {showAuthModal && (
-        <div
-          className="sg-auth-modal-backdrop"
-          onClick={(e) => e.target === e.currentTarget && setShowAuthModal(false)}
-        >
-          <AuthPage
-            apiBase={apiBase}
-            onAuthSuccess={handleAuthSuccess}
-            onCancel={() => setShowAuthModal(false)}
-            modal
-          />
+        <div className="sg-ops-card-body">
+          <div className="sg-ops-alerts">
+            {(alerts || []).slice(0, 6).map((alert) => {
+              const clickable = !!alert.utteranceId;
+              return (
+                <div
+                  key={alert.id}
+                  className={`sg-ops-alert ${clickable ? "is-clickable" : ""}`}
+                  onClick={() => clickable && jumpToUtterance(alert.utteranceId)}
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onKeyDown={(e) => {
+                    if (!clickable) return;
+                    if (e.key === "Enter" || e.key === " ") jumpToUtterance(alert.utteranceId);
+                  }}
+                >
+                  <div className="sg-ops-alert-meta">
+                    <div className="sg-ops-alert-meta-left">
+                      <span className="sg-ops-pill mono">score {alert.score}</span>
+                      <span className="mono">{alert.timestamp}</span>
+                    </div>
+                    <strong>TRAP</strong>
+                  </div>
+                  <div className="sg-ops-alert-text">{alert.text}</div>
+                </div>
+              );
+            })}
+            {(!alerts || alerts.length === 0) && (
+              <div className="sg-ops-empty">直播中若出现高风险话术，会在这里沉淀为可回看条目。</div>
+            )}
+          </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
 
-      {/* Session Report Modal - delayed display to avoid Chrome crash */}
-      {showReportModal && sessionSnapshot && (
-        <SessionReportModal
-          snapshot={sessionSnapshot}
-          apiBase={apiBase}
-          onDismiss={handleReportDismiss}
-          onClose={handleReportClose}
-        />
-      )}
+function Kv({ label, value, mono = false }) {
+  return (
+    <div className="sg-ops-kv">
+      <span className="sg-ops-k">{label}</span>
+      <span className={`sg-ops-v ${mono ? "mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
 
-      {/* ??湔?渡＆霈文撕蝒?*/}
-      {pendingRoomId && !sessionSnapshot && (
-        <SwitchRoomModal
-          fromRoomId={sourceConfig.roomId}
-          toRoomId={pendingRoomId}
-          stats={sessionStats}
-          startTime={sessionStartRef.current}
-          onSaveAndSwitch={handleSaveAndSwitch}
-          onDirectSwitch={() => doSwitchRoom(pendingRoomId)}
-          onCancel={() => {
-            setPendingRoomId(null);
-            pendingRoomIdRef.current = null;
-          }}
-        />
-      )}
-      {/* 蝎折△??*/}
+function AuthModal({ children, onClose }) {
+  return (
+    <div className="sg-auth-modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      {children}
     </div>
   );
 }
@@ -762,13 +720,8 @@ function LockedFeature({ title, description, onLogin }) {
         <p className="sg-locked-copy">
           该功能会读取或沉淀账号数据，需要先登录或注册后使用。实时总览和首页仍可直接访问。
         </p>
-        <button className="sg-locked-action" onClick={onLogin} type="button">
-          登录 / 注册
-        </button>
+        <button className="sg-locked-action" onClick={onLogin} type="button">登录 / 注册</button>
       </div>
     </div>
   );
 }
-
-
-

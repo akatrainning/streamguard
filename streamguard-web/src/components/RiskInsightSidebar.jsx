@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { MetricTile, StatusBadge } from "./ui";
 
 const RISK_LABELS = {
   "Price Transparency": "价格透明",
@@ -71,7 +72,7 @@ export default function RiskInsightSidebar({
   }, [messageTotals.utterances, utterances]);
 
   const riskLevel = rationalityIndex >= 70 ? "低风险" : rationalityIndex >= 40 ? "观察中" : "高风险";
-  const riskLevelClass = rationalityIndex >= 70 ? "is-low" : rationalityIndex >= 40 ? "is-mid" : "is-high";
+  const riskTone = rationalityIndex >= 70 ? "success" : rationalityIndex >= 40 ? "warning" : "danger";
   const riskScore = Math.max(0, Math.min(100, 100 - Math.round(rationalityIndex || 0)));
 
   const dimensionData = useMemo(
@@ -96,7 +97,7 @@ export default function RiskInsightSidebar({
           <div className="sg-risk-eyebrow">Risk Intelligence</div>
           <div className="sg-risk-title">风险分析</div>
         </div>
-        <span className={`sg-risk-badge ${riskLevelClass}`}>{riskLevel}</span>
+        <StatusBadge tone={riskTone}>{riskLevel}</StatusBadge>
       </div>
 
       <section className="sg-risk-score-card">
@@ -118,22 +119,10 @@ export default function RiskInsightSidebar({
       </section>
 
       <div className="sg-risk-kpi-grid">
-        <div className="sg-risk-kpi">
-          <span>高危</span>
-          <strong className="mono">{stats.trap}</strong>
-        </div>
-        <div className="sg-risk-kpi">
-          <span>夸大</span>
-          <strong className="mono">{stats.hype}</strong>
-        </div>
-        <div className="sg-risk-kpi">
-          <span>风险率</span>
-          <strong className="mono">{stats.riskRate}%</strong>
-        </div>
-        <div className="sg-risk-kpi">
-          <span>观众</span>
-          <strong className="mono">{viewerCount || 0}</strong>
-        </div>
+        <MetricTile label="高危" value={stats.trap} tone="danger" />
+        <MetricTile label="夸大" value={stats.hype} tone="warning" />
+        <MetricTile label="风险率" value={`${stats.riskRate}%`} tone={riskTone} />
+        <MetricTile label="观众" value={viewerCount || 0} />
       </div>
 
       <section className="sg-risk-panel">

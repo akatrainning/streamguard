@@ -59,7 +59,7 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
       onUserUpdate?.(payload.user);
       setSaved(true);
     } catch (err) {
-      setError(err?.message || "Save failed.");
+      setError(err?.message || "保存失败");
     } finally {
       setSaving(false);
     }
@@ -68,7 +68,7 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
   if (!user) {
     return (
       <div className="sg-profile-shell">
-        <div className="sg-profile-card">Loading profile...</div>
+        <div className="sg-profile-card">正在加载个人资料...</div>
       </div>
     );
   }
@@ -80,75 +80,75 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
           <div className="sg-profile-identity">
             <div className="sg-profile-avatar">
               {user.avatar_url ? (
-                <img src={user.avatar_url} alt="avatar" />
+                <img src={user.avatar_url} alt="用户头像" />
               ) : (
                 <span>{initials}</span>
               )}
             </div>
             <div>
-              <div className="sg-profile-name">{user.nickname || "Unnamed"}</div>
+              <div className="sg-profile-name">{user.nickname || "未命名用户"}</div>
               <div className="sg-profile-meta">{user.email}</div>
-              <div className="sg-profile-meta">Joined {formatDate(user.created_at)}</div>
+              <div className="sg-profile-meta">创建于 {formatDate(user.created_at)}</div>
             </div>
           </div>
           <button className="sg-profile-logout" onClick={onLogout} type="button">
-            Sign out
+            退出登录
           </button>
         </div>
 
         <div className="sg-profile-grid">
           <div className="sg-profile-panel">
-            <div className="sg-profile-panel-title">Account</div>
+            <div className="sg-profile-panel-title">账号状态</div>
             <div className="sg-profile-panel-body">
               <div className="sg-profile-row">
-                <span>Email</span>
+                <span>邮箱</span>
                 <strong>{user.email}</strong>
               </div>
               <div className="sg-profile-row">
-                <span>Status</span>
-                <strong>Active</strong>
+                <span>状态</span>
+                <strong>正常</strong>
               </div>
               <div className="sg-profile-row">
-                <span>Last login</span>
+                <span>最近登录</span>
                 <strong>{user.last_login ? formatDate(user.last_login) : "-"}</strong>
               </div>
               <div className="sg-profile-hint">
-                Update your public information on the right.
+                这里记录账号基础状态，右侧可维护工作区展示信息。
               </div>
             </div>
           </div>
 
           <div className="sg-profile-panel">
-            <div className="sg-profile-panel-title">Profile</div>
+            <div className="sg-profile-panel-title">个人资料</div>
             <div className="sg-profile-panel-body">
               <label className="sg-profile-field">
-                <span>Display Name</span>
+                <span>显示名称</span>
                 <input
                   value={form.nickname}
                   onChange={(e) => updateField("nickname", e.target.value)}
-                  placeholder="Your name" />
+                  placeholder="用于审查记录署名" />
               </label>
               <label className="sg-profile-field">
-                <span>Avatar URL</span>
+                <span>头像 URL</span>
                 <input
                   value={form.avatar_url}
                   onChange={(e) => updateField("avatar_url", e.target.value)}
                   placeholder="https://..." />
               </label>
               <label className="sg-profile-field">
-                <span>Bio</span>
+                <span>简介</span>
                 <textarea
                   rows={4}
                   value={form.bio}
                   onChange={(e) => updateField("bio", e.target.value)}
-                  placeholder="A short introduction" />
+                  placeholder="职责、团队或审查范围" />
               </label>
 
               {error && <div className="sg-profile-error">{error}</div>}
-              {saved && !error && <div className="sg-profile-success">Saved.</div>}
+              {saved && !error && <div className="sg-profile-success">已保存</div>}
 
               <button className="sg-profile-save" onClick={handleSave} disabled={saving} type="button">
-                {saving ? "Saving..." : "Save changes"}
+                {saving ? "保存中..." : "保存修改"}
               </button>
             </div>
           </div>
