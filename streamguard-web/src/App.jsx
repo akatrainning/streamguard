@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useMemo, useEffect } from "react";
+import { Suspense, lazy, useRef, useCallback, useState, useMemo, useEffect } from "react";
 import "./App.css";
 import { useSimulatedStream } from "./hooks/useSimulatedStream";
 import { useRealStream } from "./hooks/useRealStream";
@@ -15,7 +15,6 @@ import SessionReportModal from "./components/SessionReportModal";
 import SwitchRoomModal from "./components/SwitchRoomModal";
 import HistoryPage from "./pages/HistoryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
-import RulesPage from "./pages/RulesPage";
 import ConsumerAdvisorPage from "./pages/ConsumerAdvisorPage";
 import LiveDiscoverPage from "./pages/LiveDiscoverPage";
 import WelcomePage from "./pages/WelcomePage";
@@ -42,6 +41,8 @@ const LOCKED_FEATURE_NAMES = {
   analytics: "深度分析",
   profile: "个人主页",
 };
+
+const RulesPage = lazy(() => import("./pages/RulesPage"));
 
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
@@ -464,7 +465,11 @@ export default function App() {
             <ConsumerAdvisorPage apiBase={apiBase} utterances={utterances} chatMessages={chatMessages} />
           )}
           {!activePageLocked && page === "analytics" && <AnalyticsPage />}
-          {page === "rules" && <RulesPage />}
+          {page === "rules" && (
+            <Suspense fallback={<PageFallback title="正在载入规则知识图谱" detail="拆分后的图谱模块会按需加载，不再占用主工作台首屏体积。" />}>
+              <RulesPage />
+            </Suspense>
+          )}
           {!activePageLocked && page === "profile" && (
             <ProfilePage apiBase={apiBase} token={authToken} user={authUser} onUserUpdate={handleUserUpdate} onLogout={handleLogout} />
           )}
@@ -699,6 +704,22 @@ function Kv({ label, value, mono = false }) {
       <span className="sg-ops-k">{label}</span>
       <span className={`sg-ops-v ${mono ? "mono" : ""}`}>{value}</span>
     </div>
+  );
+}
+
+function PageFallback({ title, detail }) {
+  return (
+    <section className="sg-ui-panel" style={{ margin: "20px 24px", maxWidth: 720 }}>
+      <header className="sg-ui-panel-head">
+        <div>
+          <div className="sg-ui-eyebrow">LOADING</div>
+          <h2>{title}</h2>
+        </div>
+      </header>
+      <div className="sg-ui-panel-body">
+        <p style={{ margin: 0, color: "var(--text-muted)", lineHeight: 1.7 }}>{detail}</p>
+      </div>
+    </section>
   );
 }
 
