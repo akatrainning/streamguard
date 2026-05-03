@@ -68,28 +68,21 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
   if (!user) {
     return (
       <div className="sg-profile-shell">
-        <div className="sg-profile-card">正在加载个人资料...</div>
+        <div className="sg-profile-frame">
+          <div className="sg-profile-panel sg-profile-panel-loading">正在加载个人资料...</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="sg-profile-shell">
-      <div className="sg-profile-card">
-        <div className="sg-profile-header">
-          <div className="sg-profile-identity">
-            <div className="sg-profile-avatar">
-              {user.avatar_url ? (
-                <img src={user.avatar_url} alt="用户头像" />
-              ) : (
-                <span>{initials}</span>
-              )}
-            </div>
-            <div>
-              <div className="sg-profile-name">{user.nickname || "未命名用户"}</div>
-              <div className="sg-profile-meta">{user.email}</div>
-              <div className="sg-profile-meta">创建于 {formatDate(user.created_at)}</div>
-            </div>
+      <div className="sg-profile-frame">
+        <div className="sg-profile-top">
+          <div className="sg-profile-top-copy">
+            <div className="sg-profile-kicker">PROFILE CONTROL</div>
+            <div className="sg-profile-title">个人主页</div>
+            <div className="sg-profile-subtitle">管理账号资料、头像和对外展示信息。</div>
           </div>
           <button className="sg-profile-logout" onClick={onLogout} type="button">
             退出登录
@@ -97,8 +90,28 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
         </div>
 
         <div className="sg-profile-grid">
-          <div className="sg-profile-panel">
-            <div className="sg-profile-panel-title">账号状态</div>
+          <section className="sg-profile-panel sg-profile-summary">
+            <div className="sg-profile-panel-head">
+              <div>
+                <div className="sg-profile-panel-kicker">账号状态</div>
+                <div className="sg-profile-panel-title">当前账号</div>
+              </div>
+              <div className="sg-profile-status is-ok">正常</div>
+            </div>
+            <div className="sg-profile-identity">
+              <div className="sg-profile-avatar">
+                {user.avatar_url ? (
+                  <img src={user.avatar_url} alt="用户头像" />
+                ) : (
+                  <span>{initials}</span>
+                )}
+              </div>
+              <div className="sg-profile-identity-copy">
+                <div className="sg-profile-name">{user.nickname || "未命名用户"}</div>
+                <div className="sg-profile-meta">{user.email}</div>
+                <div className="sg-profile-meta">创建于 {formatDate(user.created_at)}</div>
+              </div>
+            </div>
             <div className="sg-profile-panel-body">
               <div className="sg-profile-row">
                 <span>邮箱</span>
@@ -106,7 +119,7 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
               </div>
               <div className="sg-profile-row">
                 <span>状态</span>
-                <strong>正常</strong>
+                <strong className="is-ok">正常</strong>
               </div>
               <div className="sg-profile-row">
                 <span>最近登录</span>
@@ -116,10 +129,16 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
                 这里记录账号基础状态，右侧可维护工作区展示信息。
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="sg-profile-panel">
-            <div className="sg-profile-panel-title">个人资料</div>
+          <section className="sg-profile-panel sg-profile-editor">
+            <div className="sg-profile-panel-head">
+              <div>
+                <div className="sg-profile-panel-kicker">个人资料</div>
+                <div className="sg-profile-panel-title">对外展示信息</div>
+              </div>
+              {saved && !error && <div className="sg-profile-status is-saved">已保存</div>}
+            </div>
             <div className="sg-profile-panel-body">
               <label className="sg-profile-field">
                 <span>显示名称</span>
@@ -145,13 +164,12 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
               </label>
 
               {error && <div className="sg-profile-error">{error}</div>}
-              {saved && !error && <div className="sg-profile-success">已保存</div>}
 
-              <button className="sg-profile-save" onClick={handleSave} disabled={saving} type="button">
+              <button className="sg-profile-save sg-primary-action" onClick={handleSave} disabled={saving} type="button">
                 {saving ? "保存中..." : "保存修改"}
               </button>
             </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>

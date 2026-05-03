@@ -613,38 +613,165 @@
 }
 
 .sg-profile-shell {
-  padding: 24px;
+  padding: 28px;
+  min-height: 100%;
 }
 
-.sg-profile-card {
-  background: rgba(12, 19, 30, 0.85);
-  border: 1px solid rgba(60, 85, 120, 0.5);
-  border-radius: 18px;
-  padding: 24px;
-  box-shadow: var(--shadow-md);
+.sg-profile-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
-.sg-profile-header {
+.sg-profile-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 2px;
+}
+
+.sg-profile-top-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sg-profile-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.sg-profile-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
+}
+
+.sg-profile-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-width: 420px;
+}
+
+.sg-profile-panel-loading {
+  padding: 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.sg-profile-logout {
+  border: 1px solid rgba(255, 92, 104, 0.35);
+  background: rgba(255, 92, 104, 0.12);
+  color: var(--trap);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sg-profile-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(360px, 1.2fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.sg-profile-panel {
+  background: var(--sg-surface-raised);
+  border: 1px solid var(--sg-border-base);
+  border-radius: var(--sg-radius-panel);
+  box-shadow: var(--sg-shadow-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+}
+
+.sg-profile-panel-head {
+  padding: 14px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 22px;
-  flex-wrap: wrap;
+  border-bottom: 1px solid var(--sg-border-base);
+  background: rgba(14, 15, 16, 0.7);
+}
+
+.sg-profile-panel-kicker {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sg-profile-panel-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.sg-profile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--sg-border-muted);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sg-profile-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.sg-profile-status.is-ok {
+  border-color: var(--fact-border);
+  background: var(--fact-bg);
+  color: var(--fact);
+}
+
+.sg-profile-status.is-saved {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .sg-profile-identity {
   display: flex;
   align-items: center;
   gap: 14px;
+  padding: 16px 18px 4px;
+}
+
+.sg-profile-identity-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .sg-profile-avatar {
   width: 56px;
   height: 56px;
-  border-radius: 16px;
-  background: rgba(63, 140, 255, 0.15);
-  border: 1px solid rgba(63, 140, 255, 0.45);
+  border-radius: 12px;
+  background: rgba(246, 255, 95, 0.12);
+  border: 1px solid rgba(246, 255, 95, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -660,7 +787,7 @@
 }
 
 .sg-profile-name {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
 }
 
@@ -669,43 +796,11 @@
   color: var(--text-muted);
 }
 
-.sg-profile-logout {
-  border: 1px solid rgba(227, 91, 91, 0.4);
-  background: rgba(227, 91, 91, 0.15);
-  color: var(--trap);
-  padding: 8px 12px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.sg-profile-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(320px, 1.2fr);
-  gap: 18px;
-}
-
-.sg-profile-panel {
-  background: rgba(16, 26, 41, 0.7);
-  border: 1px solid rgba(43, 61, 86, 0.7);
-  border-radius: 14px;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.sg-profile-panel-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
 .sg-profile-panel-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 12px 18px 18px;
   font-size: 12px;
   color: var(--text-muted);
 }
@@ -724,7 +819,14 @@
   font-weight: 600;
 }
 
+.sg-profile-row strong.is-ok {
+  color: var(--fact);
+}
+
 .sg-profile-hint {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--sg-border-base);
   font-size: 11px;
   color: var(--text-muted);
 }
@@ -739,11 +841,18 @@
 
 .sg-profile-field input,
 .sg-profile-field textarea {
-  background: rgba(6, 10, 18, 0.7);
-  border: 1px solid rgba(46, 66, 93, 0.7);
-  border-radius: 10px;
+  background: var(--sg-surface-sunken);
+  border: 1px solid var(--sg-border-muted);
+  border-radius: var(--sg-radius-control);
   padding: 10px 12px;
   color: var(--text-primary);
+}
+
+.sg-profile-field input:focus,
+.sg-profile-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(246, 255, 95, 0.14);
 }
 
 .sg-profile-field textarea {
@@ -753,29 +862,17 @@
 .sg-profile-save {
   margin-top: 4px;
   align-self: flex-start;
-  padding: 9px 14px;
-  border-radius: 10px;
-  border: none;
-  background: rgba(63, 140, 255, 0.85);
-  color: #fff;
-  font-weight: 600;
-  cursor: pointer;
+  min-height: 38px;
+  padding: 0 16px;
 }
 
 .sg-profile-error {
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(227, 91, 91, 0.12);
-  border: 1px solid rgba(227, 91, 91, 0.3);
+  background: var(--trap-bg);
+  border: 1px solid var(--trap-border);
   color: var(--trap);
-}
-
-.sg-profile-success {
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(47, 180, 122, 0.12);
-  border: 1px solid rgba(47, 180, 122, 0.3);
-  color: var(--fact);
+  font-size: 12px;
 }
 
 @media (max-width: 900px) {

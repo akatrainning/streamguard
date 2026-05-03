@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 const A    = "rgba(63,140,255,";   // accent base
 const FACT = "#2fb47a";
 const HYPE = "#d79b30";
+const HYPE_TEXT = "#111";
 const TRAP = "#e35b5b";
 
 /* -- Global CSS (animations + card interactions) -- */
@@ -228,8 +229,9 @@ export default function LiveDiscoverPage({
     ok:   { color: FACT, label: `已登录 · ${cookieStatus?.profile_size_mb || 0}MB · ${cookieStatus?.count || 0} cookies` },
     warn: { color: HYPE, label: `仅 Cookie (${cookieStatus?.count || 0} 条) · 建议重新登录` },
     none: { color: TRAP, label: "未登录 · 建议先登录以获取真实数据" },
-  };
+  }; 
   const authMeta = AUTH_META[authState];
+  const authTextColor = authState === "warn" ? HYPE_TEXT : authMeta.color;
 
   /* -- Render -- */
   return (
@@ -302,7 +304,7 @@ export default function LiveDiscoverPage({
               style={{
                 padding: "0 26px", borderRadius: 8, border: "none",
                 background: searching ? `${A}.3)` : "var(--accent)",
-                color: "#fff",
+                color: "#black", 
                 cursor: searching ? "not-allowed" : "pointer",
                 fontSize: 13, fontWeight: 700, whiteSpace: "nowrap",
                 minHeight: 40,
@@ -329,7 +331,7 @@ export default function LiveDiscoverPage({
                 display: "flex", alignItems: "center", gap: 7,
                 padding: "5px 13px", borderRadius: 20,
                 background: `${authMeta.color}15`, border: `1px solid ${authMeta.color}35`,
-                fontSize: 11, color: authMeta.color, flexShrink: 0,
+                fontSize: 11, color: authTextColor, flexShrink: 0,
               }}>
                 <span style={{
                   width: 6, height: 6, borderRadius: "50%", background: authMeta.color,
@@ -399,7 +401,7 @@ export default function LiveDiscoverPage({
               fontSize: 12, animation: "ldcFadeUp .3s ease",
             }}>
               {searchResult.data_source === "fallback_mock" ? (
-                <span style={{ color: "var(--hype)" }}>
+                <span style={{ color: HYPE_TEXT }}>
                   演示数据 — 点击上方「打开 Chrome 登录」后重新搜索可获取真实直播间
                 </span>
               ) : (
@@ -439,7 +441,7 @@ export default function LiveDiscoverPage({
                 style={{
                   padding: "9px 22px", borderRadius: 8, border: "none",
                   background: selectedIds.length >= 2 ? "var(--accent)" : `${A}.15)`,
-                  color: selectedIds.length >= 2 ? "#fff" : "rgba(255,255,255,.3)",
+                  color: selectedIds.length >= 2 ? "#black" : "rgba(255,255,255,.3)",
                   cursor: selectedIds.length >= 2 && !comparing ? "pointer" : "not-allowed",
                   fontSize: 13, fontWeight: 700,
                 }}
@@ -737,7 +739,7 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
             onClick={onEnter}
             style={{
               flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
-              background: "var(--accent)", color: "#fff",
+              background: "var(--accent)", color: "#black",
               fontSize: 12, fontWeight: 700, cursor: "pointer",
             }}
           >
@@ -775,6 +777,7 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
     SKIP: { c: TRAP, bg: "var(--trap-bg)", bd: "var(--trap-border)", t: "不建议购买"   },
   };
   const vm = VERDICT[p0?.verdict || "WAIT"] || VERDICT.WAIT;
+  const isWait = (p0?.verdict || "WAIT") === "WAIT";
   const engineLabel = engine === "llm" ? "AI 分析" : "规则引擎";
 
   const overlayRef = useRef(null);
@@ -850,17 +853,17 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
                 border: `1.5px solid ${vm.bd}`, borderRadius: 12, padding: "16px",
                 background: vm.bg, display: "flex", flexDirection: "column", gap: 10,
               }}>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>
+                <div style={{ fontSize: 10, color: isWait ? HYPE_TEXT : "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>
                   综合结论
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: vm.c, lineHeight: 1.3 }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: isWait ? HYPE_TEXT : vm.c, lineHeight: 1.3 }}>
                   {vm.t}
                 </div>
                 <div style={{
                   display: "inline-flex", alignItems: "center", gap: 5,
                   padding: "3px 11px", borderRadius: 20,
                   background: `${vm.c}18`, border: `1px solid ${vm.c}35`,
-                  fontSize: 11, color: vm.c, fontWeight: 700, width: "fit-content",
+                  fontSize: 11, color: isWait ? HYPE_TEXT : vm.c, fontWeight: 700, width: "fit-content",
                 }}>
                   置信度 {Math.round((p0.confidence || 0.5) * 100)}%
                 </div>
@@ -940,8 +943,8 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
                   border: "1px solid var(--hype-border)", borderRadius: 10,
                   padding: "12px 15px", background: "var(--hype-bg)",
                 }}>
-                  <div style={{ fontSize: 11, color: "var(--hype)", marginBottom: 7, fontWeight: 700 }}>最佳下单时机</div>
-                  <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.7 }}>{p2.buy_timing}</div>
+                  <div style={{ fontSize: 11, color: HYPE_TEXT, marginBottom: 7, fontWeight: 700 }}>最佳下单时机</div>
+                  <div style={{ fontSize: 12, color: HYPE_TEXT, lineHeight: 1.7 }}>{p2.buy_timing}</div>
                 </div>
               )}
               <BulletBox title="行动计划" items={p2.action_plan || []} accentColor={FACT} />
@@ -958,7 +961,7 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
         }}>
           <button onClick={onClose} className="ldc-btn-primary" style={{
             padding: "9px 28px", borderRadius: 8, border: "none",
-            background: "var(--accent)", color: "#fff",
+            background: "var(--accent)", color: "#black",
             cursor: "pointer", fontSize: 13, fontWeight: 700,
           }}>
             关闭

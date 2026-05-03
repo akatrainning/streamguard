@@ -978,6 +978,248 @@ def _clamp01(v: float) -> float:
     return max(0.0, min(1.0, float(v)))
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _clip_text(text: str, limit: int = 36) -> str:
+    value = (text or "").strip()
+    if len(value) <= limit:
+        return value
+    return value[: max(0, limit - 1)] + "…"
+
+
+def _collect_stream_signals(utterances: list, chats: list) -> dict:
+    utterance_total = len(utterances)
+    chat_total = len(chats)
+
+    fact_count = sum(1 for u in utterances if u.get("type") == "fact")
+    hype_count = sum(1 for u in utterances if u.get("type") == "hype")
+    trap_count = sum(1 for u in utterances if u.get("type") == "trap")
+    high_risk_count = hype_count + trap_count
+
+    evidence_hits = 0
+    for u in utterances:
+        evidence_hits += len(u.get("violations") or [])
+        if u.get("suggestion"):
+            evidence_hits += 1
+
+    avg_score = (
+        sum(_safe_float(u.get("score"), 0.0) for u in utterances) / utterance_total
+        if utterance_total
+        else 0.0
+    )
+    confidence_base = (
+        0.35
+        + min(0.30, utterance_total / 80.0 * 0.30)
+        + min(0.15, chat_total / 120.0 * 0.15)
+        + min(0.20, evidence_hits / max(1.0, utterance_total * 2.0) * 0.20)
+    )
+    evidence_confidence = round(_clamp01(confidence_base), 3)
+
+    complaint_count = sum(1 for c in chats if c.get("intent") == "complaint")
+    doubt_count = sum(1 for c in chats if c.get("intent") == "doubt")
+    purchase_count = sum(1 for c in chats if c.get("intent") == "purchase")
+    question_count = sum(1 for c in chats if c.get("intent") == "question")
+    negative_chat_count = sum(1 for c in chats if c.get("sentiment") == "neg")
+
+    risk_ratio = high_risk_count / utterance_total if utterance_total else 0.0
+    fact_ratio = fact_count / utterance_total if utterance_total else 0.0
+    complaint_ratio = complaint_count / chat_total if chat_total else 0.0
+    doubt_ratio = doubt_count / chat_total if chat_total else 0.0
+    purchase_ratio = purchase_count / chat_total if chat_total else 0.0
+
+    trust_penalty = min(0.55, risk_ratio * 0.40 + complaint_ratio * 0.25 + doubt_ratio * 0.15)
+    trust_bonus = min(0.18, fact_ratio * 0.12 + purchase_ratio * 0.06)
+    trust_score = round(_clamp01(0.52 + trust_bonus - trust_penalty + avg_score * 0.12), 3)
+
+    high_risk_samples = [
+        {
+            "text": u.get("text") or "",
+            "type": u.get("type") or "",
+            "score": round(_safe_float(u.get("score"), 0.0), 3),
+        }
+        for u in utterances
+        if u.get("type") in ("trap", "hype")
+    ][:5]
+
+    return {
+        "utterance_count": utterance_total,
+        "chat_count": chat_total,
+        "fact_count": fact_count,
+        "hype_count": hype_count,
+        "trap_count": trap_count,
+        "high_risk_count": high_risk_count,
+        "avg_score": round(avg_score, 3),
+        "evidence_hits": evidence_hits,
+        "evidence_confidence": evidence_confidence,
+        "complaint_count": complaint_count,
+        "doubt_count": doubt_count,
+        "purchase_count": purchase_count,
+        "question_count": question_count,
+        "negative_chat_count": negative_chat_count,
+        "risk_ratio": round(risk_ratio, 3),
+        "fact_ratio": round(fact_ratio, 3),
+        "complaint_ratio": round(complaint_ratio, 3),
+        "doubt_ratio": round(doubt_ratio, 3),
+        "purchase_ratio": round(purchase_ratio, 3),
+        "trust_score": trust_score,
+        "high_risk_samples": high_risk_samples,
+    }
+
+
+def _verdict_from_score(score: float) -> str:
+    if score >= 0.72:
+        return "BUY"
+    if score >= 0.48:
+        return "WAIT"
+    return "SKIP"
+
+
+def _build_dynamic_consumer_p0(best_name: str, overall_score: float, signals: dict, keyword: str = "") -> dict:
+    verdict = _verdict_from_score(overall_score)
+    confidence = round(_clamp01(overall_score * 0.55 + signals["evidence_confidence"] * 0.45), 3)
+
+    why_buy = []
+    if best_name:
+        why_buy.append(f"{best_name} 当前综合得分最高。")
+    if signals["fact_count"] > 0:
+        why_buy.append(f"本场已识别 {signals['fact_count']} 条偏事实表达，可核验信息相对更多。")
+    if signals["purchase_count"] > 0:
+        why_buy.append(f"弹幕中有 {signals['purchase_count']} 条购买意向，说明成交兴趣存在。")
+    if signals["question_count"] > 0:
+        why_buy.append(f"用户正在追问 {signals['question_count']} 个问题，适合继续核验证据后再决策。")
+    if not why_buy:
+        why_buy.append("当前有一定可比较信息，但证据量仍有限。")
+
+    why_not_buy = []
+    if signals["high_risk_count"] > 0:
+        why_not_buy.append(f"监测到 {signals['high_risk_count']} 条风险话术，需警惕夸大或压迫式表达。")
+    if signals["complaint_count"] > 0:
+        why_not_buy.append(f"弹幕里出现 {signals['complaint_count']} 条客诉/退款相关信号。")
+    if signals["doubt_count"] > 0:
+        why_not_buy.append(f"弹幕里有 {signals['doubt_count']} 条质疑内容，说明信任度还不稳。")
+    if signals["evidence_confidence"] < 0.55:
+        why_not_buy.append("当前样本量偏少，结论可信度还不足以支持直接下单。")
+    if not why_not_buy:
+        why_not_buy.append("暂未看到明显负反馈，但仍需核验价格、规格和售后。")
+
+    must_verify = []
+    if keyword:
+        must_verify.append(f"{keyword} 对应的检测报告或授权凭证")
+    must_verify.extend(["最终到手价", "退换货政策", "套餐规格换算"])
+    if signals["complaint_count"] > 0:
+        must_verify.append("历史投诉点是否已被主播正面回应")
+
+    if verdict == "BUY":
+        consumer_summary = "当前证据偏正向，可以继续核验关键凭证；核验通过后再下单更稳。"
+    elif verdict == "WAIT":
+        consumer_summary = "直播间信息还不够扎实，先观望并补齐证据，比直接跟单更安全。"
+    else:
+        consumer_summary = "当前风险信号偏多，不建议仅凭直播间话术做购买决定。"
+
+    return {
+        "verdict": verdict,
+        "confidence": confidence,
+        "why_buy": why_buy[:4],
+        "why_not_buy": why_not_buy[:4],
+        "must_verify": must_verify[:5],
+        "consumer_summary": consumer_summary,
+    }
+
+
+def _build_session_summary_response(utterances: list, chats: list, duration_seconds: int = 0, room_id: str = "") -> dict:
+    signals = _collect_stream_signals(utterances, chats)
+    verdict = _verdict_from_score(signals["trust_score"])
+
+    if verdict == "BUY":
+        ai_summary = (
+            f"本场监测共采集 {signals['utterance_count']} 条话术、{signals['chat_count']} 条弹幕，"
+            f"事实表达占比相对更高，整体信任度约为 {round(signals['trust_score'] * 100)}%。"
+        )
+    elif verdict == "WAIT":
+        ai_summary = (
+            f"本场证据量为 {signals['utterance_count']} 条话术、{signals['chat_count']} 条弹幕，"
+            f"风险与可核验信息并存，当前更适合继续观察。"
+        )
+    else:
+        ai_summary = (
+            f"本场监测中风险话术共 {signals['high_risk_count']} 条，"
+            f"负向弹幕与质疑信号偏多，整体需提高警惕。"
+        )
+
+    ai_advice = []
+    ai_advice.append({
+        "level": "info",
+        "title": "证据概览",
+        "body": (
+            f"本次会话累计 {signals['utterance_count']} 条话术、{signals['chat_count']} 条弹幕，"
+            f"其中 FACT {signals['fact_count']} 条，HYPE {signals['hype_count']} 条，TRAP {signals['trap_count']} 条。"
+        ),
+    })
+
+    if signals["high_risk_count"] > 0:
+        sample = _clip_text(signals["high_risk_samples"][0]["text"]) if signals["high_risk_samples"] else "风险话术"
+        ai_advice.append({
+            "level": "high" if signals["high_risk_count"] >= 4 else "medium",
+            "title": "风险话术回放",
+            "body": f"检测到 {signals['high_risk_count']} 条高风险表达，例如“{sample}”，建议优先复核原始录屏和截图证据。",
+        })
+
+    if signals["complaint_count"] > 0 or signals["doubt_count"] > 0:
+        ai_advice.append({
+            "level": "medium",
+            "title": "用户反馈信号",
+            "body": (
+                f"弹幕中有 {signals['complaint_count']} 条客诉、{signals['doubt_count']} 条质疑，"
+                "应核对主播是否正面回应了价格、真伪、售后等问题。"
+            ),
+        })
+
+    if signals["evidence_confidence"] < 0.55:
+        ai_advice.append({
+            "level": "info",
+            "title": "样本量提醒",
+            "body": "当前样本量或证据密度偏低，这份摘要更适合做预警，不适合作为最终定论。",
+        })
+    else:
+        ai_advice.append({
+            "level": "low",
+            "title": "结论可信度",
+            "body": f"当前摘要置信度约为 {round(signals['evidence_confidence'] * 100)}%，已具备一定参考价值，但仍建议保留原始证据。",
+        })
+
+    if duration_seconds > 0:
+        ai_advice.append({
+            "level": "info",
+            "title": "会话时长",
+            "body": f"本次监测时长约 {duration_seconds} 秒{f'，直播间 {room_id}' if room_id else ''}，建议结合时序回看风险是否集中爆发。",
+        })
+
+    return {
+        "summary": ai_summary,
+        "ai_summary": ai_summary,
+        "ai_advice": ai_advice[:5],
+        "utterance_count": signals["utterance_count"],
+        "chat_count": signals["chat_count"],
+        "high_risk_count": signals["high_risk_count"],
+        "average_score": signals["avg_score"],
+        "high_risk_samples": signals["high_risk_samples"],
+        "confidence": signals["evidence_confidence"],
+        "signal_stats": signals,
+    }
+
+
 # ============= Chat Semantic Analysis =============
 
 _CHAT_POS = ["好用", "喜欢", "买了", "下单", "真香", "赞", "不错", "推荐", "支持", "期待", "满意", "值得", "棒", "厉害", "冲", "必买"]
@@ -2344,21 +2586,31 @@ async def compare_streams(request: CompareStreamsRequest):
 
     utterances = stream_ctx.get("utterances", [])
     chats = stream_ctx.get("chats", [])
-    evidence_stats = {"utterance_count": len(utterances), "chat_count": len(chats)}
+    signals = _collect_stream_signals(utterances, chats)
+    evidence_stats = {
+        "utterance_count": signals["utterance_count"],
+        "chat_count": signals["chat_count"],
+        "high_risk_count": signals["high_risk_count"],
+        "confidence": signals["evidence_confidence"],
+    }
 
     dimensions = ["价格", "品质", "信任度", "物流", "性价比"]
     products = []
-    for room in rooms:
-        base = float(room.recommendation_score or 0.5)
-        complaint_penalty = min(0.25, sum(1 for c in chats if c.get("intent") == "complaint") * 0.03)
-        hype_penalty = min(0.20, sum(1 for u in utterances if u.get("type") in ("trap", "hype")) * 0.02)
-        trust = _clamp01(base - complaint_penalty - hype_penalty)
+    room_count = max(1, len(rooms))
+    for idx, room in enumerate(rooms):
+        base = _safe_float(room.recommendation_score, 0.5)
+        room_position_bonus = max(0.0, (room_count - idx - 1) * 0.015)
+        price_score = _clamp01(base + 0.02 + room_position_bonus - signals["risk_ratio"] * 0.06)
+        quality_score = _clamp01(base + 0.04 + signals["fact_ratio"] * 0.12 - signals["complaint_ratio"] * 0.05)
+        trust = _clamp01(base + signals["fact_ratio"] * 0.18 - signals["risk_ratio"] * 0.24 - signals["complaint_ratio"] * 0.18 - signals["doubt_ratio"] * 0.10)
+        logistics = _clamp01(base - signals["complaint_ratio"] * 0.08 + signals["purchase_ratio"] * 0.04)
+        value_score = _clamp01((price_score + quality_score + trust) / 3.0)
         scores = {
-            "价格": round(_clamp01(base + 0.03), 2),
-            "品质": round(_clamp01(base + 0.05), 2),
+            "价格": round(price_score, 2),
+            "品质": round(quality_score, 2),
             "信任度": round(trust, 2),
-            "物流": round(_clamp01(base), 2),
-            "性价比": round(_clamp01((base + trust) / 2), 2),
+            "物流": round(logistics, 2),
+            "性价比": round(value_score, 2),
         }
         overall = round(sum(scores.values()) / len(scores), 2)
         products.append({
@@ -2371,29 +2623,19 @@ async def compare_streams(request: CompareStreamsRequest):
     products.sort(key=lambda item: item["overall"], reverse=True)
     ranked = [p["name"] for p in products]
     best = products[0]
-
-    verdict = "BUY" if best["overall"] >= 0.75 else "WAIT" if best["overall"] >= 0.55 else "SKIP"
+    p0 = _build_dynamic_consumer_p0(best["name"], best["overall"], signals, keyword)
     return {
         "keyword": keyword,
-        "engine": "rules-streamguard",
+        "engine": "dynamic-streamguard",
         "evidence_stats": evidence_stats,
-        "p0": {
-            "verdict": verdict,
-            "confidence": best["overall"],
-            "why_buy": [
-                f"{best['name']} 综合评分最高。",
-                "优先选择有明确成分、检测报告和售后政策的直播间。",
-                "结合当前监测证据，风险话术越少越适合继续咨询。",
-            ],
-            "why_not_buy": [
-                "下单前请确认价格、规格、发货时效和退换货条件。",
-                "若主播持续使用极限词或倒计时压迫，应降低信任度。",
-            ],
-        },
+        "p0": p0,
         "p1": {
             "compare_dimensions": dimensions,
             "products": products,
             "ranked": ranked,
+            "analysis_notes": [
+                f"评分已结合 {signals['high_risk_count']} 条风险话术、{signals['complaint_count']} 条客诉和 {signals['fact_count']} 条事实表达动态计算。",
+            ],
         },
         "p2": {
             "ask_anchor_questions": [
@@ -2401,9 +2643,22 @@ async def compare_streams(request: CompareStreamsRequest):
                 "具体规格、生产日期和保质期是什么？",
                 "退换货和售后政策如何执行？",
             ],
-            "alternatives": ["查看品牌官方店", "对比同类商品历史价格"],
-            "buy_timing": "证据充分、价格透明且售后明确时再下单。",
-            "action_plan": ["先问关键凭证", "截图保存承诺", "对比最终到手价"],
+            "alternatives": [
+                "查看品牌官方店",
+                "对比同类商品历史价格",
+                "回看高风险话术片段再决定",
+            ],
+            "buy_timing": (
+                "当授权、检测、价格和售后都能被主播明确回答时再下单；"
+                if p0["verdict"] != "SKIP"
+                else "当前不建议因为直播间气氛或倒计时而立即下单。"
+            ),
+            "action_plan": [
+                "先问关键凭证",
+                "截图保存承诺",
+                "对比最终到手价",
+                "复核弹幕质疑点",
+            ],
         },
     }
 
@@ -2464,21 +2719,27 @@ async def consumer_full_suite(payload: dict):
 
     utterances = stream_ctx.get("utterances", [])
     chats = stream_ctx.get("chats", [])
-    evidence_stats = {"utterance_count": len(utterances), "chat_count": len(chats)}
-    risk_count = sum(1 for u in utterances if u.get("type") in ("trap", "hype"))
-    complaint_count = sum(1 for c in chats if c.get("intent") in ("complaint", "doubt"))
+    signals = _collect_stream_signals(utterances, chats)
+    evidence_stats = {
+        "utterance_count": signals["utterance_count"],
+        "chat_count": signals["chat_count"],
+        "high_risk_count": signals["high_risk_count"],
+        "confidence": signals["evidence_confidence"],
+    }
 
     dims = ["价格透明度", "质量证据", "售后保障", "话术可信度", "弹幕口碑"]
     scored = []
     for idx, product in enumerate(products_in):
-        base = 0.78 - idx * 0.04
-        risk_penalty = min(0.25, risk_count * 0.025 + complaint_count * 0.02)
+        base = 0.76 - idx * 0.035
+        profile_bonus = 0.03 if user_profile.get("budget") else 0.0
+        need_bonus = 0.03 if user_profile.get("core_need") else 0.0
+        risk_penalty = min(0.30, signals["risk_ratio"] * 0.28 + signals["complaint_ratio"] * 0.20 + signals["doubt_ratio"] * 0.10)
         scores = {
-            "价格透明度": round(_clamp01(base), 2),
-            "质量证据": round(_clamp01(base - 0.03), 2),
-            "售后保障": round(_clamp01(base - 0.02), 2),
-            "话术可信度": round(_clamp01(base - risk_penalty), 2),
-            "弹幕口碑": round(_clamp01(base - complaint_count * 0.03), 2),
+            "价格透明度": round(_clamp01(base + profile_bonus - signals["risk_ratio"] * 0.08), 2),
+            "质量证据": round(_clamp01(base + signals["fact_ratio"] * 0.18 - 0.03), 2),
+            "售后保障": round(_clamp01(base - signals["complaint_ratio"] * 0.12 - 0.02), 2),
+            "话术可信度": round(_clamp01(base + need_bonus - risk_penalty), 2),
+            "弹幕口碑": round(_clamp01(base + signals["purchase_ratio"] * 0.10 - signals["complaint_ratio"] * 0.18 - signals["doubt_ratio"] * 0.08), 2),
         }
         scored.append({
             "name": product.get("name") or f"候选商品 {idx + 1}",
@@ -2488,39 +2749,33 @@ async def consumer_full_suite(payload: dict):
 
     scored.sort(key=lambda item: item["overall"], reverse=True)
     best = scored[0]
-    verdict = "BUY" if best["overall"] >= 0.76 and risk_count <= 2 else "WAIT" if best["overall"] >= 0.55 else "SKIP"
-
     budget = user_profile.get("budget") or "未填写"
     core_need = user_profile.get("core_need") or "未填写"
     risk_replay = [
-        {"text": u.get("text", ""), "type": u.get("type", ""), "score": u.get("score", 0)}
+        {
+            "title": f"{(u.get('type') or 'risk').upper()} 风险片段",
+            "detail": f"{_clip_text(u.get('text', ''), 80)}（风险分 {round(_safe_float(u.get('score'), 0.0) * 100)}%）",
+            "text": u.get("text", ""),
+            "type": u.get("type", ""),
+            "score": u.get("score", 0),
+        }
         for u in utterances
         if u.get("type") in ("trap", "hype")
     ][:5]
+    p0 = _build_dynamic_consumer_p0(best["name"], best["overall"], signals, product_query)
+    p0["why_buy"].insert(1, f"预算：{budget}；核心需求：{core_need}。")
 
     return {
-        "engine": "rules-streamguard",
+        "engine": "dynamic-streamguard",
         "evidence_stats": evidence_stats,
-        "p0": {
-            "verdict": verdict,
-            "confidence": best["overall"],
-            "why_buy": [
-                f"当前最优候选是 {best['name']}。",
-                f"预算：{budget}；核心需求：{core_need}。",
-                "优先考虑证据充分、售后清晰、话术稳健的商品。",
-            ],
-            "why_not_buy": [
-                "若直播间持续使用极限词、倒计时压迫或无法提供凭证，建议暂缓。",
-                "不同规格组合需换算到单价后再比较。",
-            ],
-            "must_verify": ["检测报告", "授权凭证", "退换货政策", "最终到手价"],
-            "consumer_summary": "先核验证据，再比较价格和售后。不要只被直播间折扣或倒计时驱动。",
-        },
+        "p0": p0,
         "p1": {
             "compare_dimensions": dims,
             "products": scored,
             "ranked": [item["name"] for item in scored],
-            "analysis_notes": ["评分为规则生成的本地估算，可作为决策前筛选参考。"],
+            "analysis_notes": [
+                f"评分已结合直播风险比例 {round(signals['risk_ratio'] * 100)}%、客诉比例 {round(signals['complaint_ratio'] * 100)}% 和事实表达比例 {round(signals['fact_ratio'] * 100)}% 动态生成。",
+            ],
         },
         "p2": {
             "ask_anchor_questions": [
@@ -2529,8 +2784,12 @@ async def consumer_full_suite(payload: dict):
                 "不同套餐的单件价格分别是多少？",
             ],
             "alternatives": ["品牌官方店", "同类高评价商品", "历史价格更稳定的渠道"],
-            "buy_timing": "当凭证、价格和售后都明确时再下单；信息不完整时先等待。",
-            "action_plan": ["截图保存关键承诺", "核验官方凭证", "比较单价", "确认售后"],
+            "buy_timing": (
+                "当凭证、价格和售后都明确时再下单；信息不完整时先等待。"
+                if p0["verdict"] != "SKIP"
+                else "当前风险偏高，优先转向更透明的渠道，不建议继续被直播节奏推动。"
+            ),
+            "action_plan": ["截图保存关键承诺", "核验官方凭证", "比较单价", "确认售后", "回看风险片段"],
             "risk_replay": risk_replay,
         },
     }
@@ -2540,19 +2799,10 @@ async def consumer_full_suite(payload: dict):
 async def session_summary(payload: dict):
     """Summarize a monitoring session for the history/report modal."""
     utterances = payload.get("utterances") or []
-    chats = payload.get("chats") or []
-    high_risk = [u for u in utterances if u.get("type") in ("trap", "hype")]
-    avg_score = 0.0
-    if utterances:
-        avg_score = sum(float(u.get("score") or 0) for u in utterances) / len(utterances)
-    return {
-        "summary": "本次会话已生成基础合规摘要。",
-        "utterance_count": len(utterances),
-        "chat_count": len(chats),
-        "high_risk_count": len(high_risk),
-        "average_score": round(avg_score, 3),
-        "high_risk_samples": high_risk[:5],
-    }
+    chats = payload.get("chats") or payload.get("chatMessages") or []
+    duration_seconds = _safe_int(payload.get("durationSeconds"), 0)
+    room_id = (payload.get("roomId") or "").strip()
+    return _build_session_summary_response(utterances, chats, duration_seconds, room_id)
 
 @app.get("/health")
 async def health():
