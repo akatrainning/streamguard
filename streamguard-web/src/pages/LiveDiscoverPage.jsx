@@ -1,6 +1,148 @@
 import { useMemo, useState } from "react";
 import { Button, Panel, StatusBadge, TextField } from "../components/ui";
 
+function GuideIcon({ name }) {
+  const common = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+  };
+
+  if (name === "search") {
+    return (
+      <svg {...common}>
+        <path
+          d="M10.5 18.5a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+        <path
+          d="M16.2 16.2 21 21"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "login") {
+    return (
+      <svg {...common}>
+        <path
+          d="M12 12a4.3 4.3 0 1 0-4.3-4.3A4.3 4.3 0 0 0 12 12Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+        <path
+          d="M4.5 21a7.5 7.5 0 0 1 15 0"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M20.2 7.4h-3.2"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M18.6 5.8v3.2"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "compare") {
+    return (
+      <svg {...common}>
+        <path
+          d="M7 20V10"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M12 20V4"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M17 20v-7"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M5 10h4"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M10 4h4"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M15 13h4"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "monitor") {
+    return (
+      <svg {...common}>
+        <path
+          d="M4.5 6.8A2.3 2.3 0 0 1 6.8 4.5h10.4a2.3 2.3 0 0 1 2.3 2.3v6.9a2.3 2.3 0 0 1-2.3 2.3H6.8a2.3 2.3 0 0 1-2.3-2.3V6.8Z"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        />
+        <path
+          d="M9 19.5h6"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M10.3 11.5 12 9l1.2 1.6 2.5-3"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path
+        d="M4.5 7A2.5 2.5 0 0 1 7 4.5h10A2.5 2.5 0 0 1 19.5 7v10A2.5 2.5 0 0 1 17 19.5H7A2.5 2.5 0 0 1 4.5 17V7Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M8 12h8"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export default function LiveDiscoverPage({
   apiBase = "http://localhost:8012",
   onConnectRoom,
@@ -160,9 +302,62 @@ export default function LiveDiscoverPage({
         </Panel>
       )}
 
-      {!searching && rooms.length === 0 && (
-        <Panel className="sg-discover-empty" title="还没有搜索结果" eyebrow="EMPTY">
-          <p>先输入一个关键词，系统会尝试找出相关直播间。</p>
+      {!searching && rooms.length === 0 && query.trim().length === 0 && (
+        <Panel className="sg-discover-guide" title="如何使用直播发现" eyebrow="GUIDE">
+          <div className="sg-discover-guide-howto">
+            <div className="sg-discover-guide-howto-title">使用流程</div>
+
+            <div className="sg-discover-guide-steps" role="list" aria-label="直播发现使用步骤">
+              <div className="sg-discover-guide-step is-1" role="listitem">
+                <div className="sg-discover-guide-badge">
+                  <span className="sg-discover-guide-badge-icon" aria-hidden="true"><GuideIcon name="login" /></span>
+                  <span className="sg-discover-guide-badge-num">1</span>
+                </div>
+                <div className="sg-discover-guide-step-title">登录账号</div>
+                <div className="sg-discover-guide-step-desc">授权抖音账号，解锁直播数据</div>
+              </div>
+
+              <div className="sg-discover-guide-step is-2" role="listitem">
+                <div className="sg-discover-guide-badge">
+                  <span className="sg-discover-guide-badge-icon" aria-hidden="true"><GuideIcon name="search" /></span>
+                  <span className="sg-discover-guide-badge-num">2</span>
+                </div>
+                <div className="sg-discover-guide-step-title">搜索关键词</div>
+                <div className="sg-discover-guide-step-desc">输入商品名称，Chrome 实时抓取</div>
+              </div>
+
+              <div className="sg-discover-guide-step is-3" role="listitem">
+                <div className="sg-discover-guide-badge">
+                  <span className="sg-discover-guide-badge-icon" aria-hidden="true"><GuideIcon name="compare" /></span>
+                  <span className="sg-discover-guide-badge-num">3</span>
+                </div>
+                <div className="sg-discover-guide-step-title">AI 对比分析</div>
+                <div className="sg-discover-guide-step-desc">勾选 2+ 直播间，获取综合报告</div>
+              </div>
+
+              <div className="sg-discover-guide-step is-4" role="listitem">
+                <div className="sg-discover-guide-badge">
+                  <span className="sg-discover-guide-badge-icon" aria-hidden="true"><GuideIcon name="monitor" /></span>
+                  <span className="sg-discover-guide-badge-num">4</span>
+                </div>
+                <div className="sg-discover-guide-step-title">进入监测</div>
+                <div className="sg-discover-guide-step-desc">一键切换至实时话术监控</div>
+              </div>
+            </div>
+
+            <div className="sg-discover-guide-features" aria-label="能力标签">
+              <span className="sg-discover-guide-chip">Chrome 真实抓取</span>
+              <span className="sg-discover-guide-chip">AI 多维对比评分</span>
+              <span className="sg-discover-guide-chip">实时话术风险识别</span>
+              <span className="sg-discover-guide-chip">历史会话回放</span>
+            </div>
+          </div>
+        </Panel>
+      )}
+
+      {!searching && rooms.length === 0 && query.trim().length > 0 && (
+        <Panel className="sg-discover-empty" title="没有找到匹配结果" eyebrow="EMPTY">
+          <p>换个关键词试试，例如补充品牌名、品类或功能词。</p>
         </Panel>
       )}
     </main>
