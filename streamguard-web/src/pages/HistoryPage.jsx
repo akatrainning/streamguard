@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -12,22 +12,22 @@ import { Button, Panel, SegmentedControl, StatusBadge, TextField } from "../comp
 import SessionReportModal from "../components/SessionReportModal";
 
 const DEMO_SESSIONS = [
-  { id: "demo-1", date: "2026-03-02 14:30", product: "雅诗兰黛修护精华", brand: "直播间 888888", duration: "2h 15m", total: 42, fact: 19, hype: 15, trap: 8, score: 64, viewers: 28500, _demo: true },
-  { id: "demo-2", date: "2026-03-01 20:15", product: "Mate70 Pro 专场", brand: "直播间 66666", duration: "3h 00m", total: 67, fact: 45, hype: 18, trap: 4, score: 82, viewers: 89000, _demo: true },
-  { id: "demo-3", date: "2026-03-01 10:30", product: "黄金投资咨询", brand: "直播间 12345", duration: "45m", total: 19, fact: 3, hype: 8, trap: 8, score: 22, viewers: 3200, _demo: true },
+  { id: "demo-1", date: "2026-03-02 14:30", product: "闆呰瘲鍏伴粵淇姢绮惧崕", brand: "鐩存挱闂?888888", duration: "2h 15m", total: 42, fact: 19, hype: 15, trap: 8, score: 64, viewers: 28500, _demo: true },
+  { id: "demo-2", date: "2026-03-01 20:15", product: "Mate70 Pro 涓撳満", brand: "鐩存挱闂?66666", duration: "3h 00m", total: 67, fact: 45, hype: 18, trap: 4, score: 82, viewers: 89000, _demo: true },
+  { id: "demo-3", date: "2026-03-01 10:30", product: "榛勯噾鎶曡祫鍜ㄨ", brand: "鐩存挱闂?12345", duration: "45m", total: 19, fact: 3, hype: 8, trap: 8, score: 22, viewers: 3200, _demo: true },
 ];
 
 const FILTERS = [
-  { value: "all", label: "全部", meta: "All" },
-  { value: "high", label: "高危", meta: "Risk" },
-  { value: "ok", label: "合规", meta: "Safe" },
+  { value: "all", label: "鍏ㄩ儴", meta: "All" },
+  { value: "high", label: "楂樺嵄", meta: "Risk" },
+  { value: "ok", label: "鍚堣", meta: "Safe" },
 ];
 
 const scoreTone = (score) => (score >= 75 ? "success" : score >= 50 ? "warning" : "danger");
-const scoreLabel = (score) => (score >= 75 ? "合规" : score >= 50 ? "注意" : "高危");
+const scoreLabel = (score) => (score >= 75 ? "鍚堣" : score >= 50 ? "娉ㄦ剰" : "楂樺嵄");
 const scoreColor = (score) => (score >= 75 ? "var(--fact)" : score >= 50 ? "var(--hype)" : "var(--trap)");
 
-export default function HistoryPage({ apiBase = "http://localhost:8011", token }) {
+export default function HistoryPage({ apiBase = "http://localhost:8012", token }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,7 +45,7 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
       const payload = await listHistorySessions(apiBase, token, 100);
       setSessions(payload.items || []);
     } catch (err) {
-      setError(err?.message || "历史记录加载失败");
+      setError(err?.message || "鍘嗗彶璁板綍鍔犺浇澶辫触");
       setSessions([]);
     } finally {
       setLoading(false);
@@ -62,7 +62,7 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
       await deleteHistorySession(apiBase, token, id);
       await reload();
     } catch (err) {
-      setError(err?.message || "删除失败");
+      setError(err?.message || "鍒犻櫎澶辫触");
     }
   }, [apiBase, token, reload]);
 
@@ -80,9 +80,9 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
     try {
       const payload = await getHistorySession(apiBase, token, id);
       if (payload.snapshot) setReplaySnapshot(payload.snapshot);
-      else setError("该记录没有完整报告数据");
+      else setError("这条记录没有完整报告数据");
     } catch (err) {
-      setError(err?.message || "报告加载失败");
+      setError(err?.message || "鎶ュ憡鍔犺浇澶辫触");
     }
   }, [apiBase, token]);
 
@@ -92,7 +92,7 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
       await reload();
       setShowClearConfirm(false);
     } catch (err) {
-      setError(err?.message || "清空失败");
+      setError(err?.message || "娓呯┖澶辫触");
     }
   }, [apiBase, token, reload]);
 
@@ -110,13 +110,13 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
         <header className="sg-history-head">
           <div>
             <div className="sg-ui-eyebrow">Archive</div>
-            <h1>历史档案</h1>
+            <h1>鍘嗗彶妗ｆ</h1>
             <p>
               {loading
-                ? "正在加载账号历史。"
+                ? "姝ｅ湪鍔犺浇璐﹀彿鍘嗗彶銆?
                 : isDemo
-                  ? "当前展示示例档案。结束真实直播会话后，报告会自动沉淀到这里。"
-                  : `共 ${sessions.length} 场直播记录。`}
+                  ? "褰撳墠灞曠ず绀轰緥妗ｆ銆傜粨鏉熺湡瀹炵洿鎾細璇濆悗锛屾姤鍛婁細鑷姩娌夋穩鍒拌繖閲屻€?
+                  : `鍏?${sessions.length} 鍦虹洿鎾褰曘€俙}
             </p>
           </div>
 
@@ -124,12 +124,12 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
             <div className="sg-history-clear">
               {showClearConfirm ? (
                 <>
-                  <span>确认清空所有记录？</span>
-                  <Button variant="danger" onClick={handleClearAll}>确认清空</Button>
-                  <Button onClick={() => setShowClearConfirm(false)}>取消</Button>
+                  <span>纭娓呯┖鎵€鏈夎褰曪紵</span>
+                  <Button variant="danger" onClick={handleClearAll}>纭娓呯┖</Button>
+                  <Button onClick={() => setShowClearConfirm(false)}>鍙栨秷</Button>
                 </>
               ) : (
-                <Button variant="danger" onClick={() => setShowClearConfirm(true)}>清空历史</Button>
+                <Button variant="danger" onClick={() => setShowClearConfirm(true)}>娓呯┖鍘嗗彶</Button>
               )}
             </div>
           )}
@@ -141,7 +141,7 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
           <TextField
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="搜索名称 / 房间号"
+            placeholder="鎼滅储鍚嶇О / 鎴块棿鍙?
           />
           <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
         </Panel>
@@ -163,8 +163,7 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
 
         {filtered.length === 0 && (
           <Panel className="sg-history-empty">
-            未找到匹配记录。
-          </Panel>
+            鏈壘鍒板尮閰嶈褰曘€?          </Panel>
         )}
       </main>
 
@@ -183,9 +182,9 @@ function HistoryRow({ session, index, isOpen, onToggle, onDelete, onRename, onRe
   const isReal = !session._demo;
   const tone = scoreTone(session.score);
   const barData = [
-    { name: "事实", value: session.fact, color: "var(--fact)" },
-    { name: "夸大", value: session.hype, color: "var(--hype)" },
-    { name: "陷阱", value: session.trap, color: "var(--trap)" },
+    { name: "浜嬪疄", value: session.fact, color: "var(--fact)" },
+    { name: "澶稿ぇ", value: session.hype, color: "var(--hype)" },
+    { name: "闄烽槺", value: session.trap, color: "var(--trap)" },
   ];
 
   return (
@@ -207,26 +206,26 @@ function HistoryRow({ session, index, isOpen, onToggle, onDelete, onRename, onRe
               ? <EditableTitle value={session.product} sessionId={session.id} onRename={onRename} />
               : <strong>{session.product}</strong>}
             <span>{session.brand}</span>
-            {session._demo && <StatusBadge tone="warning">示例</StatusBadge>}
+            {session._demo && <StatusBadge tone="warning">绀轰緥</StatusBadge>}
           </div>
           <div className="sg-history-meta">
             <span>{session.date}</span>
             <span>{session.duration}</span>
-            {session.viewers > 0 && <span>{session.viewers.toLocaleString()} 观众</span>}
-            <span>{session.total} 话术</span>
+            {session.viewers > 0 && <span>{session.viewers.toLocaleString()} 瑙備紬</span>}
+            <span>{session.total} 璇濇湳</span>
           </div>
         </div>
 
         <div className="sg-history-pills">
-          <TypePill count={session.fact} tone="success" label="事实" />
-          <TypePill count={session.hype} tone="warning" label="夸大" />
-          <TypePill count={session.trap} tone="danger" label="陷阱" />
+          <TypePill count={session.fact} tone="success" label="浜嬪疄" />
+          <TypePill count={session.hype} tone="warning" label="澶稿ぇ" />
+          <TypePill count={session.trap} tone="danger" label="闄烽槺" />
         </div>
 
         {isReal && (
           <div className="sg-history-actions">
-            <Button onClick={(event) => onReplay(session.id, event)} variant="primary">报告</Button>
-            <Button onClick={(event) => onDelete(session.id, event)} variant="danger">删除</Button>
+            <Button onClick={(event) => onReplay(session.id, event)} variant="primary">鎶ュ憡</Button>
+            <Button onClick={(event) => onDelete(session.id, event)} variant="danger">鍒犻櫎</Button>
           </div>
         )}
       </button>
@@ -241,7 +240,7 @@ function HistoryRow({ session, index, isOpen, onToggle, onDelete, onRename, onRe
             className="sg-history-detail-wrap"
           >
             <div className="sg-history-detail">
-              <Panel title="话术类型分布" bodyClassName="sg-chart-panel">
+              <Panel title="璇濇湳绫诲瀷鍒嗗竷" bodyClassName="sg-chart-panel">
                 <ResponsiveContainer width="100%" height={150}>
                   <BarChart data={barData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                     <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -254,14 +253,14 @@ function HistoryRow({ session, index, isOpen, onToggle, onDelete, onRename, onRe
                 </ResponsiveContainer>
               </Panel>
 
-              <Panel title="会话统计">
-                <StatRow label="陷阱话术占比" value={session.total ? `${((session.trap / session.total) * 100).toFixed(1)}%` : "--"} tone="danger" />
-                <StatRow label="夸大话术占比" value={session.total ? `${((session.hype / session.total) * 100).toFixed(1)}%` : "--"} tone="warning" />
-                <StatRow label="事实话术占比" value={session.total ? `${((session.fact / session.total) * 100).toFixed(1)}%` : "--"} tone="success" />
-                <StatRow label="观看人数" value={session.viewers?.toLocaleString?.() || 0} />
-                <StatRow label="合规评分" value={`${session.score}/100`} tone={tone} />
-                <StatRow label="时长" value={session.duration} />
-                {isReal && <Button className="sg-history-report-wide" onClick={(event) => onReplay(session.id, event)} variant="primary">查看完整报告</Button>}
+              <Panel title="浼氳瘽缁熻">
+                <StatRow label="闄烽槺璇濇湳鍗犳瘮" value={session.total ? `${((session.trap / session.total) * 100).toFixed(1)}%` : "--"} tone="danger" />
+                <StatRow label="澶稿ぇ璇濇湳鍗犳瘮" value={session.total ? `${((session.hype / session.total) * 100).toFixed(1)}%` : "--"} tone="warning" />
+                <StatRow label="浜嬪疄璇濇湳鍗犳瘮" value={session.total ? `${((session.fact / session.total) * 100).toFixed(1)}%` : "--"} tone="success" />
+                <StatRow label="瑙傜湅浜烘暟" value={session.viewers?.toLocaleString?.() || 0} />
+                <StatRow label="鍚堣璇勫垎" value={`${session.score}/100`} tone={tone} />
+                <StatRow label="鏃堕暱" value={session.duration} />
+                {isReal && <Button className="sg-history-report-wide" onClick={(event) => onReplay(session.id, event)} variant="primary">鏌ョ湅瀹屾暣鎶ュ憡</Button>}
               </Panel>
             </div>
           </motion.div>
@@ -300,7 +299,7 @@ function EditableTitle({ value, sessionId, onRename }) {
 
   return (
     <strong
-      title="点击编辑名称"
+      title="鐐瑰嚮缂栬緫鍚嶇О"
       onClick={(event) => {
         event.stopPropagation();
         setDraft(value);
@@ -329,3 +328,4 @@ function StatRow({ label, value, tone = "neutral" }) {
     </div>
   );
 }
+

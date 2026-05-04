@@ -1,7 +1,16 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
-$Port = 8011
+$Port = 8012
 $BackendDir = Join-Path $PSScriptRoot "streamguard-backend"
+
+$utf8 = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+$env:NO_PROXY = if ($env:NO_PROXY) { "$($env:NO_PROXY),localhost,127.0.0.1,::1" } else { "localhost,127.0.0.1,::1" }
+$env:no_proxy = if ($env:no_proxy) { "$($env:no_proxy),localhost,127.0.0.1,::1" } else { "localhost,127.0.0.1,::1" }
 
 Write-Host "Starting StreamGuard backend on http://localhost:$Port" -ForegroundColor Cyan
 
@@ -23,3 +32,4 @@ if (-not (Test-Path ".env") -and (Test-Path ".env.example")) {
 }
 
 python -m uvicorn app:app --reload --host 0.0.0.0 --port $Port
+

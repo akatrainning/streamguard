@@ -34,5 +34,59 @@
     "stance": "risk_supporting",
     "score": 0.92,
     "related_claim_types": ["price_claim"]
+  },
+  {
+    "evidence_id": "rule_efficacy_001",
+    "source": "evidence_db",
+    "title": "功效宣称证据要求",
+    "content": "涉及祛斑、祛痘、抗衰、治疗、速效等功效承诺时，应提供检测报告、临床研究或备案允许的功效依据。",
+    "stance": "risk_supporting",
+    "score": 0.9,
+    "related_claim_types": ["efficacy_claim"]
+  },
+  {
+    "evidence_id": "rule_authority_001",
+    "source": "evidence_db",
+    "title": "权威背书证明材料",
+    "content": "专家推荐、医生推荐、官方认证、专利背书等表述，需要可核验机构名称、证书编号、授权文件或专利信息。",
+    "stance": "risk_supporting",
+    "score": 0.89,
+    "related_claim_types": ["authority_claim"]
+  },
+  {
+    "evidence_id": "rule_quality_001",
+    "source": "evidence_db",
+    "title": "品质与成分证明",
+    "content": "纯天然、无添加、进口原料、高品质、安全无刺激等品质表述，应与配方表、检测报告或质量资质保持一致。",
+    "stance": "risk_supporting",
+    "score": 0.87,
+    "related_claim_types": ["quality_claim"]
+  },
+  {
+    "evidence_id": "rule_comparison_001",
+    "source": "evidence_db",
+    "title": "竞品比较证据要求",
+    "content": "涉及同款工厂、平替、比某品牌更好、比旗舰店更便宜等比较话术时，需要明确比较对象、口径和可复核数据。",
+    "stance": "risk_supporting",
+    "score": 0.9,
+    "related_claim_types": ["comparison_claim", "price_claim"]
+  },
+  {
+    "evidence_id": "rule_guarantee_001",
+    "source": "evidence_db",
+    "title": "售后和赔付承诺依据",
+    "content": "不满意全退、假一赔十、终身保修、无效包退等承诺应有明确的售后政策、赔付条件和执行规则支持。",
+    "stance": "risk_supporting",
+    "score": 0.9,
+    "related_claim_types": ["guarantee_claim"]
+  },
+  {
+    "evidence_id": "rule_pressure_001",
+    "source": "evidence_db",
+    "title": "催单与限时活动说明",
+    "content": "错过今天就没了、最后机会、马上下单、仅限今天等压力话术，应与活动截止时间、库存和实际促销规则一致。",
+    "stance": "risk_supporting",
+    "score": 0.88,
+    "related_claim_types": ["pressure_claim", "scarcity_claim"]
   }
 ]

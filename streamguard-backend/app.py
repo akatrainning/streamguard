@@ -18,12 +18,13 @@ import hashlib
 import hmac
 import secrets
 import sqlite3
+import html
 from typing import Optional, List, Tuple
 from urllib.parse import quote, urljoin, urlparse
 from pydantic import BaseModel
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from dotenv import load_dotenv
 import httpx
 
@@ -62,7 +63,7 @@ try:
     _compile_rule_graph_from_frontend()
 
     from rag_pipeline import RAGPipeline
-    from models import LiveSemanticEvent, RAGQuestion, Claim, ClaimType
+    from models import LiveSemanticEvent, RAGQuestion, Claim, ClaimType, Modality
     rag_pipeline = RAGPipeline()
     RAG_AVAILABLE = True
 except ImportError as e:
@@ -77,13 +78,18 @@ except ImportError:
 
 try:
     from douyin_search import search_douyin_live_rooms, clear_search_cache, \
-        get_cookie_status, open_douyin_for_login, _save_douyin_cookies
+        get_cookie_status, open_douyin_for_login, _save_douyin_cookies, _load_douyin_cookies
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
     print("[warn] douyin_search module not found, search will use fallback data")
 
-app = FastAPI(title="StreamGuard Backend")
+
+class UTF8JSONResponse(JSONResponse):
+    media_type = "application/json; charset=utf-8"
+
+
+app = FastAPI(title="StreamGuard Backend", default_response_class=UTF8JSONResponse)
 
 # ============= Pydantic Models =============
 class RoomInfo(BaseModel):
@@ -135,6 +141,22 @@ class RAGConfigRequest(BaseModel):
 
 class RAGTestRequest(BaseModel):
     text: str
+
+
+class RAGKnowledgeRequest(BaseModel):
+    view: Optional[str] = "combined"
+    query: Optional[str] = ""
+    limit: Optional[int] = 48
+
+
+class RAGAskRequest(BaseModel):
+    question: str
+    context: Optional[dict] = None
+    evidence_ids: Optional[List[str]] = None
+
+
+class RAGLiveEvaluationRequest(BaseModel):
+    context: Optional[dict] = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -982,6 +1004,153 @@ Return JSON: {"type": "fact"|"hype"|"trap", "score": 0-1, "sub_scores": {...}, "
         return analyze_with_keywords(text)
 
 
+def _model_to_plain(value):
+    if value is None:
+        return None
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return value
+
+
+def _claim_type_names(claim) -> List[str]:
+    if not claim:
+        return []
+    raw = getattr(claim, "claim_type", None)
+    if raw is None and isinstance(claim, dict):
+        raw = claim.get("claim_type")
+    if not raw:
+        return []
+    names: List[str] = []
+    for item in raw:
+        if hasattr(item, "value"):
+            names.append(str(item.value))
+        else:
+            names.append(str(item))
+    return names
+
+
+def _legacy_type_from_rag_level(level: Optional[str]) -> str:
+    if level in ("P0", "P1"):
+        return "trap"
+    if level == "P2":
+        return "hype"
+    return "fact"
+
+
+def _legacy_analysis_from_rag_result(result) -> dict:
+    risk = _model_to_plain(getattr(result, "risk", None)) or {}
+    report = _model_to_plain(getattr(result, "report", None)) or {}
+    verification = _model_to_plain(getattr(result, "verification", None)) or {}
+    claim = getattr(result, "claim", None)
+    claim_types = _claim_type_names(claim)
+    factors = risk.get("factors", {}) or {}
+
+    risk_score = _clamp01(_safe_float(risk.get("score"), 0.0))
+    rule_severity = _clamp01(_safe_float(factors.get("rule_severity"), risk_score))
+    claim_risk = _clamp01(_safe_float(factors.get("claim_risk"), risk_score))
+    evidence_missing = _clamp01(_safe_float(factors.get("evidence_missing"), 0.0))
+    evidence_conflict = _clamp01(_safe_float(factors.get("evidence_conflict"), 0.0))
+    chat_questioning = _clamp01(_safe_float(factors.get("chat_questioning"), 0.0))
+    historical_similarity = _clamp01(_safe_float(factors.get("historical_similarity"), 0.0))
+
+    legacy_type = _legacy_type_from_rag_level(risk.get("level"))
+    legacy_score = round(_clamp01(1.0 - risk_score), 3)
+    accuracy = round(_clamp01(1.0 - max(claim_risk, evidence_conflict * 0.8)), 3)
+    evidence = round(_clamp01(1.0 - max(evidence_missing, evidence_conflict)), 3)
+    compliance = round(_clamp01(1.0 - max(rule_severity, claim_risk)), 3)
+    pressure = round(
+        _clamp01(
+            max(
+                chat_questioning,
+                0.85 if "pressure_claim" in claim_types else 0.0,
+                0.75 if "scarcity_claim" in claim_types else 0.0,
+            )
+        ),
+        3,
+    )
+
+    suggestions = report.get("suggestions") or []
+    reason = (verification.get("reason") or "").strip()
+    if suggestions:
+        suggestion = str(suggestions[0]).strip()
+    elif reason:
+        suggestion = reason
+    else:
+        suggestion = "建议补充证据并调整表述。"
+
+    return {
+        "type": legacy_type,
+        "score": legacy_score,
+        "sub_scores": {
+            "semantic_consistency": accuracy,
+            "fact_verification": evidence,
+            "compliance_score": compliance,
+            "subjectivity_index": pressure,
+            "rag_risk_score": round(risk_score, 3),
+            "historical_similarity": round(historical_similarity, 3),
+        },
+        "violations": claim_types,
+        "suggestion": suggestion,
+    }
+
+
+async def _enrich_utterance_with_rag(
+    payload: dict,
+    *,
+    session_id: str,
+    source: str,
+    modality: Optional[Modality] = None,
+    confidence: float = 0.9,
+    persist_discovery: bool = True,
+) -> dict:
+    if not (RAG_AVAILABLE and rag_pipeline):
+        return payload
+
+    text = (payload.get("text") or "").strip()
+    if not text:
+        return payload
+
+    try:
+        rag_event = LiveSemanticEvent(
+            event_id=f"{source}_{payload.get('id', int(time.time() * 1000))}",
+            session_id=session_id,
+            timestamp=time.time(),
+            modality=modality or Modality.TEXT,
+            source=source,
+            raw_content=text,
+            confidence=confidence,
+        )
+        rag_result = await asyncio.to_thread(
+            rag_pipeline.process_event,
+            rag_event,
+            persist_discovery,
+        )
+    except Exception as exc:
+        print(f"[RAG] analysis failed for {source}: {exc}")
+        payload["rag_error"] = str(exc)
+        return payload
+
+    claim_plain = _model_to_plain(getattr(rag_result, "claim", None))
+    evidence_plain = [_model_to_plain(ev) for ev in (getattr(rag_result, "evidence", None) or [])]
+    verification_plain = _model_to_plain(getattr(rag_result, "verification", None))
+    risk_plain = _model_to_plain(getattr(rag_result, "risk", None))
+    report_plain = _model_to_plain(getattr(rag_result, "report", None))
+
+    payload["rag_claims"] = [claim_plain] if claim_plain else []
+    payload["rag_evidence"] = evidence_plain
+    payload["rag_verification"] = verification_plain
+    payload["rag_risk"] = risk_plain
+    payload["rag_report"] = report_plain
+    payload["rag_trace"] = _model_to_plain(getattr(rag_result, "trace", None)) or []
+
+    if risk_plain:
+        payload.update(_legacy_analysis_from_rag_result(rag_result))
+
+    return payload
+
+
 def _clamp01(v: float) -> float:
     return max(0.0, min(1.0, float(v)))
 
@@ -1488,6 +1657,273 @@ _MEDIA_URL_TTL = 900  # seconds
 
 
 
+def _clean_room_identity_text(value: str) -> str:
+    text = html.unescape((value or "").strip())
+    if "\\u" in text or "\\x" in text:
+        try:
+            text = text.encode("utf-8").decode("unicode_escape")
+        except Exception:
+            pass
+    text = text.replace("\\/", "/").replace('\\"', '"')
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" -|")
+
+
+def _empty_room_identity() -> dict:
+    return {
+        "anchor_name": "",
+        "room_title": "",
+        "thumbnail_url": "",
+        "avatar_url": "",
+    }
+
+
+async def _fetch_douyin_room_identity(room_id: str) -> dict:
+    """Best-effort fetch of room display metadata without launching Chrome."""
+    target = f"https://live.douyin.com/{room_id}"
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Referer": "https://live.douyin.com/",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Encoding": "identity",
+    }
+    cookies = {}
+    if SEARCH_AVAILABLE:
+        try:
+            for cookie in _load_douyin_cookies():
+                name = cookie.get("name") or cookie.get("Name")
+                value = cookie.get("value") or cookie.get("Value")
+                if name and value:
+                    cookies[name] = value
+        except Exception:
+            cookies = {}
+
+    try:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            resp = await client.get(target, headers=headers, cookies=cookies or None)
+        if resp.status_code >= 400:
+            return _empty_room_identity()
+        body = resp.text.replace('\\"', '"').replace("\\/", "/")
+    except Exception:
+        return _empty_room_identity()
+
+    room_title = None
+    anchor_name = None
+    avatar_url = None
+    thumbnail_url = None
+
+    for pattern in (
+        r"<title[^>]*>(.*?)</title>",
+        r'"room_title"\s*:\s*"([^"]+)"',
+        r'"title"\s*:\s*"([^"]+)"',
+    ):
+        match = re.search(pattern, body, re.IGNORECASE | re.DOTALL)
+        if match:
+            room_title = _clean_room_identity_text(match.group(1))
+            break
+
+    for pattern in (
+        r'"owner"\s*:\s*\{.*?"nickname"\s*:\s*"([^"]+)"',
+        r'"anchor_name"\s*:\s*"([^"]+)"',
+        r'"nickname"\s*:\s*"([^"]+)"',
+    ):
+        match = re.search(pattern, body, re.IGNORECASE | re.DOTALL)
+        if match:
+            anchor_name = _clean_room_identity_text(match.group(1))
+            break
+
+    if room_title:
+        room_title = re.sub(r"\s*[-|·]\s*抖音直播.*$", "", room_title, flags=re.IGNORECASE)
+        room_title = re.sub(r"\s*[-|·]\s*抖音.*$", "", room_title, flags=re.IGNORECASE)
+        room_title = room_title.strip() or None
+        if room_title in {"抖音商城", "抖音直播", "直播间"}:
+            room_title = None
+
+    if not anchor_name and room_title and "的直播间" in room_title:
+        anchor_name = room_title.split("的直播间", 1)[0].strip() or None
+
+    for pattern in (
+        r'"avatar_thumb"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+        r'"avatar_medium"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+        r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"',
+        r'<meta[^>]+name="twitter:image"[^>]+content="([^"]+)"',
+    ):
+        match = re.search(pattern, body, re.IGNORECASE | re.DOTALL)
+        if match:
+            avatar_url = _clean_room_identity_text(match.group(1)) or None
+            break
+
+    for pattern in (
+        r'"room_cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+        r'"cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+        r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"',
+        r'<meta[^>]+name="twitter:image"[^>]+content="([^"]+)"',
+    ):
+        match = re.search(pattern, body, re.IGNORECASE | re.DOTALL)
+        if match:
+            thumbnail_url = _clean_room_identity_text(match.group(1)) or None
+            break
+
+    return {
+        "anchor_name": anchor_name or "",
+        "room_title": room_title or "",
+        "thumbnail_url": thumbnail_url or avatar_url or "",
+        "avatar_url": avatar_url or thumbnail_url or "",
+    }
+
+
+def _merge_room_identity(*parts: dict) -> dict:
+    merged = _empty_room_identity()
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        for key in ("anchor_name", "room_title", "thumbnail_url", "avatar_url"):
+            value = (part.get(key) or "").strip() if isinstance(part.get(key), str) else part.get(key)
+            if value:
+                merged[key] = value
+    return merged
+
+
+def _discover_douyin_room_identity_via_browser(room_id: str, timeout_sec: int = 12) -> dict:
+    """Open the live room in Chrome and read visible identity metadata from the rendered page."""
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from selenium.common.exceptions import TimeoutException
+    from douyin_cdp import _get_chromedriver_path
+
+    target = f"https://live.douyin.com/{room_id}"
+    opts = Options()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--ignore-certificate-errors")
+    opts.add_argument("--allow-running-insecure-content")
+    opts.add_argument("--mute-audio")
+    opts.add_argument("--window-size=1280,900")
+    opts.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    opts.add_argument("--disable-extensions")
+    opts.add_argument("--disable-background-networking")
+    opts.add_argument("--disable-sync")
+    opts.add_argument("--disable-translate")
+    opts.add_argument("--disable-plugins")
+    opts.add_argument("--disable-background-timer-throttling")
+    opts.add_argument("--disable-renderer-backgrounding")
+    opts.add_argument("--blink-settings=imagesEnabled=false")
+    opts.add_argument("--disable-javascript-harmony-shipping")
+    opts.add_argument("--js-flags=--max-old-space-size=256")
+    opts.add_argument("--media-cache-size=1")
+    opts.add_argument("--disk-cache-size=1")
+    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    opts.add_experimental_option("useAutomationExtension", False)
+
+    driver = None
+    service_pid = None
+    identity = _empty_room_identity()
+    try:
+        try:
+            service = Service(_get_chromedriver_path(), log_output=subprocess.DEVNULL)
+        except TypeError:
+            service = Service(_get_chromedriver_path())
+        driver = webdriver.Chrome(service=service, options=opts)
+        service_pid = getattr(getattr(service, "process", None), "pid", None)
+        driver.set_page_load_timeout(25)
+
+        try:
+            driver.get(target)
+        except TimeoutException:
+            pass
+
+        start = time.time()
+        while time.time() - start < timeout_sec:
+            page_source = driver.page_source or ""
+            title = _clean_room_identity_text(driver.title or "")
+            browser_identity = _empty_room_identity()
+
+            if title and title not in ("抖音直播", "直播间", f"直播间 {room_id}"):
+                browser_identity["room_title"] = title
+
+            for pattern in (
+                r'"nickname"\s*:\s*"([^"]+)"',
+                r'"anchor_name"\s*:\s*"([^"]+)"',
+                r'"owner"\s*:\s*\{.*?"nickname"\s*:\s*"([^"]+)"',
+            ):
+                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                if match:
+                    browser_identity["anchor_name"] = _clean_room_identity_text(match.group(1))
+                    break
+
+            for pattern in (
+                r'"room_title"\s*:\s*"([^"]+)"',
+                r'"title"\s*:\s*"([^"]+)"',
+            ):
+                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                if match:
+                    browser_identity["room_title"] = _clean_room_identity_text(match.group(1))
+                    break
+
+            for pattern in (
+                r'"avatar_thumb"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                r'"avatar_medium"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                r'<img[^>]+src="([^"]+)"[^>]*>',
+            ):
+                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                if match:
+                    value = html.unescape(match.group(1)).strip()
+                    if "avatar" in pattern or "douyinpic.com" in value or "byteimg.com" in value:
+                        browser_identity["avatar_url"] = value
+                        break
+
+            for pattern in (
+                r'"room_cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                r'"cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"',
+            ):
+                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                if match:
+                    browser_identity["thumbnail_url"] = html.unescape(match.group(1)).strip()
+                    break
+
+            if not browser_identity["anchor_name"] and browser_identity["room_title"] and "的直播间" in browser_identity["room_title"]:
+                browser_identity["anchor_name"] = browser_identity["room_title"].split("的直播间", 1)[0].strip()
+
+            identity = _merge_room_identity(identity, browser_identity)
+            if identity["anchor_name"] and (identity["avatar_url"] or identity["room_title"]):
+                break
+            time.sleep(0.6)
+    except Exception as exc:
+        print(f"[room-identity] browser fallback failed for room {room_id}: {exc}")
+    finally:
+        try:
+            if driver:
+                driver.quit()
+        except Exception:
+            pass
+        if service_pid:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(service_pid)],
+                    capture_output=True,
+                    timeout=5,
+                )
+            except Exception:
+                pass
+    return identity
+
+
+async def _resolve_douyin_room_identity(room_id: str) -> dict:
+    identity = await _fetch_douyin_room_identity(room_id)
+    if identity.get("anchor_name") and (identity.get("avatar_url") or identity.get("room_title")):
+        return identity
+    browser_identity = await asyncio.to_thread(_discover_douyin_room_identity_via_browser, room_id, 12)
+    return _merge_room_identity(identity, browser_identity)
+
+
 def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[str]:
     """Open Douyin room and detect candidate media URL (m3u8/flv) from CDP logs."""
     # Reuse a recent discovery result before starting Chrome again.
@@ -1851,14 +2287,23 @@ class MockLiveSource:
             text = self.UTTERANCES[idx % len(self.UTTERANCES)]
             idx += 1
             last_utterance = text
-            analysis = analyze_utterance(text)
-            await callback({
+            utterance = {
                 "event": "utterance",
                 "id": int(time.time() * 1000),
                 "text": text,
+                "display_text": text,
                 "timestamp": time.strftime("%H:%M:%S"),
-                **analysis,
-            })
+                "source": "mock",
+                **analyze_utterance(text),
+            }
+            utterance = await _enrich_utterance_with_rag(
+                utterance,
+                session_id="mock_demo_session",
+                source="mock_stream",
+                modality=Modality.TEXT,
+                persist_discovery=False,
+            )
+            await callback(utterance)
 
             chat = random.choice(self.CHATS)
             chat_analysis = analyze_chat_light(chat, recent_utterance=last_utterance)
@@ -1898,6 +2343,42 @@ class DouyinLiveSource:
 
     def __init__(self, room_id: str):
         self.room_id = room_id
+
+    async def _emit_room_identity_discovered(self, callback):
+        try:
+            identity = await _resolve_douyin_room_identity(self.room_id)
+        except Exception as exc:
+            print(f"[room-identity] failed for room {self.room_id}: {exc}")
+            identity = _empty_room_identity()
+
+        await callback({
+            "event": "room_identity_discovered",
+            "room_id": self.room_id,
+            **identity,
+        })
+
+    async def _emit_media_url_discovered(self, callback):
+        """Discover a playable media URL and publish it to the frontend."""
+        await callback({
+            "event": "status",
+            "message": f"Discovering media stream for room {self.room_id}...",
+        })
+        try:
+            media_url = await asyncio.to_thread(_discover_douyin_media_url, self.room_id, 20)
+        except Exception as exc:
+            print(f"[media-discovery] failed for room {self.room_id}: {exc}")
+            await callback({
+                "event": "media_url_discovered",
+                "url": None,
+                "message": str(exc),
+            })
+            return
+
+        await callback({
+            "event": "media_url_discovered",
+            "url": media_url,
+            "message": None if media_url else "media url not found",
+        })
 
     async def _audio_loop(self, callback):
         if not _ENABLE_LIVE_AUDIO_ASR:
@@ -2016,38 +2497,33 @@ class DouyinLiveSource:
                         })
             elif evt.get("event") == "utterance":
                 last_utterance_text = evt.get("text", "")
-                # Integrate RAG analysis
-                if RAG_AVAILABLE and rag_pipeline:
-                    try:
-                        from models import LiveSemanticEvent, Modality
-                        rag_event = LiveSemanticEvent(
-                            event_id=f"live_{evt.get('id', int(time.time() * 1000))}",
-                            session_id=f"session_{self.room_id}",
-                            timestamp=time.time(),
-                            modality=Modality.ASR,
-                            source="douyin_live",
-                            raw_content=last_utterance_text,
-                            confidence=0.9
-                        )
-                        rag_result = await asyncio.to_thread(rag_pipeline.process_event, rag_event)
-                        # Add RAG results to the event
-                        evt["rag_claims"] = [rag_result.claim.dict()] if rag_result.claim and hasattr(rag_result.claim, 'dict') else ([] if not rag_result.claim else [rag_result.claim])
-                        evt["rag_evidence"] = [ev.dict() if hasattr(ev, 'dict') else ev for ev in (rag_result.evidence or [])]
-                        evt["rag_verification"] = rag_result.verification.dict() if rag_result.verification and hasattr(rag_result.verification, 'dict') else rag_result.verification
-                        evt["rag_risk"] = rag_result.risk.dict() if rag_result.risk and hasattr(rag_result.risk, 'dict') else rag_result.risk
-                        evt["rag_report"] = rag_result.report.dict() if rag_result.report and hasattr(rag_result.report, 'dict') else rag_result.report
-                    except Exception as e:
-                        print(f"[RAG] analysis failed: {e}")
-                        evt["rag_error"] = str(e)
+                evt = await _enrich_utterance_with_rag(
+                    evt,
+                    session_id=f"session_{self.room_id}",
+                    source="douyin_live",
+                    modality=Modality.ASR,
+                )
                 await callback(evt)
             else:
                 await callback(evt)
 
+        identity_task = asyncio.create_task(self._emit_room_identity_discovered(callback))
+        media_task = asyncio.create_task(self._emit_media_url_discovered(callback))
         audio_task = asyncio.create_task(self._audio_loop(callback))
         try:
             await stream_douyin_cdp(self.room_id, _on_event)
         finally:
+            identity_task.cancel()
+            media_task.cancel()
             audio_task.cancel()
+            try:
+                await identity_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await media_task
+            except asyncio.CancelledError:
+                pass
             try:
                 await audio_task
             except asyncio.CancelledError:
@@ -2241,6 +2717,8 @@ async def douyin_room_info(room_id: str):
     if not room_id or not re.match(r"^\d{6,24}$", room_id):
         raise HTTPException(status_code=400, detail="Invalid room_id format")
 
+    identity = await _fetch_douyin_room_identity(room_id)
+
     try:
         media_url = await asyncio.to_thread(_discover_douyin_media_url, room_id, timeout_sec=15)
         return {
@@ -2249,6 +2727,7 @@ async def douyin_room_info(room_id: str):
             "media_url": media_url,
             "live_hint": "直播中" if media_url else "未开播或无法访问",
             "error": None,
+            **identity,
         }
     except Exception as e:
         return {
@@ -2257,6 +2736,7 @@ async def douyin_room_info(room_id: str):
             "media_url": None,
             "live_hint": "检测异常",
             "error": str(e)[:100],
+            **identity,
         }
 
 @app.get("/media-url")
@@ -2264,8 +2744,12 @@ async def get_media_url(roomId: str):
     """Return a discovered stream URL for a Douyin room (m3u8/flv).
     Result is cached for 5 minutes to avoid repeatedly launching Chrome.
     """
-    url = await asyncio.to_thread(_discover_douyin_media_url, roomId)
-    from fastapi import HTTPException
+    try:
+        url = await asyncio.to_thread(_discover_douyin_media_url, roomId)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"media url discovery failed: {exc}") from exc
     if not url:
         raise HTTPException(status_code=404, detail="media url not found")
     return {"url": url, "cached": roomId in _media_url_cache}
@@ -2864,6 +3348,17 @@ async def rag_reindex():
         raise HTTPException(status_code=500, detail=f"RAG reindex failed: {str(e)}")
 
 
+@app.get("/rag/architecture")
+async def rag_architecture():
+    """Return the layered RAG knowledge-base design and live module counts."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    try:
+        return rag_pipeline.get_knowledge_architecture()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG architecture failed: {str(e)}")
+
+
 @app.post("/rag/test")
 async def rag_test_query(request: RAGTestRequest):
     """Run a single utterance through the current RAG configuration."""
@@ -2876,6 +3371,57 @@ async def rag_test_query(request: RAGTestRequest):
         return rag_pipeline.test_query(text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG test failed: {str(e)}")
+
+
+@app.get("/rag/knowledge")
+async def rag_knowledge_view(view: str = "combined", query: str = "", limit: int = 48):
+    """Return visualizable knowledge-base evidence for the RAG workbench."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    try:
+        return rag_pipeline.get_knowledge_view(view=view, query=query, limit=max(1, min(limit, 120)))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG knowledge view failed: {str(e)}")
+
+
+@app.post("/rag/knowledge")
+async def rag_knowledge_view_post(request: RAGKnowledgeRequest):
+    """POST variant for longer search strings."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    try:
+        return rag_pipeline.get_knowledge_view(
+            view=request.view or "combined",
+            query=request.query or "",
+            limit=max(1, min(int(request.limit or 48), 120)),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG knowledge view failed: {str(e)}")
+
+
+@app.post("/rag/ask")
+async def rag_ask_workbench(request: RAGAskRequest):
+    """Evidence-bound RAG Q&A for auditors."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    question = (request.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
+    try:
+        return rag_pipeline.answer_question(question, context=request.context or {}, evidence_ids=request.evidence_ids or [])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG answer failed: {str(e)}")
+
+
+@app.post("/rag/live-evaluation")
+async def rag_live_evaluation(request: RAGLiveEvaluationRequest):
+    """Evaluate current livestream context with RAG evidence."""
+    if not RAG_AVAILABLE or not rag_pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    try:
+        return rag_pipeline.evaluate_live_context(request.context or {})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"RAG live evaluation failed: {str(e)}")
 
 
 @app.post("/rag/analyze")

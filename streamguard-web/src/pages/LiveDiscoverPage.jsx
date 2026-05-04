@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from "react";
+﻿import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 
 /* -- Theme tokens (consistent with App.css / index.css) -- */
 const A    = "rgba(63,140,255,";   // accent base
@@ -46,10 +46,10 @@ const GLOBAL_CSS = `
 `;
 
 /**
- * LiveDiscoverPage — 抖音直播间发现 + 对比分析
+ * LiveDiscoverPage 鈥?鎶栭煶鐩存挱闂村彂鐜?+ 瀵规瘮鍒嗘瀽
  */
 export default function LiveDiscoverPage({
-  apiBase = "http://localhost:8011",
+  apiBase = "http://localhost:8012",
   onConnectRoom,
   utterances = [],
   chatMessages = [],
@@ -102,10 +102,10 @@ export default function LiveDiscoverPage({
           profile_exists: data.profile_saved ?? prev?.profile_exists,
         }));
       } else {
-        setError(data.message || "登录失败，请重试");
+        setError(data.message || "鐧诲綍澶辫触锛岃閲嶈瘯");
       }
     } catch (e) {
-      setError(e?.message || "请求失败");
+      setError(e?.message || "璇锋眰澶辫触");
     } finally {
       setAuthLoading(false);
     }
@@ -116,7 +116,7 @@ export default function LiveDiscoverPage({
     try {
       const cookies = JSON.parse(cookiePasteText.trim());
       if (!Array.isArray(cookies) || cookies.length === 0) {
-        setError("Cookie 格式错误：必须为非空 JSON 数组");
+        setError("Cookie 鏍煎紡閿欒锛氬繀椤讳负闈炵┖ JSON 鏁扮粍");
         return;
       }
       const res = await fetch(`${apiBase}/consumer/upload-cookies`, {
@@ -130,10 +130,10 @@ export default function LiveDiscoverPage({
         setShowCookiePaste(false);
         setCookiePasteText("");
       } else {
-        setError(data?.detail || "上传失败");
+        setError(data?.detail || "涓婁紶澶辫触");
       }
     } catch (e) {
-      setError("JSON 解析错误：" + (e?.message || "格式无效"));
+      setError("JSON 瑙ｆ瀽閿欒锛? + (e?.message || "鏍煎紡鏃犳晥"));
     }
   };
 
@@ -152,7 +152,7 @@ export default function LiveDiscoverPage({
   /* -- Search -- */
   const runSearch = async () => {
     const kw = query.trim();
-    if (!kw) { setError("请先输入商品关键词，例如：蓝莓、蛋白粉、口红"); return; }
+    if (!kw) { setError("璇峰厛杈撳叆鍟嗗搧鍏抽敭璇嶏紝渚嬪锛氳摑鑾撱€佽泲鐧界矇銆佸彛绾?); return; }
     setError(""); setResult(null); setSelected([]); setComparison(null); setShowModal(false);
     setSearching(true);
     try {
@@ -160,11 +160,11 @@ export default function LiveDiscoverPage({
         `${apiBase}/consumer/search-live-streams?q=${encodeURIComponent(kw)}&max_results=12`
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || "搜索失败");
+      if (!res.ok) throw new Error(data?.detail || "鎼滅储澶辫触");
       setResult(data);
       setSelected((data.rooms || []).slice(0, 3).map(r => r.room_id));
     } catch (e) {
-      setError(e?.message || "搜索失败");
+      setError(e?.message || "鎼滅储澶辫触");
     } finally {
       setSearching(false);
     }
@@ -177,10 +177,10 @@ export default function LiveDiscoverPage({
   );
 
   const runCompare = async () => {
-    if (selectedRooms.length < 2) { setError("请至少勾选 2 个直播间进行对比"); return; }
+    if (selectedRooms.length < 2) { setError("璇疯嚦灏戝嬀閫?2 涓洿鎾棿杩涜瀵规瘮"); return; }
     setError(""); setComparing(true); setComparison(null);
     try {
-      // 传入当前已监听到的话术与弹幕作为分析证据
+      // 浼犲叆褰撳墠宸茬洃鍚埌鐨勮瘽鏈笌寮瑰箷浣滀负鍒嗘瀽璇佹嵁
       const us = utterances.slice(0, 60).map(u => ({ text: u.text, type: u.type, score: u.score }));
       const cs = chatMessages.slice(0, 100).map(c => ({ text: c.text, intent: c.intent, sentiment: c.sentiment }));
       const res = await fetch(`${apiBase}/consumer/compare-streams`, {
@@ -194,11 +194,11 @@ export default function LiveDiscoverPage({
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || "对比失败");
+      if (!res.ok) throw new Error(data?.detail || "瀵规瘮澶辫触");
       setComparison(data);
       setShowModal(true);
     } catch (e) {
-      setError(e?.message || "对比失败");
+      setError(e?.message || "瀵规瘮澶辫触");
     } finally {
       setComparing(false);
     }
@@ -209,9 +209,10 @@ export default function LiveDiscoverPage({
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
 
-  const handleEnter = roomId => {
+  const handleEnter = room => {
+    const roomId = room?.room_id || room;
     if (typeof onConnectRoom === "function") {
-      onConnectRoom(roomId);
+      onConnectRoom(room);
     } else {
       window.open(`https://live.douyin.com/${roomId}`, "_blank", "noopener");
     }
@@ -226,9 +227,9 @@ export default function LiveDiscoverPage({
 
   const authState = cookieStatus?.profile_exists ? "ok" : cookieStatus?.exists ? "warn" : "none";
   const AUTH_META = {
-    ok:   { color: FACT, label: `已登录 · ${cookieStatus?.profile_size_mb || 0}MB · ${cookieStatus?.count || 0} cookies` },
-    warn: { color: HYPE, label: `仅 Cookie (${cookieStatus?.count || 0} 条) · 建议重新登录` },
-    none: { color: TRAP, label: "未登录 · 建议先登录以获取真实数据" },
+    ok:   { color: FACT, label: `宸茬櫥褰?路 ${cookieStatus?.profile_size_mb || 0}MB 路 ${cookieStatus?.count || 0} cookies` },
+    warn: { color: HYPE, label: `浠?Cookie (${cookieStatus?.count || 0} 鏉? 路 寤鸿閲嶆柊鐧诲綍` },
+    none: { color: TRAP, label: "鏈櫥褰?路 寤鸿鍏堢櫥褰曚互鑾峰彇鐪熷疄鏁版嵁" },
   }; 
   const authMeta = AUTH_META[authState];
   const authTextColor = authState === "warn" ? HYPE_TEXT : authMeta.color;
@@ -244,27 +245,27 @@ export default function LiveDiscoverPage({
         animation: "ldcFadeUp .35s ease",
       }}>
 
-        {/* Page Title — same classes as 实时总览 */}
+        {/* Page Title 鈥?same classes as 瀹炴椂鎬昏 */}
         <div className="sg-dashboard-head">
           <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
-            <div className="sg-dashboard-title">直播发现</div>
+            <div className="sg-dashboard-title">鐩存挱鍙戠幇</div>
             {/* {searchResult && !searching && (
               <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 500 }}>
-                共 {searchResult.total} 个直播间
+                鍏?{searchResult.total} 涓洿鎾棿
                 {searchResult.data_source !== "fallback_mock" && (
-                  <span style={{ color: FACT, marginLeft: 8 }}>实时数据</span>
+                  <span style={{ color: FACT, marginLeft: 8 }}>瀹炴椂鏁版嵁</span>
                 )}
               </span>
             )} */}
           </div>
           {selectedIds.length > 0 && (
             <span style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>
-              已选 {selectedIds.length} 个
+              宸查€?{selectedIds.length} 涓?
             </span>
           )}
         </div>
 
-        {/* Search Panel — sg-ops-card style */}
+        {/* Search Panel 鈥?sg-ops-card style */}
         <div style={{
           background: "linear-gradient(180deg, rgba(18,29,45,.92), rgba(15,24,37,.95))",
           border: "1px solid var(--border)",
@@ -284,7 +285,7 @@ export default function LiveDiscoverPage({
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && runSearch()}
-                placeholder="输入商品关键词，如：蓝莓、蛋白粉、儿童防晒霜…"
+                placeholder="杈撳叆鍟嗗搧鍏抽敭璇嶏紝濡傦細钃濊帗銆佽泲鐧界矇銆佸効绔ラ槻鏅掗湝鈥?
                 style={{
                   width: "100%", padding: "11px 16px 11px 42px",
                   borderRadius: 8,
@@ -310,7 +311,7 @@ export default function LiveDiscoverPage({
                 minHeight: 40,
               }}
             >
-              {searching ? "搜索中…" : "搜索"}
+              {searching ? "鎼滅储涓€? : "鎼滅储"}
             </button>
           </div>
 
@@ -347,7 +348,7 @@ export default function LiveDiscoverPage({
                   cursor: "pointer", fontSize: 11, fontWeight: 600,
                 }}
               >
-                {authLoading ? "Chrome 已打开，请登录后关闭…" : authState === "ok" ? "刷新登录" : "打开 Chrome 登录"}
+                {authLoading ? "Chrome 宸叉墦寮€锛岃鐧诲綍鍚庡叧闂€? : authState === "ok" ? "鍒锋柊鐧诲綍" : "鎵撳紑 Chrome 鐧诲綍"}
               </button>
               <button onClick={() => setShowCookiePaste(v => !v)}
                 style={{
@@ -356,7 +357,7 @@ export default function LiveDiscoverPage({
                   color: "var(--text-muted)", cursor: "pointer", fontSize: 11,
                 }}
               >
-                {showCookiePaste ? "取消" : "粘贴 Cookie"}
+                {showCookiePaste ? "鍙栨秷" : "绮樿创 Cookie"}
               </button>
             </div>
           )}
@@ -384,7 +385,7 @@ export default function LiveDiscoverPage({
                   cursor: cookiePasteText.trim() ? "pointer" : "not-allowed",
                   fontSize: 12, fontWeight: 600, alignSelf: "flex-end", height: 38,
                 }}
-              >上传</button>
+              >涓婁紶</button>
             </div>
           )}
 
@@ -402,11 +403,11 @@ export default function LiveDiscoverPage({
             }}>
               {searchResult.data_source === "fallback_mock" ? (
                 <span style={{ color: HYPE_TEXT }}>
-                  演示数据 — 点击上方「打开 Chrome 登录」后重新搜索可获取真实直播间
+                  婕旂ず鏁版嵁 鈥?鐐瑰嚮涓婃柟銆屾墦寮€ Chrome 鐧诲綍銆嶅悗閲嶆柊鎼滅储鍙幏鍙栫湡瀹炵洿鎾棿
                 </span>
               ) : (
                 <span style={{ color: "var(--fact)" }}>
-                  找到 <b>{searchResult.total}</b> 个「<b>{searchResult.keyword}</b>」直播间
+                  鎵惧埌 <b>{searchResult.total}</b> 涓€?b>{searchResult.keyword}</b>銆嶇洿鎾棿
                   {searchResult.search_note && (
                     <span style={{ opacity: .65, marginLeft: 6 }}>{searchResult.search_note}</span>
                   )}
@@ -425,14 +426,14 @@ export default function LiveDiscoverPage({
               marginBottom: 14,
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>直播间列表</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>鐩存挱闂村垪琛?/span>
                 <span style={{
                   padding: "2px 10px", borderRadius: 20,
                   background: "var(--accent-soft)",
                   border: "1px solid var(--panel-border)",
                   fontSize: 11, color: "var(--accent)", fontWeight: 600,
-                }}>{rooms.length} 个</span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>按推荐度排序 · 勾选 2+ 个进行对比</span>
+                }}>{rooms.length} 涓?/span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>鎸夋帹鑽愬害鎺掑簭 路 鍕鹃€?2+ 涓繘琛屽姣?/span>
               </div>
               <button
                 className="ldc-btn-primary"
@@ -446,7 +447,7 @@ export default function LiveDiscoverPage({
                   fontSize: 13, fontWeight: 700,
                 }}
               >
-                {comparing ? "分析中…" : "对比分析"}
+                {comparing ? "鍒嗘瀽涓€? : "瀵规瘮鍒嗘瀽"}
               </button>
             </div>
 
@@ -464,7 +465,7 @@ export default function LiveDiscoverPage({
                   total={rooms.length}
                   selected={selectedIds.includes(room.room_id)}
                   onToggle={() => toggleSelect(room.room_id)}
-                  onEnter={() => handleEnter(room.room_id)}
+                  onEnter={() => handleEnter(room)}
                   animDelay={idx * 50}
                 />
               ))}
@@ -495,9 +496,9 @@ export default function LiveDiscoverPage({
                 }} />
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>正在对比分析直播间…</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>姝ｅ湪瀵规瘮鍒嗘瀽鐩存挱闂粹€?/div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
-                  评估价格、品质、信任度等维度，通常需要 5~15 秒
+                  璇勪及浠锋牸銆佸搧璐ㄣ€佷俊浠诲害绛夌淮搴︼紝閫氬父闇€瑕?5~15 绉?
                 </div>
               </div>
             </div>
@@ -515,7 +516,7 @@ export default function LiveDiscoverPage({
           />
         )}
 
-        {/* ── Feature Guide — 仅在未搜索时展示，搜索后自动消失 ── */}
+        {/* 鈹€鈹€ Feature Guide 鈥?浠呭湪鏈悳绱㈡椂灞曠ず锛屾悳绱㈠悗鑷姩娑堝け 鈹€鈹€ */}
         {!searchResult && !searching && (
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
@@ -525,10 +526,10 @@ export default function LiveDiscoverPage({
             {/* Title block */}
             <div style={{ textAlign: "center", marginBottom: 28 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
-                如何使用直播发现
+                濡備綍浣跨敤鐩存挱鍙戠幇
               </div>
               {/* <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                输入商品关键词开始搜索，AI 将为你实时筛选、评分并对比抖音直播间
+                杈撳叆鍟嗗搧鍏抽敭璇嶅紑濮嬫悳绱紝AI 灏嗕负浣犲疄鏃剁瓫閫夈€佽瘎鍒嗗苟瀵规瘮鎶栭煶鐩存挱闂?
               </div> */}
             </div>
 
@@ -550,10 +551,10 @@ export default function LiveDiscoverPage({
               }} />
 
               {[
-                { step: 1, title: "登录账号",   desc: "扫码授权抖音账号，解锁真实直播数据",                  color: "var(--accent)" },
-                { step: 2, title: "搜索关键词", desc: "输入商品名称，Chrome 实时抓取当前直播列表",            color: FACT            },
-                { step: 3, title: "AI 对比分析",desc: "勾选 2+ 直播间，获取价格、品质、信任度综合报告",       color: HYPE            },
-                { step: 4, title: "进入监测",   desc: "一键切换至实时话术监测，FACT / HYPE / TRAP 实时标注", color: "var(--accent)"  },
+                { step: 1, title: "鐧诲綍璐﹀彿",   desc: "鎵爜鎺堟潈鎶栭煶璐﹀彿锛岃В閿佺湡瀹炵洿鎾暟鎹?,                  color: "var(--accent)" },
+                { step: 2, title: "鎼滅储鍏抽敭璇?, desc: "杈撳叆鍟嗗搧鍚嶇О锛孋hrome 瀹炴椂鎶撳彇褰撳墠鐩存挱鍒楄〃",            color: FACT            },
+                { step: 3, title: "AI 瀵规瘮鍒嗘瀽",desc: "鍕鹃€?2+ 鐩存挱闂达紝鑾峰彇浠锋牸銆佸搧璐ㄣ€佷俊浠诲害缁煎悎鎶ュ憡",       color: HYPE            },
+                { step: 4, title: "杩涘叆鐩戞祴",   desc: "涓€閿垏鎹㈣嚦瀹炴椂璇濇湳鐩戞祴锛孎ACT / HYPE / TRAP 瀹炴椂鏍囨敞", color: "var(--accent)"  },
               ].map(({ step, title, desc, color }) => (
                 <div key={step} style={{
                   display: "flex", flexDirection: "column", alignItems: "center",
@@ -588,10 +589,10 @@ export default function LiveDiscoverPage({
               display: "flex", gap: 10, marginTop: 28, flexWrap: "wrap", justifyContent: "center",
             }}>
               {[
-                { icon: "◎", label: "Chrome CDP 真实抓取" },
-                { icon: "▦", label: "AI 多维对比评分"      },
-                { icon: "⚑", label: "实时话术风险识别"      },
-                { icon: "◷", label: "历史会话回放"          },
+                { icon: "鈼?, label: "Chrome CDP 鐪熷疄鎶撳彇" },
+                { icon: "鈻?, label: "AI 澶氱淮瀵规瘮璇勫垎"      },
+                { icon: "鈿?, label: "瀹炴椂璇濇湳椋庨櫓璇嗗埆"      },
+                { icon: "鈼?, label: "鍘嗗彶浼氳瘽鍥炴斁"          },
               ].map(({ icon, label }) => (
                 <div key={label} style={{
                   display: "flex", alignItems: "center", gap: 6,
@@ -649,7 +650,7 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "center",
             height: "100%", color: "var(--text-muted)", fontSize: 13, opacity: .5,
-          }}>暂无封面</div>
+          }}>鏆傛棤灏侀潰</div>
         )}
         {/* Dark gradient overlay */}
         <div style={{
@@ -684,17 +685,17 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
             width: 5, height: 5, borderRadius: "50%", background: TRAP,
             animation: "ldcLive 1.5s ease-in-out infinite",
           }} />
-          直播中
+          鐩存挱涓?
         </div>
 
-        {/* Viewer count — always show; use fmtViewers for formatting */}
+        {/* Viewer count 鈥?always show; use fmtViewers for formatting */}
         <div style={{
           position: "absolute", bottom: 9, left: 9,
           background: "rgba(0,0,0,.5)", color: "var(--text-secondary)",
           borderRadius: 20, padding: "2px 9px",
           fontSize: 10, fontWeight: 500, backdropFilter: "blur(6px)",
         }}>
-          {room.viewer_count > 0 ? `${fmtViewers(room.viewer_count)} 观看` : "热播中"}
+          {room.viewer_count > 0 ? `${fmtViewers(room.viewer_count)} 瑙傜湅` : "鐑挱涓?}
         </div>
       </div>
 
@@ -705,12 +706,12 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
           fontSize: 13, fontWeight: 700, lineHeight: 1.45, color: "var(--text-primary)",
           display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
         }}>
-          {room.room_title || room.title || "直播中"}
+          {room.room_title || room.title || "鐩存挱涓?}
         </div>
 
         {/* Anchor */}
         <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          {room.anchor_name || room.streamer_name || "主播"}
+          {room.anchor_name || room.streamer_name || "涓绘挱"}
         </div>
 
         {/* Ranking reason */}
@@ -722,7 +723,7 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
             borderLeft: `2px solid ${isTopThree ? rankBorder : "var(--border)"}`,
           }}>
             <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600, display: "block", marginBottom: 3 }}>
-              排序依据
+              鎺掑簭渚濇嵁
             </span>
             <span style={{
               display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden",
@@ -743,7 +744,7 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
               fontSize: 12, fontWeight: 700, cursor: "pointer",
             }}
           >
-            进入直播间
+            杩涘叆鐩存挱闂?
           </button>
           <button
             onClick={onToggle}
@@ -757,7 +758,7 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
               fontWeight: selected ? 600 : 400,
             }}
           >
-            {selected ? "已选" : "对比"}
+            {selected ? "宸查€? : "瀵规瘮"}
           </button>
         </div>
       </div>
@@ -766,19 +767,19 @@ function LiveStreamCard({ room, rank, total, selected, onToggle, onEnter, animDe
 }
 
 /* ================================================================
-   ComparisonModal — full-screen overlay
+   ComparisonModal 鈥?full-screen overlay
    ================================================================ */
 function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
   const { p0, p1, p2, engine, evidence_stats } = comparison || {};
 
   const VERDICT = {
-    BUY:  { c: FACT, bg: "var(--fact-bg)", bd: "var(--fact-border)", t: "综合推荐购买" },
-    WAIT: { c: HYPE, bg: "var(--hype-bg)", bd: "var(--hype-border)", t: "建议先观望"   },
-    SKIP: { c: TRAP, bg: "var(--trap-bg)", bd: "var(--trap-border)", t: "不建议购买"   },
+    BUY:  { c: FACT, bg: "var(--fact-bg)", bd: "var(--fact-border)", t: "缁煎悎鎺ㄨ崘璐拱" },
+    WAIT: { c: HYPE, bg: "var(--hype-bg)", bd: "var(--hype-border)", t: "寤鸿鍏堣鏈?   },
+    SKIP: { c: TRAP, bg: "var(--trap-bg)", bd: "var(--trap-border)", t: "涓嶅缓璁喘涔?   },
   };
   const vm = VERDICT[p0?.verdict || "WAIT"] || VERDICT.WAIT;
   const isWait = (p0?.verdict || "WAIT") === "WAIT";
-  const engineLabel = engine === "llm" ? "AI 分析" : "规则引擎";
+  const engineLabel = engine === "llm" ? "AI 鍒嗘瀽" : "瑙勫垯寮曟搸";
 
   const overlayRef = useRef(null);
   const onOverlayClick = useCallback(e => {
@@ -818,16 +819,16 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
           background: "rgba(255,255,255,.015)",
         }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>跨直播间对比分析</div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text-primary)" }}>璺ㄧ洿鎾棿瀵规瘮鍒嗘瀽</div>
             <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>
-              关键词：{keyword} · {engineLabel}
+              鍏抽敭璇嶏細{keyword} 路 {engineLabel}
               {evidence_stats && (evidence_stats.utterance_count > 0 || evidence_stats.chat_count > 0) ? (
                 <span style={{ marginLeft: 10, color: FACT }}>
-                  ✓ 话术 {evidence_stats.utterance_count} 条 · 弹幕 {evidence_stats.chat_count} 条已纳入分析
+                  鉁?璇濇湳 {evidence_stats.utterance_count} 鏉?路 寮瑰箷 {evidence_stats.chat_count} 鏉″凡绾冲叆鍒嗘瀽
                 </span>
               ) : (
                 <span style={{ marginLeft: 10, color: "var(--text-muted)" }}>
-                  基于直播间标题与推荐分分析（可先开启监控再对比以获得更精准结果）
+                  鍩轰簬鐩存挱闂存爣棰樹笌鎺ㄨ崘鍒嗗垎鏋愶紙鍙厛寮€鍚洃鎺у啀瀵规瘮浠ヨ幏寰楁洿绮惧噯缁撴灉锛?
                 </span>
               )}
             </div>
@@ -854,7 +855,7 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
                 background: vm.bg, display: "flex", flexDirection: "column", gap: 10,
               }}>
                 <div style={{ fontSize: 10, color: isWait ? HYPE_TEXT : "var(--text-muted)", textTransform: "uppercase", letterSpacing: 1.2, fontWeight: 600 }}>
-                  综合结论
+                  缁煎悎缁撹
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: isWait ? HYPE_TEXT : vm.c, lineHeight: 1.3 }}>
                   {vm.t}
@@ -865,16 +866,16 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
                   background: `${vm.c}18`, border: `1px solid ${vm.c}35`,
                   fontSize: 11, color: isWait ? HYPE_TEXT : vm.c, fontWeight: 700, width: "fit-content",
                 }}>
-                  置信度 {Math.round((p0.confidence || 0.5) * 100)}%
+                  缃俊搴?{Math.round((p0.confidence || 0.5) * 100)}%
                 </div>
               </div>
-              <BulletBox title="推荐理由" items={p0.why_buy || []} accentColor={FACT} />
-              <BulletBox title="谨慎因素" items={p0.why_not_buy || []} accentColor={TRAP} />
+              <BulletBox title="鎺ㄨ崘鐞嗙敱" items={p0.why_buy || []} accentColor={FACT} />
+              <BulletBox title="璋ㄦ厧鍥犵礌" items={p0.why_not_buy || []} accentColor={TRAP} />
             </div>
           )}
           {!p0 && (
             <div style={{ padding: 24, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
-              未收到结构化分析结果，请检查后端日志
+              鏈敹鍒扮粨鏋勫寲鍒嗘瀽缁撴灉锛岃妫€鏌ュ悗绔棩蹇?
             </div>
           )}
 
@@ -882,15 +883,15 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
           {p1?.compare_dimensions?.length > 0 && (
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: "var(--text-primary)" }}>
-                直播间维度对比
+                鐩存挱闂寸淮搴﹀姣?
               </div>
               <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 10 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                   <thead>
                     <tr style={{ background: "var(--accent-soft)" }}>
-                      <th style={TH}>直播间</th>
+                      <th style={TH}>鐩存挱闂?/th>
                       {p1.compare_dimensions.map(d => <th key={d} style={TH}>{d}</th>)}
-                      <th style={TH}>综合分</th>
+                      <th style={TH}>缁煎悎鍒?/th>
                     </tr>
                   </thead>
                   <tbody>
@@ -914,7 +915,7 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
                   background: "var(--accent-soft)", borderRadius: 10,
                   border: "1px solid var(--panel-border)",
                 }}>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>推荐顺序</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, fontWeight: 600 }}>鎺ㄨ崘椤哄簭</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {p1.ranked.map((name, i) => (
                       <div key={i} style={{
@@ -936,18 +937,18 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
           {/* P2 Actions */}
           {p2 && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 11 }}>
-              <BulletBox title="问主播的关键问题" items={p2.ask_anchor_questions || []} accentColor="var(--accent)" />
-              <BulletBox title="替代方案" items={p2.alternatives || []} accentColor="#38bdf8" />
+              <BulletBox title="闂富鎾殑鍏抽敭闂" items={p2.ask_anchor_questions || []} accentColor="var(--accent)" />
+              <BulletBox title="鏇夸唬鏂规" items={p2.alternatives || []} accentColor="#38bdf8" />
               {p2.buy_timing && (
                 <div style={{
                   border: "1px solid var(--hype-border)", borderRadius: 10,
                   padding: "12px 15px", background: "var(--hype-bg)",
                 }}>
-                  <div style={{ fontSize: 11, color: HYPE_TEXT, marginBottom: 7, fontWeight: 700 }}>最佳下单时机</div>
+                  <div style={{ fontSize: 11, color: HYPE_TEXT, marginBottom: 7, fontWeight: 700 }}>鏈€浣充笅鍗曟椂鏈?/div>
                   <div style={{ fontSize: 12, color: HYPE_TEXT, lineHeight: 1.7 }}>{p2.buy_timing}</div>
                 </div>
               )}
-              <BulletBox title="行动计划" items={p2.action_plan || []} accentColor={FACT} />
+              <BulletBox title="琛屽姩璁″垝" items={p2.action_plan || []} accentColor={FACT} />
             </div>
           )}
         </div>
@@ -964,7 +965,7 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
             background: "var(--accent)", color: "#black",
             cursor: "pointer", fontSize: 13, fontWeight: 700,
           }}>
-            关闭
+            鍏抽棴
           </button>
         </div>
       </div>
@@ -976,11 +977,11 @@ function ComparisonModal({ comparison, keyword, selectedRooms, onClose }) {
    SearchProgress
    ================================================================ */
 const SEARCH_STAGES = [
-  { label: "启动真实 Chrome 浏览器",   start: 0,  end: 5  },
-  { label: "打开抖音直播搜索页面",      start: 5,  end: 15 },
-  { label: "截获直播间 API 数据",       start: 15, end: 28 },
-  { label: "AI 评估直播间质量",         start: 28, end: 38 },
-  { label: "整理并排序结果",            start: 38, end: 45 },
+  { label: "鍚姩鐪熷疄 Chrome 娴忚鍣?,   start: 0,  end: 5  },
+  { label: "鎵撳紑鎶栭煶鐩存挱鎼滅储椤甸潰",      start: 5,  end: 15 },
+  { label: "鎴幏鐩存挱闂?API 鏁版嵁",       start: 15, end: 28 },
+  { label: "AI 璇勪及鐩存挱闂磋川閲?,         start: 28, end: 38 },
+  { label: "鏁寸悊骞舵帓搴忕粨鏋?,            start: 38, end: 45 },
 ];
 const SEARCH_TOTAL = 45;
 
@@ -1004,7 +1005,7 @@ function SearchProgress({ elapsed = 0 }) {
             borderTopColor: "var(--accent)", borderRadius: "50%",
             animation: "ldcSpin 1s linear infinite",
           }} />
-          正在抓取抖音直播间数据
+          姝ｅ湪鎶撳彇鎶栭煶鐩存挱闂存暟鎹?
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{
@@ -1054,15 +1055,15 @@ function SearchProgress({ elapsed = 0 }) {
                 color: done ? "var(--fact)" : active ? "var(--text-primary)" : "var(--text-muted)",
                 fontWeight: active ? 700 : 400,
               }}>{stage.label}</span>
-              {active && <span style={{ fontSize: 10, color: "var(--accent)" }}>进行中</span>}
-              {done && <span style={{ fontSize: 10, color: "var(--fact)" }}>完成</span>}
+              {active && <span style={{ fontSize: 10, color: "var(--accent)" }}>杩涜涓?/span>}
+              {done && <span style={{ fontSize: 10, color: "var(--fact)" }}>瀹屾垚</span>}
             </div>
           );
         })}
       </div>
 
       <div style={{ marginTop: 11, fontSize: 10, color: "var(--text-muted)", opacity: .55 }}>
-        使用真实 Chrome + CDP 抓取，绕过机器人检测 · 缓存命中时仅需 1~2 秒
+        浣跨敤鐪熷疄 Chrome + CDP 鎶撳彇锛岀粫杩囨満鍣ㄤ汉妫€娴?路 缂撳瓨鍛戒腑鏃朵粎闇€ 1~2 绉?
       </div>
     </div>
   );
@@ -1141,8 +1142,8 @@ function ScoreBar({ value, bold = false }) {
 
 /* -- Helpers -- */
 function fmtViewers(n) {
-  if (!n) return "直播中";
-  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
+  if (!n) return "鐩存挱涓?;
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}涓嘸;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return `${n}`;
 }
@@ -1158,3 +1159,4 @@ const TD = {
   fontSize: 12, color: "var(--text-secondary)",
   padding: "9px 13px", borderBottom: "1px solid rgba(255,255,255,.04)",
 };
+

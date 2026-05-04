@@ -1,6 +1,5 @@
-import { Suspense, lazy, useRef, useCallback, useState, useMemo, useEffect } from "react";
+﻿import { Suspense, lazy, useRef, useCallback, useState, useMemo, useEffect } from "react";
 import "./App.css";
-import { useSimulatedStream } from "./hooks/useSimulatedStream";
 import { useRealStream } from "./hooks/useRealStream";
 import Header, { NAV_TABS } from "./components/Header";
 import VideoPlayer from "./components/VideoPlayer";
@@ -36,14 +35,43 @@ const NAV_ICONS = {
 };
 
 const LOCKED_FEATURE_NAMES = {
-  discover: "直播发现",
-  consumer: "消费建议",
-  history: "历史记录",
-  analytics: "深度分析",
-  profile: "个人主页",
+  discover: "鐩存挱鍙戠幇",
+  consumer: "娑堣垂寤鸿",
+  history: "鍘嗗彶璁板綍",
+  analytics: "娣卞害鍒嗘瀽",
+  profile: "涓汉涓婚〉",
 };
 
 const RulesPage = lazy(() => import("./pages/RulesPage"));
+
+function normalizeRoomMeta(input, fallbackRoomId = "") {
+  const roomId = input?.roomId || input?.room_id || fallbackRoomId || "";
+  return {
+    roomId,
+    roomTitle: input?.roomTitle || input?.room_title || input?.title || "",
+    anchorName: input?.anchorName || input?.anchor_name || input?.streamer_name || input?.name || "",
+    avatarUrl: input?.avatarUrl || input?.avatar_url || input?.thumbnailUrl || input?.thumbnail_url || input?.img || "",
+    thumbnailUrl: input?.thumbnailUrl || input?.thumbnail_url || input?.avatarUrl || input?.avatar_url || input?.img || "",
+  };
+}
+
+function roomDisplayTitle(meta = {}) {
+  return meta.anchorName || meta.roomTitle || (meta.roomId ? `直播间 ${meta.roomId}` : "等待直播间");
+}
+
+function roomDisplaySubtitle(meta = {}) {
+  if (!meta.roomId) return "连接后显示直播间信息";
+  const parts = [`房间号 ${meta.roomId}`];
+  if (meta.roomTitle && meta.roomTitle !== meta.anchorName) {
+    parts.push(meta.roomTitle);
+  }
+  return parts.join(" · ");
+}
+
+function roomAvatarFallback(meta = {}) {
+  const seed = roomDisplayTitle(meta).replace(/\s+/g, "");
+  return seed.slice(0, 2).toUpperCase() || "SG";
+}
 
 export default function App() {
   const [dataSource, setDataSource] = useState(null);
@@ -66,12 +94,11 @@ export default function App() {
   const feedRef = useRef(null);
   const pendingRoomIdRef = useRef(null);
 
-  const simulated = useSimulatedStream();
   const realStream = useRealStream({
     mode: dataSource === "douyin" ? "douyin" : "mock",
     roomId: sourceConfig.roomId,
-    wsBase: sourceConfig.wsBase || "ws://localhost:8011",
-    enabled: dataSource === "douyin",
+    wsBase: sourceConfig.wsBase || "ws://localhost:8012",
+    enabled: dataSource === "douyin" || dataSource === "mock",
   });
 
   if (realStream.connected && !sessionStartRef.current) {
@@ -80,9 +107,8 @@ export default function App() {
 
   const streamData = useMemo(() => {
     if (!dataSource) return null;
-    if (dataSource === "mock") return simulated;
     return realStream;
-  }, [dataSource, simulated, realStream]);
+  }, [dataSource, realStream]);
 
   const {
     utterances = [],
@@ -102,8 +128,85 @@ export default function App() {
     recentLimits = { utterances: 0, chats: 0 },
   } = streamData || {};
 
-  const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
+  const apiBase = (sourceConfig.wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
   const protectedPages = useMemo(() => new Set(["discover", "consumer", "history", "analytics", "rag", "profile"]), []);
+
+  useEffect(() => {
+    if (dataSource !== "douyin" || !sourceConfig.roomId) return;
+    const roomId = sourceConfig.roomId;
+    let alive = true;
+
+    const loadRoomInfo = async () => {
+      try {
+        const info = await requestJson(apiBase, `/douyin/room-info/${encodeURIComponent(roomId)}`);
+        if (!alive) return;
+        setSourceConfig((prev) => {
+          if (prev.roomId !== roomId) return prev;
+          const nextMeta = normalizeRoomMeta(info, roomId);
+          if (
+            prev.roomTitle === nextMeta.roomTitle
+            && prev.anchorName === nextMeta.anchorName
+            && prev.avatarUrl === nextMeta.avatarUrl
+            && prev.thumbnailUrl === nextMeta.thumbnailUrl
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            roomTitle: nextMeta.roomTitle || prev.roomTitle || "",
+            anchorName: nextMeta.anchorName || prev.anchorName || "",
+            avatarUrl: nextMeta.avatarUrl || prev.avatarUrl || "",
+            thumbnailUrl: nextMeta.thumbnailUrl || prev.thumbnailUrl || "",
+          };
+        });
+      } catch {
+        // Keep the existing room label if probing metadata fails.
+      }
+    };
+
+    loadRoomInfo();
+    return () => {
+      alive = false;
+    };
+  }, [apiBase, dataSource, sourceConfig.roomId]);
+
+  useEffect(() => {
+    if (dataSource !== "douyin" || !sourceConfig.roomId) return;
+    const liveMeta = normalizeRoomMeta({
+      roomId: sourceConfig.roomId,
+      roomTitle: realStream.roomTitle,
+      anchorName: realStream.anchorName,
+      avatarUrl: realStream.avatarUrl,
+      thumbnailUrl: realStream.thumbnailUrl,
+    }, sourceConfig.roomId);
+    if (!liveMeta.roomTitle && !liveMeta.anchorName && !liveMeta.avatarUrl && !liveMeta.thumbnailUrl) return;
+
+    setSourceConfig((prev) => {
+      if (prev.roomId !== sourceConfig.roomId) return prev;
+      if (
+        prev.roomTitle === (liveMeta.roomTitle || prev.roomTitle || "")
+        && prev.anchorName === (liveMeta.anchorName || prev.anchorName || "")
+        && prev.avatarUrl === (liveMeta.avatarUrl || prev.avatarUrl || "")
+        && prev.thumbnailUrl === (liveMeta.thumbnailUrl || prev.thumbnailUrl || "")
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        roomTitle: liveMeta.roomTitle || prev.roomTitle || "",
+        anchorName: liveMeta.anchorName || prev.anchorName || "",
+        avatarUrl: liveMeta.avatarUrl || prev.avatarUrl || "",
+        thumbnailUrl: liveMeta.thumbnailUrl || prev.thumbnailUrl || "",
+      };
+    });
+  }, [
+    dataSource,
+    sourceConfig.roomId,
+    realStream.roomTitle,
+    realStream.anchorName,
+    realStream.avatarUrl,
+    realStream.thumbnailUrl,
+  ]);
 
   const navigateTo = useCallback((nextPage) => {
     if (!authUser && protectedPages.has(nextPage)) {
@@ -260,11 +363,15 @@ export default function App() {
 
   const handleSourceSelect = useCallback((source, config) => {
     setDataSource(source);
-    setSourceConfig(config);
+    setSourceConfig(source === "douyin" ? normalizeRoomMeta(config, config?.roomId) : config);
     setShowSourceSelector(false);
   }, []);
 
-  const doSwitchRoom = useCallback((roomId) => {
+  const doSwitchRoom = useCallback((roomInput) => {
+    const roomMeta = normalizeRoomMeta(
+      typeof roomInput === "string" ? { roomId: roomInput } : roomInput,
+      typeof roomInput === "string" ? roomInput : roomInput?.room_id || roomInput?.roomId || "",
+    );
     reset();
     realStream.disconnect?.();
     sessionStartRef.current = null;
@@ -273,21 +380,26 @@ export default function App() {
     setDataSource("douyin");
     setSourceConfig((prev) => ({
       ...prev,
-      roomId,
-      wsBase: prev.wsBase || "ws://localhost:8011",
+      ...roomMeta,
+      wsBase: prev.wsBase || "ws://localhost:8012",
     }));
     setPage("dashboard");
     setTimeout(() => realStream.reconnectNow?.(), 50);
   }, [reset, realStream]);
 
-  const handleConnectRoom = useCallback((roomId) => {
+  const handleConnectRoom = useCallback((roomInput) => {
+    const roomMeta = normalizeRoomMeta(
+      typeof roomInput === "string" ? { roomId: roomInput } : roomInput,
+      typeof roomInput === "string" ? roomInput : roomInput?.room_id || roomInput?.roomId || "",
+    );
+    const roomId = roomMeta.roomId;
     const hasData = utterances.length > 0 || chatMessages.length > 0;
     const isSameRoom = sourceConfig.roomId === roomId;
     if (hasData && dataSource === "douyin" && !isSameRoom) {
-      pendingRoomIdRef.current = roomId;
-      setPendingRoomId(roomId);
+      pendingRoomIdRef.current = roomMeta;
+      setPendingRoomId(roomMeta);
     } else {
-      doSwitchRoom(roomId);
+      doSwitchRoom(roomMeta);
     }
   }, [utterances.length, chatMessages.length, dataSource, sourceConfig.roomId, doSwitchRoom]);
 
@@ -356,11 +468,13 @@ export default function App() {
         sessionStats={sessionStats}
         currentSource={dataSource}
         onSwitchSource={() => setShowSourceSelector(true)}
-        connectionStatus={dataSource !== "mock" ? {
+        connectionStatus={dataSource ? {
           connected: realStream.connected,
           connecting: realStream.connecting,
           error: realStream.error,
           roomId: sourceConfig.roomId,
+          roomTitle: sourceConfig.roomTitle,
+          anchorName: sourceConfig.anchorName,
         } : null}
         showTabs={false}
       />
@@ -380,9 +494,9 @@ export default function App() {
                       className={`sg-side-link sg-side-parent ${page === "dashboard" ? "is-active" : ""}`}
                       type="button"
                     >
-                      <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
+                      <span className="sg-side-icon">{NAV_ICONS[tab.id] || "·"}</span>
                       <span className="sg-side-label">{tab.label}</span>
-                      <span className="sg-side-chevron">⌄</span>
+                      <span className="sg-side-chevron">▾</span>
                     </button>
                     <div className="sg-side-submenu">
                       {[
@@ -413,17 +527,17 @@ export default function App() {
                   className={`sg-side-link ${page === tab.id ? "is-active" : ""} ${!authUser && protectedPages.has(tab.id) ? "is-locked" : ""}`}
                   type="button"
                 >
-                  <span className="sg-side-icon">{NAV_ICONS[tab.id] || "•"}</span>
+                  <span className="sg-side-icon">{NAV_ICONS[tab.id] || "·"}</span>
                   <span className="sg-side-label">{tab.label}</span>
                   {!authUser && protectedPages.has(tab.id) && <span className="sg-side-lock">LOCK</span>}
                 </button>
               );
             })}
-          </div>
-          <div className="sg-sidebar-card">
-            <div className="sg-sidebar-card-title">当前页</div>
-            <div className="sg-sidebar-card-body">{activeTab.description}</div>
-          </div>
+        </div>
+        <div className="sg-sidebar-card">
+          <div className="sg-sidebar-card-title">当前页</div>
+          <div className="sg-sidebar-card-body">{activeTab.description}</div>
+        </div>
         </aside>
 
         <main className="sg-main">
@@ -468,7 +582,16 @@ export default function App() {
           {!activePageLocked && page === "analytics" && (
             <AnalyticsPage apiBase={apiBase} token={authToken} />
           )}
-          {!activePageLocked && page === "rag" && <RagSettingsPage apiBase={apiBase} />}
+          {!activePageLocked && page === "rag" && (
+            <RagSettingsPage
+              apiBase={apiBase}
+              utterances={utterances}
+              chatMessages={chatMessages}
+              sessionStats={sessionStats}
+              sourceConfig={sourceConfig}
+              riskData={riskData}
+            />
+          )}
           {page === "rules" && (
             <Suspense fallback={<PageFallback title="正在载入规则知识图谱" detail="拆分后的图谱模块会按需加载，不再占用主工作台首屏体积。" />}>
               <RulesPage />
@@ -508,7 +631,7 @@ export default function App() {
       {pendingRoomId && !sessionSnapshot && (
         <SwitchRoomModal
           fromRoomId={sourceConfig.roomId}
-          toRoomId={pendingRoomId}
+          toRoomId={pendingRoomId?.roomId || pendingRoomId}
           stats={sessionStats}
           startTime={sessionStartRef.current}
           onSaveAndSwitch={handleSaveAndSwitch}
@@ -553,7 +676,11 @@ function Dashboard(props) {
   const trapCount = utterances.filter((u) => u.type === "trap").length;
   const hypeCount = utterances.filter((u) => u.type === "hype").length;
   const riskHeat = Math.max(0, Math.min(100, 100 - Math.round(rationalityIndex || 0)));
-  const roomLabel = sourceConfig.roomId ? `直播间 ${sourceConfig.roomId}` : "等待直播间";
+  const roomMeta = normalizeRoomMeta(sourceConfig, sourceConfig.roomId);
+  const roomLabel = roomDisplayTitle(roomMeta);
+  const roomSubtitle = roomDisplaySubtitle(roomMeta);
+  const roomAvatar = roomMeta.avatarUrl || roomMeta.thumbnailUrl || "";
+  const roomAvatarText = roomAvatarFallback(roomMeta);
 
   return (
     <div
@@ -576,7 +703,19 @@ function Dashboard(props) {
       <section className={`sg-dashboard-focus-strip is-${dashboardSection}`}>
         <div className="sg-dashboard-focus-main">
           <span>{isOps ? "Connection health" : "Live review"}</span>
-          <strong>{isOps ? connectionText : roomLabel}</strong>
+          {isOps ? (
+            <strong>{connectionText}</strong>
+          ) : (
+            <div className="sg-dashboard-room-identity">
+              <div className="sg-dashboard-room-avatar" aria-hidden="true">
+                {roomAvatar ? <img src={roomAvatar} alt={roomLabel} /> : <b>{roomAvatarText}</b>}
+              </div>
+              <div className="sg-dashboard-room-copy">
+                <strong>{roomLabel}</strong>
+                <em>{roomSubtitle}</em>
+              </div>
+            </div>
+          )}
           <small>
             {isOps
               ? `最近消息 ${lastSeen} · 尝试 ${realStream.connectionAttempts ?? 0} 次`
@@ -586,8 +725,8 @@ function Dashboard(props) {
         <div className="sg-dashboard-focus-metrics">
           <FocusMetric label={isOps ? "语义" : "观众"} value={isOps ? (messageTotals.utterances || utterances.length) : (viewerCount || 0)} />
           <FocusMetric label={isOps ? "弹幕" : "证据"} value={isOps ? (messageTotals.chats || chatMessages.length) : utterances.length} />
-          <FocusMetric label={isOps ? "告警" : "告警"} value={alerts?.length || 0} tone={(alerts?.length || 0) > 0 ? "danger" : "neutral"} />
-          <FocusMetric label={isOps ? "状态" : "连接"} value={isOps ? connectionText : connectionText} tone={connectionTone} />
+          <FocusMetric label="告警" value={alerts?.length || 0} tone={(alerts?.length || 0) > 0 ? "danger" : "neutral"} />
+          <FocusMetric label={isOps ? "状态" : "连接"} value={connectionText} tone={connectionTone} />
         </div>
       </section>
 
@@ -631,8 +770,9 @@ function Dashboard(props) {
                 {sourceConfig.roomId ? (
                   <VideoPlayer
                     roomId={sourceConfig.roomId}
-                    wsBase={sourceConfig.wsBase || "http://localhost:8011"}
+                    wsBase={sourceConfig.wsBase || "http://localhost:8012"}
                     isVisible={dashboardSection === "stream"}
+                    mediaUrl={realStream.mediaUrl}
                   />
                 ) : (
                   <div className="sg-video-empty">
@@ -648,7 +788,7 @@ function Dashboard(props) {
 
             <div className="sg-stream-column">
               <div className="sg-stream-chat">
-                <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected || dataSource === "mock"} />
+                <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected} />
               </div>
               <SemanticFeed ref={feedRef} utterances={utterances} />
             </div>
@@ -658,7 +798,6 @@ function Dashboard(props) {
     </div>
   );
 }
-
 function FocusMetric({ label, value, tone = "neutral" }) {
   return (
     <div className={`sg-focus-metric is-${tone}`}>
@@ -770,10 +909,12 @@ function LockedFeature({ title, description, onLogin }) {
         <h1>{title}</h1>
         <p>{description}</p>
         <p className="sg-locked-copy">
-          该功能会读取或沉淀账号数据，需要先登录或注册后使用。实时总览和首页仍可直接访问。
+          璇ュ姛鑳戒細璇诲彇鎴栨矇娣€璐﹀彿鏁版嵁锛岄渶瑕佸厛鐧诲綍鎴栨敞鍐屽悗浣跨敤銆傚疄鏃舵€昏鍜岄椤典粛鍙洿鎺ヨ闂€?
         </p>
-        <button className="sg-locked-action" onClick={onLogin} type="button">登录 / 注册</button>
+        <button className="sg-locked-action" onClick={onLogin} type="button">鐧诲綍 / 娉ㄥ唽</button>
       </div>
     </div>
   );
 }
+
+

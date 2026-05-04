@@ -91,3 +91,7 @@ npm run build
 cd ..\streamguard-backend
 python -m py_compile app.py douyin_cdp.py douyin_search.py douyin_selenium.py douyin_ws_client.py
 ```
+
+## RAG Knowledge Architecture
+
+The RAG layer is organized as a layered knowledge base: real-time transcript hot memory, historical records, rule graph, and citation-ready evidence documents. See [docs/rag_knowledge_architecture.md](docs/rag_knowledge_architecture.md) for the module design, retrieval policy, and API surface.

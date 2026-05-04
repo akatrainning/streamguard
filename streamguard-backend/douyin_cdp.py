@@ -18,6 +18,7 @@ import atexit
 import os
 import pathlib
 import stat
+import re
 from typing import Callable, Optional
 
 # ---------------------------------------------------------------------------
@@ -74,6 +75,128 @@ from webdriver_manager.chrome import ChromeDriverManager
 # ---------------------------------------------------------------------------
 _CHROMEDRIVER_PATH: Optional[str] = None
 
+
+def _merge_no_proxy_value(existing: str) -> str:
+    required = ["localhost", "127.0.0.1", "::1"]
+    items = [part.strip() for part in (existing or "").split(",") if part.strip()]
+    seen = {item.lower() for item in items}
+    for value in required:
+        if value.lower() not in seen:
+            items.append(value)
+    return ",".join(items)
+
+
+def _ensure_local_webdriver_bypass():
+    """Keep Selenium's localhost traffic away from the user's HTTP proxy."""
+    for key in ("NO_PROXY", "no_proxy"):
+        os.environ[key] = _merge_no_proxy_value(os.environ.get(key, ""))
+
+
+def _find_chrome_exe() -> str:
+    """Locate a local Chrome/Edge executable on Windows."""
+    import shutil as _sh
+
+    candidates = [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), r"Google\Chrome\Application\chrome.exe"),
+        os.path.join(os.environ.get("PROGRAMFILES", ""), r"Google\Chrome\Application\chrome.exe"),
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    for name in ("chrome", "google-chrome", "chromium", "msedge"):
+        found = _sh.which(name)
+        if found:
+            return found
+    return ""
+
+
+def _get_browser_major_version() -> Optional[int]:
+    browser_path = _find_chrome_exe()
+    if not browser_path:
+        return None
+    try:
+        version = pathlib.Path(browser_path).resolve().stat()
+    except Exception:
+        version = None
+    try:
+        import win32api  # type: ignore
+        version_str = win32api.GetFileVersionInfo(browser_path, "\\")  # pragma: no cover
+        if version_str:
+            ms = version_str["FileVersionMS"]
+            ls = version_str["FileVersionLS"]
+            major = ms // 65536
+            if major:
+                return int(major)
+    except Exception:
+        pass
+    try:
+        import ctypes
+
+        size = ctypes.windll.version.GetFileVersionInfoSizeW(browser_path, None)
+        if size:
+            res = ctypes.create_string_buffer(size)
+            ctypes.windll.version.GetFileVersionInfoW(browser_path, 0, size, res)
+            lptr = ctypes.c_void_p()
+            ulen = ctypes.c_uint()
+            if ctypes.windll.version.VerQueryValueW(res, "\\", ctypes.byref(lptr), ctypes.byref(ulen)):
+                class VS_FIXEDFILEINFO(ctypes.Structure):
+                    _fields_ = [
+                        ("dwSignature", ctypes.c_uint32),
+                        ("dwStrucVersion", ctypes.c_uint32),
+                        ("dwFileVersionMS", ctypes.c_uint32),
+                        ("dwFileVersionLS", ctypes.c_uint32),
+                        ("dwProductVersionMS", ctypes.c_uint32),
+                        ("dwProductVersionLS", ctypes.c_uint32),
+                        ("dwFileFlagsMask", ctypes.c_uint32),
+                        ("dwFileFlags", ctypes.c_uint32),
+                        ("dwFileOS", ctypes.c_uint32),
+                        ("dwFileType", ctypes.c_uint32),
+                        ("dwFileSubtype", ctypes.c_uint32),
+                        ("dwFileDateMS", ctypes.c_uint32),
+                        ("dwFileDateLS", ctypes.c_uint32),
+                    ]
+
+                ffi = VS_FIXEDFILEINFO.from_address(lptr.value)
+                major = ffi.dwFileVersionMS >> 16
+                if major:
+                    return int(major)
+    except Exception:
+        pass
+    return None
+
+
+def _cached_chromedriver_candidates() -> list[pathlib.Path]:
+    root = pathlib.Path.home() / ".wdm" / "drivers" / "chromedriver"
+    if not root.exists():
+        return []
+    hits = [path for path in root.rglob("chromedriver.exe") if path.is_file()]
+    hits.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+    return hits
+
+
+def _pick_cached_chromedriver() -> Optional[str]:
+    browser_major = _get_browser_major_version()
+    candidates = _cached_chromedriver_candidates()
+    if not candidates:
+        return None
+
+    if browser_major is not None:
+        for candidate in candidates:
+            parts = candidate.parts
+            for part in parts:
+                match = re.match(r"^(\d+)\.", part)
+                if match and int(match.group(1)) == browser_major:
+                    return str(candidate)
+
+    return str(candidates[0])
+
+
+_ensure_local_webdriver_bypass()
+
 def _fix_chromedriver_permissions(driver_path: str):
     """Best-effort permission repair for webdriver binaries on Windows."""
     if os.name != "nt" or not os.path.exists(driver_path):
@@ -123,6 +246,15 @@ def _validate_chromedriver_path(driver_path: str) -> str:
 def _get_chromedriver_path() -> str:
     global _CHROMEDRIVER_PATH
     if _CHROMEDRIVER_PATH is None:
+        cached_path = _pick_cached_chromedriver()
+        if cached_path:
+            try:
+                _CHROMEDRIVER_PATH = _validate_chromedriver_path(cached_path)
+                print(f"[chromedriver] using cached driver at {_CHROMEDRIVER_PATH}")
+                return _CHROMEDRIVER_PATH
+            except Exception as cached_err:
+                print(f"[chromedriver] cached driver unusable: {cached_err}")
+
         max_retries = 3
         last_error = None
         

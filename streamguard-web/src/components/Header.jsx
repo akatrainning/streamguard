@@ -6,14 +6,14 @@ export const NAV_TABS = [
   { id: "consumer", label: "消费建议", description: "结合直播内容和用户需求，给出购买与避坑建议。" },
   { id: "history", label: "历史记录", description: "回看往期会话，追踪风险变化与关键证据片段。" },
   { id: "rules", label: "规则中心", description: "查看合规规则、证据要求和安全改写口径。" },
-  { id: "analytics", label: "深度分析", description: "从统计维度观察趋势、分布和模型判定稳定性。" },
+  { id: "analytics", label: "数据洞察", description: "从统计维度观察趋势、分布和模型判定稳定性。" },
   { id: "profile", label: "个人主页", description: "管理账号资料、头像和个人信息。" },
 ];
 
 NAV_TABS.splice(
   Math.max(0, NAV_TABS.findIndex((tab) => tab.id === "profile")),
   0,
-  { id: "rag", label: "RAG 调优", description: "配置 AIHubMix embedding、FAISS 召回和 LLM 证据打分参数。" }
+  { id: "rag", label: "RAG 证据", description: "查看知识库证据地图、直播间总评和审核问答。" }
 );
 
 export default function Header({

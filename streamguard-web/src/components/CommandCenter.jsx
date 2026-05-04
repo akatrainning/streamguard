@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+﻿import { useEffect, useMemo, useRef } from "react";
 import { Button, MetricTile, Panel, StatusBadge } from "./ui";
 
 export default function CommandCenter({
@@ -47,7 +47,7 @@ export default function CommandCenter({
       generatedAt: new Date().toISOString(),
       source: dataSource,
       roomId: sourceConfig?.roomId || null,
-      wsBase: sourceConfig?.wsBase || "ws://localhost:8011",
+      wsBase: sourceConfig?.wsBase || "ws://localhost:8012",
       connection: {
         connected: connection.connected,
         connecting: connection.connecting,
@@ -104,12 +104,12 @@ export default function CommandCenter({
             <p>
               {connection.connected
                 ? `最近消息 ${lastSeen}，直播间数据正在进入审查管线。`
-                : "连接未稳定，优先检查后端、代理和房间号。"}
+                : "连接还不稳定，先检查后端、代理和房间号。"}
             </p>
           </div>
           <div className="sg-command-diagnostics">
             <KV k="数据源" v={dataSource || "--"} />
-            <KV k="房间" v={sourceConfig?.roomId || "--"} mono />
+            <KV k="鎴块棿" v={sourceConfig?.roomId || "--"} mono />
             <KV k="最近消息" v={lastSeen} mono />
             <KV k="尝试次数" v={connection.connectionAttempts ?? 0} mono />
           </div>
@@ -150,3 +150,4 @@ function KV({ k, v, mono, tone }) {
     </div>
   );
 }
+

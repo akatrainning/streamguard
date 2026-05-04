@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 
 const BASE_RISK = [
   { subject: "Price Transparency",  value: 70 },
@@ -12,7 +12,7 @@ const BASE_RISK = [
 export function useRealStream({
   mode = "douyin",
   roomId = "",
-  wsBase = "ws://localhost:8011",
+  wsBase = "ws://localhost:8012",
   enabled = true,
   recentUtteranceLimit = 80,
   recentChatLimit = 120,
@@ -34,15 +34,21 @@ export function useRealStream({
   const [connectionAttempts, setConnectionAttempts] = useState(0);
   const [statusLog,        setStatusLog]        = useState([]);
   const [reconnectToken,   setReconnectToken]   = useState(0);
-  const [mediaUrl,         setMediaUrl]         = useState(undefined);  // undefined=等待 null=未找到 string=就绪
+  const [mediaUrl,         setMediaUrl]         = useState(undefined);
+  const [roomIdentity,     setRoomIdentity]     = useState({
+    roomTitle: "",
+    anchorName: "",
+    avatarUrl: "",
+    thumbnailUrl: "",
+  });
 
   const wsRef       = useRef(null);
   const alertId     = useRef(0);
   const chatIdRef   = useRef(0);
   const isPausedRef = useRef(false);
   const reconnectTimerRef = useRef(null);
-  const backoffRef  = useRef(1000);   // 初始1s，指数增长至30s
-  const heartbeatRef = useRef(null);  // 心跳定时器
+  const backoffRef  = useRef(1000);   // 鍒濆1s锛屾寚鏁板闀胯嚦30s
+  const heartbeatRef = useRef(null);  // 蹇冭烦瀹氭椂鍣?
   isPausedRef.current = isPaused;
 
   const pushLog = useCallback((line) => {
@@ -60,12 +66,19 @@ export function useRealStream({
     setConnectionAttempts(v => v + 1);
     setConnecting(true);
     setError(null);
+    setMediaUrl(undefined);
+    setRoomIdentity({
+      roomTitle: "",
+      anchorName: "",
+      avatarUrl: "",
+      thumbnailUrl: "",
+    });
     pushLog(`connecting -> ${url}`);
 
-    // 清理旧连接和心跳
+    // 娓呯悊鏃ц繛鎺ュ拰蹇冭烦
     clearTimeout(heartbeatRef.current);
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
-      wsRef.current.onclose = null; // 防止触发旧onclose的重连
+      wsRef.current.onclose = null; // 闃叉瑙﹀彂鏃nclose鐨勯噸杩?
       wsRef.current.close();
     }
     const ws = new WebSocket(url);
@@ -75,10 +88,10 @@ export function useRealStream({
       setConnected(true);
       setConnecting(false);
       setError(null);
-      backoffRef.current = 1000; // 连接成功后重置backoff
+      backoffRef.current = 1000; // 杩炴帴鎴愬姛鍚庨噸缃産ackoff
       pushLog("websocket connected");
       console.log("[StreamGuard] WebSocket connected:", url);
-      // 心跳检测：45s没有收到消息就主动重连
+      // 蹇冭烦妫€娴嬶細45s娌℃湁鏀跺埌娑堟伅灏变富鍔ㄩ噸杩?
       const scheduleHeartbeat = () => {
         clearTimeout(heartbeatRef.current);
         heartbeatRef.current = setTimeout(() => {
@@ -89,13 +102,13 @@ export function useRealStream({
         }, 45000);
       };
       scheduleHeartbeat();
-      ws._scheduleHeartbeat = scheduleHeartbeat; // 每收到消息刷新
+      ws._scheduleHeartbeat = scheduleHeartbeat; // 姣忔敹鍒版秷鎭埛鏂?
     };
 
     ws.onmessage = (event) => {
       if (isPausedRef.current) return;
       setLastMessageAt(Date.now());
-      // 重置心跳计时器
+      // 閲嶇疆蹇冭烦璁℃椂鍣?
       ws._scheduleHeartbeat?.();
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
@@ -111,9 +124,22 @@ export function useRealStream({
         const url = msg.url || null;  // null = not found, string = found
         setMediaUrl(url);
         if (url) {
-          pushLog(`媒体流地址已就绪: ${url.slice(0, 60)}...`);
+          pushLog(`濯掍綋娴佸湴鍧€宸插氨缁? ${url.slice(0, 60)}...`);
         } else {
-          pushLog("未能找到媒体流（可能未开播或有反爬限制）");
+          pushLog("鏈兘鎵惧埌濯掍綋娴侊紙鍙兘鏈紑鎾垨鏈夊弽鐖檺鍒讹級");
+        }
+        return;
+      }
+
+      if (msg.event === "room_identity_discovered") {
+        setRoomIdentity({
+          roomTitle: msg.room_title || "",
+          anchorName: msg.anchor_name || "",
+          avatarUrl: msg.avatar_url || msg.thumbnail_url || "",
+          thumbnailUrl: msg.thumbnail_url || msg.avatar_url || "",
+        });
+        if (msg.anchor_name || msg.room_title) {
+          pushLog(`room identity synced: ${msg.anchor_name || msg.room_title}`);
         }
         return;
       }
@@ -121,12 +147,12 @@ export function useRealStream({
       if (msg.event === "utterance") {
         const item = {
           uid: msg.id, id: msg.id,
-          text: msg.text,                           // 原始转写（展开区显示）
-          display_text: msg.display_text || msg.text, // 整理后文本（主要展示）
+          text: msg.text,                           // 鍘熷杞啓锛堝睍寮€鍖烘樉绀猴級
+          display_text: msg.display_text || msg.text, // 鏁寸悊鍚庢枃鏈紙涓昏灞曠ず锛?
           type: msg.type,
           score: msg.score, timestamp: msg.timestamp,
           source: msg.source,
-          raw_text: msg.text,                       // 保留原始备用
+          raw_text: msg.text,                       // 淇濈暀鍘熷澶囩敤
           keywords: msg.keywords || [],
           violations: msg.violations || [],
           suggestion: msg.suggestion || "",
@@ -134,7 +160,7 @@ export function useRealStream({
           engine: msg.engine,
         };
         setUtterances(prev => {
-          // 去重：如果 ID 已存在则跳过（防止 WebSocket 重连导致重复消息）
+          // 鍘婚噸锛氬鏋?ID 宸插瓨鍦ㄥ垯璺宠繃锛堥槻姝?WebSocket 閲嶈繛瀵艰嚧閲嶅娑堟伅锛?
           if (prev.some(u => u.id === item.id)) return prev;
           return [item, ...prev].slice(0, recentUtteranceLimit);
         });
@@ -144,7 +170,7 @@ export function useRealStream({
         });
         setRiskData(prev => {
           const ss = msg.sub_scores || {};
-          // 根据 type 推算紧迫度：trap=高压 hype=中 fact=低
+          // 鏍规嵁 type 鎺ㄧ畻绱ц揩搴︼細trap=楂樺帇 hype=涓?fact=浣?
           const urgencyVal = msg.type === "trap" ? 88 : msg.type === "hype" ? 55 : 18;
           const targets = {
             "Price Transparency": Math.round((msg.score ?? 0.5) * 100),
@@ -154,7 +180,7 @@ export function useRealStream({
             "Evidence":          Math.round((ss.fact_verification ?? 0.5) * 100),
             "Compliance":        Math.round((ss.compliance_score ?? 0.5) * 100),
           };
-          // EMA 平滑 α=0.35，避免图表跳动过大
+          // EMA 骞虫粦 伪=0.35锛岄伩鍏嶅浘琛ㄨ烦鍔ㄨ繃澶?
           return prev.map(d => ({
             ...d,
             value: Math.round(d.value * 0.65 + (targets[d.subject] ?? d.value) * 0.35),
@@ -186,7 +212,7 @@ export function useRealStream({
         const fallbackId = `${Date.now()}-${chatIdRef.current++}`;
         const chatId = msg.id ?? fallbackId;
         setChatMessages(prev => {
-          // 去重：如果 ID 已存在则跳过
+          // 鍘婚噸锛氬鏋?ID 宸插瓨鍦ㄥ垯璺宠繃
           if (msg.id && prev.some(c => c.id === chatId)) return prev;
           return [
             {
@@ -194,13 +220,13 @@ export function useRealStream({
               user: msg.user,
               text: msg.text,
               timestamp: msg.timestamp,
-              // 保留后端语义分析字段（供LiveStreamPanel情感/意图可视化使用）
+              // 淇濈暀鍚庣璇箟鍒嗘瀽瀛楁锛堜緵LiveStreamPanel鎯呮劅/鎰忓浘鍙鍖栦娇鐢級
               sentiment:      msg.sentiment      || "neutral",
               intent:         msg.intent         || "other",
               flags:          msg.flags          || [],
               risk_score:     msg.risk_score     || 0,
-              label:          msg.label          || "💬 普通弹幕",
-              sentiment_icon: msg.sentiment_icon || "😐",
+              label:          msg.label          || "普通弹幕",
+              sentiment_icon: msg.sentiment_icon || "馃槓",
               correlation:    msg.correlation    || "unrelated",
             },
             ...prev,
@@ -228,7 +254,7 @@ export function useRealStream({
       setConnecting(false);
       if (enabled && wsRef.current === ws) {
         const delay = backoffRef.current;
-        backoffRef.current = Math.min(delay * 2, 30000); // 最长30s
+        backoffRef.current = Math.min(delay * 2, 30000); // 鏈€闀?0s
         pushLog(`websocket closed, retry in ${(delay/1000).toFixed(1)}s`);
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = setTimeout(connect, delay);
@@ -252,7 +278,7 @@ export function useRealStream({
       clearTimeout(reconnectTimerRef.current);
       clearTimeout(heartbeatRef.current);
       if (wsRef.current) {
-        wsRef.current.onclose = null; // 防止触发重连
+        wsRef.current.onclose = null; // 闃叉瑙﹀彂閲嶈繛
         wsRef.current.close();
       }
     };
@@ -267,15 +293,22 @@ export function useRealStream({
     setViewerCount(0);
     setSessionStats({ total:0, trap:0, hype:0, fact:0 });
     setMessageTotals({ utterances: 0, chats: 0, total: 0 });
+    setMediaUrl(undefined);
+    setRoomIdentity({
+      roomTitle: "",
+      anchorName: "",
+      avatarUrl: "",
+      thumbnailUrl: "",
+    });
   }, []);
 
   const reconnectNow = useCallback(() => {
-    backoffRef.current = 1000; // 手动重连重置backoff
+    backoffRef.current = 1000; // 鎵嬪姩閲嶈繛閲嶇疆backoff
     pushLog("manual reconnect requested");
     setReconnectToken(v => v + 1);
   }, [pushLog]);
 
-  /** 主动断开连接并停止自动重连（结束监控时使用） */
+  /** 涓诲姩鏂紑杩炴帴骞跺仠姝㈣嚜鍔ㄩ噸杩烇紙缁撴潫鐩戞帶鏃朵娇鐢級 */
   const disconnect = useCallback(() => {
     clearTimeout(reconnectTimerRef.current);
     clearTimeout(heartbeatRef.current);
@@ -316,6 +349,12 @@ export function useRealStream({
     connected, connecting, error,
     lastMessageAt, connectionAttempts, statusLog, reconnectNow, disconnect,
     mediaUrl,
+    roomTitle: roomIdentity.roomTitle,
+    anchorName: roomIdentity.anchorName,
+    avatarUrl: roomIdentity.avatarUrl,
+    thumbnailUrl: roomIdentity.thumbnailUrl,
     product: { name: "Live Product", brand: "Live Room", price: "--", stock: "--" },
   };
 }
+
+

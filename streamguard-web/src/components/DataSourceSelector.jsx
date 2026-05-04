@@ -1,21 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Button, SegmentedControl, TextField } from "./ui";
 import "./DataSourceSelector.css";
 
 const QUICK_ROOMS = [
-  { label: "同行示例", id: "646454278948" },
-  { label: "品牌专场", id: "208823316033" },
+  { label: "鍚岃绀轰緥", id: "646454278948" },
+  { label: "鍝佺墝涓撳満", id: "208823316033" },
 ];
 
 const MODE_OPTIONS = [
-  { value: "douyin", label: "真实直播", meta: "Live" },
-  { value: "mock", label: "演示数据", meta: "Demo" },
+  { value: "douyin", label: "鐪熷疄鐩存挱", meta: "Live" },
+  { value: "mock", label: "婕旂ず鏁版嵁", meta: "Demo" },
 ];
 
 export default function DataSourceSelector({ onSelect, onConnect, variant = "modal" }) {
   const [selected, setSelected] = useState("douyin");
   const [roomInput, setRoomInput] = useState("");
-  const [wsBase, setWsBase] = useState("ws://localhost:8011");
+  const [wsBase, setWsBase] = useState("ws://localhost:8012");
   const [probeLoading, setProbeLoading] = useState(false);
   const [probeData, setProbeData] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -35,12 +35,12 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
 
     const timer = window.setTimeout(async () => {
       try {
-        const httpBase = (wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
+        const httpBase = (wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
         const res = await fetch(`${httpBase}/douyin/room-info/${roomId}`);
         const data = res.ok ? await res.json() : { error: `HTTP ${res.status}` };
         setProbeData(data);
       } catch {
-        setProbeData({ error: "服务未响应" });
+        setProbeData({ error: "鏈嶅姟鏈搷搴? });
       } finally {
         setProbeLoading(false);
       }
@@ -50,9 +50,9 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
   }, [roomId, selected, wsBase]);
 
   const probeState = useMemo(() => {
-    if (selected === "mock") return { tone: "ready", label: "DEMO READY", value: "模拟流已就绪" };
-    if (!roomInput.trim()) return { tone: "idle", label: "WAITING", value: "输入直播间" };
-    if (!roomId) return { tone: "warn", label: "NO ID", value: "未识别房间号" };
+    if (selected === "mock") return { tone: "ready", label: "DEMO READY", value: "妯℃嫙娴佸凡灏辩华" };
+    if (!roomInput.trim()) return { tone: "idle", label: "WAITING", value: "杈撳叆鐩存挱闂? };
+    if (!roomId) return { tone: "warn", label: "NO ID", value: "鏈瘑鍒埧闂村彿" };
     if (probeLoading) return { tone: "scan", label: "SCANNING", value: roomId };
     if (probeData?.error) return { tone: "error", label: "OFFLINE", value: probeData.error };
     if (probeData) return { tone: "ready", label: "READY", value: probeData.room_id || roomId };
@@ -62,8 +62,15 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
   const handleConnect = () => {
     if (!canConnect) return;
     const config = selected === "douyin"
-      ? { roomId: roomId.trim(), wsBase: wsBase.trim() || "ws://localhost:8011" }
-      : { wsBase: wsBase.trim() || "ws://localhost:8011" };
+      ? {
+          roomId: roomId.trim(),
+          wsBase: wsBase.trim() || "ws://localhost:8012",
+          roomTitle: probeData?.room_title || "",
+          anchorName: probeData?.anchor_name || "",
+          avatarUrl: probeData?.avatar_url || probeData?.thumbnail_url || "",
+          thumbnailUrl: probeData?.thumbnail_url || "",
+        }
+      : { wsBase: wsBase.trim() || "ws://localhost:8012" };
     onSelect(selected, config);
     onConnect?.(selected, config);
   };
@@ -111,7 +118,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
           <div className="source-console-head">
             <div>
               <span className="source-kicker">Data Source</span>
-              <h2>连接数据源</h2>
+              <h2>杩炴帴鏁版嵁婧?/h2>
             </div>
             <div className={`source-state is-${probeState.tone}`}>
               <span>{probeState.label}</span>
@@ -129,15 +136,15 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
           {selected === "douyin" && (
             <div className="source-field">
               <TextField
-                label="直播间"
+                label="鐩存挱闂?
                 type="text"
                 value={roomInput}
                 onChange={(event) => setRoomInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && handleConnect()}
-                placeholder="粘贴链接或输入房间号"
+                placeholder="绮樿创閾炬帴鎴栬緭鍏ユ埧闂村彿"
                 action={(
                   <Button variant="primary" onClick={handleConnect} disabled={!canConnect}>
-                    连接
+                    杩炴帴
                   </Button>
                 )}
               />
@@ -154,20 +161,20 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
 
           <div className="source-advanced">
             <Button onClick={() => setShowAdvanced((value) => !value)}>
-              {showAdvanced ? "收起节点" : "节点设置"}
+              {showAdvanced ? "鏀惰捣鑺傜偣" : "鑺傜偣璁剧疆"}
             </Button>
             {showAdvanced && (
               <input
                 type="text"
                 value={wsBase}
                 onChange={(event) => setWsBase(event.target.value)}
-                placeholder="ws://localhost:8011"
+                placeholder="ws://localhost:8012"
               />
             )}
           </div>
 
           <Button className="source-submit" variant="success" onClick={handleConnect} disabled={!canConnect}>
-            {selected === "mock" ? "进入演示" : "开始监测"}
+            {selected === "mock" ? "杩涘叆婕旂ず" : "寮€濮嬬洃娴?}
           </Button>
         </div>
       </div>
@@ -199,3 +206,4 @@ function extractRoomId(input = "") {
   const anyDigits = text.match(/(\d{6,24})/);
   return anyDigits ? anyDigits[1] : "";
 }
+
