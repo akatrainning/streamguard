@@ -1,6 +1,4 @@
-﻿import { useCallback, useEffect, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   clearHistorySessions,
   deleteHistorySession,
@@ -11,28 +9,34 @@ import {
 import { Button, Panel, SegmentedControl, StatusBadge, TextField } from "../components/ui";
 import SessionReportModal from "../components/SessionReportModal";
 
-const DEMO_SESSIONS = [
-  { id: "demo-1", date: "2026-03-02 14:30", product: "闆呰瘲鍏伴粵淇姢绮惧崕", brand: "鐩存挱闂?888888", duration: "2h 15m", total: 42, fact: 19, hype: 15, trap: 8, score: 64, viewers: 28500, _demo: true },
-  { id: "demo-2", date: "2026-03-01 20:15", product: "Mate70 Pro 涓撳満", brand: "鐩存挱闂?66666", duration: "3h 00m", total: 67, fact: 45, hype: 18, trap: 4, score: 82, viewers: 89000, _demo: true },
-  { id: "demo-3", date: "2026-03-01 10:30", product: "榛勯噾鎶曡祫鍜ㄨ", brand: "鐩存挱闂?12345", duration: "45m", total: 19, fact: 3, hype: 8, trap: 8, score: 22, viewers: 3200, _demo: true },
-];
-
 const FILTERS = [
-  { value: "all", label: "鍏ㄩ儴", meta: "All" },
-  { value: "high", label: "楂樺嵄", meta: "Risk" },
-  { value: "ok", label: "鍚堣", meta: "Safe" },
+  { value: "all", label: "全部", meta: "All" },
+  { value: "high", label: "高风险", meta: "Risk" },
+  { value: "safe", label: "较稳", meta: "Safe" },
 ];
 
-const scoreTone = (score) => (score >= 75 ? "success" : score >= 50 ? "warning" : "danger");
-const scoreLabel = (score) => (score >= 75 ? "鍚堣" : score >= 50 ? "娉ㄦ剰" : "楂樺嵄");
-const scoreColor = (score) => (score >= 75 ? "var(--fact)" : score >= 50 ? "var(--hype)" : "var(--trap)");
+const DEMO_SESSIONS = [
+  { id: "demo-1", product: "与辉同行专场", brand: "直播间 646454278948", score: 64, total: 42, trap: 8, fact: 19, viewers: 28500, _demo: true },
+  { id: "demo-2", product: "品牌上新场", brand: "直播间 208823316033", score: 82, total: 67, trap: 4, fact: 45, viewers: 89000, _demo: true },
+];
+
+function scoreTone(score) {
+  if (score >= 75) return "success";
+  if (score >= 50) return "warning";
+  return "danger";
+}
+
+function scoreLabel(score) {
+  if (score >= 75) return "较稳";
+  if (score >= 50) return "注意";
+  return "高风险";
+}
 
 export default function HistoryPage({ apiBase = "http://localhost:8012", token }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
-  const [expanded, setExpanded] = useState(null);
   const [search, setSearch] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [replaySnapshot, setReplaySnapshot] = useState(null);
@@ -45,7 +49,7 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
       const payload = await listHistorySessions(apiBase, token, 100);
       setSessions(payload.items || []);
     } catch (err) {
-      setError(err?.message || "鍘嗗彶璁板綍鍔犺浇澶辫触");
+      setError(err?.message || "历史记录加载失败");
       setSessions([]);
     } finally {
       setLoading(false);
@@ -56,33 +60,33 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
     reload();
   }, [reload]);
 
-  const handleDelete = useCallback(async (id, event) => {
-    event.stopPropagation();
+  const handleDelete = useCallback(async (id) => {
     try {
       await deleteHistorySession(apiBase, token, id);
       await reload();
     } catch (err) {
-      setError(err?.message || "鍒犻櫎澶辫触");
+      setError(err?.message || "删除失败");
     }
   }, [apiBase, token, reload]);
 
-  const handleRename = useCallback(async (id, name) => {
+  const handleRename = useCallback(async (id, product) => {
+    const next = window.prompt("修改会话标题", product || "");
+    if (!next || !next.trim()) return;
     try {
-      await renameHistorySession(apiBase, token, id, name);
+      await renameHistorySession(apiBase, token, id, next.trim());
       await reload();
     } catch (err) {
       setError(err?.message || "重命名失败");
     }
   }, [apiBase, token, reload]);
 
-  const handleReplay = useCallback(async (id, event) => {
-    event.stopPropagation();
+  const handleReplay = useCallback(async (id) => {
     try {
       const payload = await getHistorySession(apiBase, token, id);
       if (payload.snapshot) setReplaySnapshot(payload.snapshot);
       else setError("这条记录没有完整报告数据");
     } catch (err) {
-      setError(err?.message || "鎶ュ憡鍔犺浇澶辫触");
+      setError(err?.message || "报告加载失败");
     }
   }, [apiBase, token]);
 
@@ -92,17 +96,25 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
       await reload();
       setShowClearConfirm(false);
     } catch (err) {
-      setError(err?.message || "娓呯┖澶辫触");
+      setError(err?.message || "清空失败");
     }
   }, [apiBase, token, reload]);
 
   const isDemo = sessions.length === 0;
   const allSessions = isDemo ? DEMO_SESSIONS : sessions;
-  const filtered = allSessions.filter((session) => {
-    const matchesFilter = filter === "all" || (filter === "high" && session.score < 50) || (filter === "ok" && session.score >= 75);
-    const matchesSearch = !search || (session.product || "").includes(search) || (session.brand || "").includes(search);
-    return matchesFilter && matchesSearch;
-  });
+
+  const filtered = useMemo(() => {
+    return allSessions.filter((session) => {
+      const score = Number(session.score || 0);
+      const matchesFilter =
+        filter === "all"
+        || (filter === "high" && score < 50)
+        || (filter === "safe" && score >= 75);
+      const haystack = `${session.product || ""} ${session.brand || ""} ${session.room_id || ""}`;
+      const matchesSearch = !search.trim() || haystack.includes(search.trim());
+      return matchesFilter && matchesSearch;
+    });
+  }, [allSessions, filter, search]);
 
   return (
     <>
@@ -110,13 +122,13 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
         <header className="sg-history-head">
           <div>
             <div className="sg-ui-eyebrow">Archive</div>
-            <h1>鍘嗗彶妗ｆ</h1>
+            <h1>历史档案</h1>
             <p>
               {loading
-                ? "姝ｅ湪鍔犺浇璐﹀彿鍘嗗彶銆?
+                ? "正在加载账号历史。"
                 : isDemo
-                  ? "褰撳墠灞曠ず绀轰緥妗ｆ銆傜粨鏉熺湡瀹炵洿鎾細璇濆悗锛屾姤鍛婁細鑷姩娌夋穩鍒拌繖閲屻€?
-                  : `鍏?${sessions.length} 鍦虹洿鎾褰曘€俙}
+                  ? "当前展示示例档案。结束真实直播会话后，报告会自动沉淀到这里。"
+                  : `共 ${sessions.length} 场直播记录。`}
             </p>
           </div>
 
@@ -124,208 +136,86 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
             <div className="sg-history-clear">
               {showClearConfirm ? (
                 <>
-                  <span>纭娓呯┖鎵€鏈夎褰曪紵</span>
-                  <Button variant="danger" onClick={handleClearAll}>纭娓呯┖</Button>
-                  <Button onClick={() => setShowClearConfirm(false)}>鍙栨秷</Button>
+                  <span>确认清空所有记录？</span>
+                  <Button variant="danger" onClick={handleClearAll}>确认清空</Button>
+                  <Button onClick={() => setShowClearConfirm(false)}>取消</Button>
                 </>
               ) : (
-                <Button variant="danger" onClick={() => setShowClearConfirm(true)}>娓呯┖鍘嗗彶</Button>
+                <Button variant="danger" onClick={() => setShowClearConfirm(true)}>清空历史</Button>
               )}
             </div>
           )}
         </header>
 
-        {error && <div className="sg-history-error">{error}</div>}
-
-        <Panel className="sg-history-toolbar">
-          <TextField
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="鎼滅储鍚嶇О / 鎴块棿鍙?
-          />
-          <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
+        <Panel className="sg-history-toolbar" title="检索与筛选" eyebrow="Filters">
+          <div className="sg-history-toolbar-row">
+            <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
+            <TextField
+              label="检索"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="按标题、品牌或房间号过滤"
+            />
+          </div>
+          {error && <div className="sg-history-error">{error}</div>}
         </Panel>
 
         <div className="sg-history-list">
-          {filtered.map((session, index) => (
-            <HistoryRow
-              key={session.id}
-              session={session}
-              index={index}
-              isOpen={expanded === session.id}
-              onToggle={() => setExpanded(expanded === session.id ? null : session.id)}
-              onDelete={handleDelete}
-              onRename={handleRename}
-              onReplay={handleReplay}
-            />
-          ))}
+          {filtered.map((session) => {
+            const score = Number(session.score || 0);
+            return (
+              <div key={session.id} className={`sg-history-row ${scoreTone(score) === "success" ? "is-success" : scoreTone(score) === "danger" ? "is-danger" : "is-warning"}`}>
+                <div className="sg-history-row-main" onClick={() => handleReplay(session.id)}>
+                  <div className="sg-history-score" style={{ "--score-color": `var(--${scoreTone(score) === "success" ? "fact" : scoreTone(score) === "danger" ? "trap" : "hype"})` }}>
+                    <strong>{score}</strong>
+                    <span>SCORE</span>
+                  </div>
+                  
+                  <div className="sg-history-info">
+                    <div className="sg-history-title-line">
+                      <strong>{session.product || session.title || "未命名会话"}</strong>
+                      <span>{session.brand || session.room_id || "直播会话"}</span>
+                    </div>
+                    <div className="sg-history-meta">
+                      <span>总条数 {session.total || 0}</span>
+                      <span>事实 {session.fact || 0}</span>
+                      <span>陷阱 {session.trap || 0}</span>
+                      <span>观众 {session.viewers || 0}</span>
+                    </div>
+                  </div>
+
+                  <div className="sg-history-pills">
+                    <div className={`sg-history-type is-${scoreTone(score)}`}>
+                      <strong style={{color: `var(--${scoreTone(score) === "success" ? "fact" : scoreTone(score) === "danger" ? "trap" : "hype"})`}}>{scoreLabel(score)}</strong>
+                    </div>
+                  </div>
+
+                  <div className="sg-history-actions">
+                    <Button onClick={(e) => { e.stopPropagation(); handleReplay(session.id); }}>回看</Button>
+                    {!session._demo && <Button onClick={(e) => { e.stopPropagation(); handleRename(session.id, session.product); }}>重命名</Button>}
+                    {!session._demo && <Button variant="danger" onClick={(e) => { e.stopPropagation(); handleDelete(session.id); }}>删除</Button>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {filtered.length === 0 && (
-          <Panel className="sg-history-empty">
-            鏈壘鍒板尮閰嶈褰曘€?          </Panel>
+          <Panel className="sg-history-empty" title="没有匹配结果" eyebrow="Empty">
+            <p>换一个筛选条件试试，或者先完成一次新的直播监测。</p>
+          </Panel>
         )}
       </main>
 
       {replaySnapshot && (
         <SessionReportModal
           snapshot={replaySnapshot}
-          apiBase={replaySnapshot._apiBase || apiBase}
+          apiBase={apiBase}
+          onDismiss={() => setReplaySnapshot(null)}
           onClose={() => setReplaySnapshot(null)}
         />
       )}
     </>
   );
 }
-
-function HistoryRow({ session, index, isOpen, onToggle, onDelete, onRename, onReplay }) {
-  const isReal = !session._demo;
-  const tone = scoreTone(session.score);
-  const barData = [
-    { name: "浜嬪疄", value: session.fact, color: "var(--fact)" },
-    { name: "澶稿ぇ", value: session.hype, color: "var(--hype)" },
-    { name: "闄烽槺", value: session.trap, color: "var(--trap)" },
-  ];
-
-  return (
-    <motion.section
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index * 0.035, 0.22) }}
-      className={`sg-history-row is-${tone}`}
-    >
-      <button className="sg-history-row-main" onClick={onToggle} type="button">
-        <div className="sg-history-score" style={{ "--score-color": scoreColor(session.score) }}>
-          <strong className="mono">{session.score}</strong>
-          <span>{scoreLabel(session.score)}</span>
-        </div>
-
-        <div className="sg-history-info">
-          <div className="sg-history-title-line">
-            {isReal
-              ? <EditableTitle value={session.product} sessionId={session.id} onRename={onRename} />
-              : <strong>{session.product}</strong>}
-            <span>{session.brand}</span>
-            {session._demo && <StatusBadge tone="warning">绀轰緥</StatusBadge>}
-          </div>
-          <div className="sg-history-meta">
-            <span>{session.date}</span>
-            <span>{session.duration}</span>
-            {session.viewers > 0 && <span>{session.viewers.toLocaleString()} 瑙備紬</span>}
-            <span>{session.total} 璇濇湳</span>
-          </div>
-        </div>
-
-        <div className="sg-history-pills">
-          <TypePill count={session.fact} tone="success" label="浜嬪疄" />
-          <TypePill count={session.hype} tone="warning" label="澶稿ぇ" />
-          <TypePill count={session.trap} tone="danger" label="闄烽槺" />
-        </div>
-
-        {isReal && (
-          <div className="sg-history-actions">
-            <Button onClick={(event) => onReplay(session.id, event)} variant="primary">鎶ュ憡</Button>
-            <Button onClick={(event) => onDelete(session.id, event)} variant="danger">鍒犻櫎</Button>
-          </div>
-        )}
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.24, ease: "easeInOut" }}
-            className="sg-history-detail-wrap"
-          >
-            <div className="sg-history-detail">
-              <Panel title="璇濇湳绫诲瀷鍒嗗竷" bodyClassName="sg-chart-panel">
-                <ResponsiveContainer width="100%" height={150}>
-                  <BarChart data={barData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
-                    <XAxis dataKey="name" tick={{ fill: "var(--text-secondary)", fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <YAxis tick={{ fill: "var(--text-muted)", fontSize: 10 }} tickLine={false} axisLine={false} />
-                    <Tooltip contentStyle={{ background: "#101112", border: "1px solid #30332f", borderRadius: 6, fontSize: 12 }} />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {barData.map((entry) => <Cell key={entry.name} fill={entry.color} fillOpacity={0.86} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </Panel>
-
-              <Panel title="浼氳瘽缁熻">
-                <StatRow label="闄烽槺璇濇湳鍗犳瘮" value={session.total ? `${((session.trap / session.total) * 100).toFixed(1)}%` : "--"} tone="danger" />
-                <StatRow label="澶稿ぇ璇濇湳鍗犳瘮" value={session.total ? `${((session.hype / session.total) * 100).toFixed(1)}%` : "--"} tone="warning" />
-                <StatRow label="浜嬪疄璇濇湳鍗犳瘮" value={session.total ? `${((session.fact / session.total) * 100).toFixed(1)}%` : "--"} tone="success" />
-                <StatRow label="瑙傜湅浜烘暟" value={session.viewers?.toLocaleString?.() || 0} />
-                <StatRow label="鍚堣璇勫垎" value={`${session.score}/100`} tone={tone} />
-                <StatRow label="鏃堕暱" value={session.duration} />
-                {isReal && <Button className="sg-history-report-wide" onClick={(event) => onReplay(session.id, event)} variant="primary">鏌ョ湅瀹屾暣鎶ュ憡</Button>}
-              </Panel>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.section>
-  );
-}
-
-function EditableTitle({ value, sessionId, onRename }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  const commit = () => {
-    const name = draft.trim();
-    if (name && name !== value) onRename(sessionId, name);
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <input
-        autoFocus
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commit();
-          if (event.key === "Escape") setEditing(false);
-        }}
-        onClick={(event) => event.stopPropagation()}
-        className="sg-history-title-input"
-      />
-    );
-  }
-
-  return (
-    <strong
-      title="鐐瑰嚮缂栬緫鍚嶇О"
-      onClick={(event) => {
-        event.stopPropagation();
-        setDraft(value);
-        setEditing(true);
-      }}
-    >
-      {value}
-    </strong>
-  );
-}
-
-function TypePill({ count, tone, label }) {
-  return (
-    <span className={`sg-history-type is-${tone}`}>
-      <strong className="mono">{count}</strong>
-      <em>{label}</em>
-    </span>
-  );
-}
-
-function StatRow({ label, value, tone = "neutral" }) {
-  return (
-    <div className="sg-history-stat-row">
-      <span>{label}</span>
-      <strong className={`mono is-${tone}`}>{value}</strong>
-    </div>
-  );
-}
-

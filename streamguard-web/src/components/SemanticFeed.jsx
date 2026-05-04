@@ -109,28 +109,27 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
 
                 <span className="sg-semantic-meta">
                   <strong>{cfg.label}</strong>
-                  {item.source && (
-                    <small style={{ "--source-color": src.color, "--source-bg": src.bg, "--source-border": src.border }}>
-                      <b>{src.tag}</b>
-                      {src.label}
-                    </small>
-                  )}
-                  <span className="sg-semantic-score" aria-label={`score ${score.toFixed(2)}`}>
-                    <i style={{ width: `${score * 100}%` }} />
-                  </span>
-                  <span className="mono">{score.toFixed(2)}</span>
                   <span>{item.timestamp || "--:--:--"}</span>
-                  <span className="sg-semantic-chevron" aria-hidden="true">{isOpen ? "收起" : "展开"}</span>
+                  {["trap", "hype"].includes(item.type) && <span className="sg-semantic-chevron" aria-hidden="true">{isOpen ? "收起" : "详情"}</span>}
                 </span>
               </button>
+
+              {/* 【极简策略】将重要违规点进行平铺展示，减少无效的展开点击 */}
+              {["trap", "hype"].includes(item.type) && !isOpen && !!item.violations?.length && (
+                <div style={{ padding: "8px 16px", marginTop: "4px", fontSize: "12px", background: "var(--trap-bg)", borderLeft: "2px solid var(--trap)", borderRadius: "4px", color: "var(--text-primary)" }}>
+                  <span style={{ fontWeight: "700", color: "var(--trap)" }}>风险：</span>
+                  {item.violations[0]}
+                  {item.violations.length > 1 && ` (及其他 ${item.violations.length - 1} 项)`}
+                </div>
+              )}
 
               {isOpen && (
                 <div className="sg-semantic-detail">
                   {!!item.violations?.length && (
                     <div>
-                      <h3>命中风险</h3>
+                      <h3 style={{ color: "var(--trap)" }}>命中风险</h3>
                       {item.violations.slice(0, 5).map((v, i) => (
-                        <p key={i}>{v}</p>
+                        <p key={i}>• {v}</p>
                       ))}
                     </div>
                   )}
@@ -147,10 +146,6 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                       <h3>原始转写</h3>
                       <p>{item.text}</p>
                     </aside>
-                  )}
-
-                  {!item.violations?.length && !item.suggestion && !(item.display_text && item.display_text !== item.text) && (
-                    <div className="sg-semantic-empty-line">暂无详细分析数据</div>
                   )}
                 </div>
               )}

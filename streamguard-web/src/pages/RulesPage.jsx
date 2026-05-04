@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { CASES, RULES, SAFE_REWRITE_TEMPLATES, getRuleProfile } from "../data/complianceRules";
 
 const RISK_META = {
@@ -313,6 +313,65 @@ function KnowledgeGraphCanvas({ rule, graph, focusNodeId, onFocusNode }) {
     nodes: graph.nodes.filter((node) => lane.kinds.includes(node.kind)),
   })).filter((lane) => lane.nodes.length > 0);
 
+  const svgRef = useRef(null);
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, startTx: 0, startTy: 0 });
+
+  const handlePointerDown = (e) => {
+    // Only capture left click that isn't on a node
+    if (e.button !== 0) return;
+    const isNode = e.target.tagName === "rect" && e.target.className.baseVal && e.target.className.baseVal.includes("sg-rules-node-card");
+    if (isNode) return;
+    
+    setIsDragging(true);
+    e.target.setPointerCapture(e.pointerId);
+    dragStart.current = {
+      x: e.clientX,
+      y: e.clientY,
+      startTx: transform.x,
+      startTy: transform.y,
+    };
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    setTransform(prev => ({
+      ...prev,
+      x: dragStart.current.startTx + dx,
+      y: dragStart.current.startTy + dy,
+    }));
+  };
+
+  const handlePointerUp = (e) => {
+    if (isDragging) {
+      setIsDragging(false);
+      e.target.releasePointerCapture(e.pointerId);
+    }
+  };
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const scaleAdj = e.deltaY * -0.001;
+      setTransform(prev => {
+        const newK = Math.min(Math.max(0.2, prev.k + scaleAdj * prev.k), 3);
+        // Approximation: scale around center.
+        return { ...prev, k: newK };
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const zoomIn = () => setTransform(p => ({ ...p, k: Math.min(3, p.k * 1.2) }));
+  const zoomOut = () => setTransform(p => ({ ...p, k: Math.max(0.2, p.k / 1.2) }));
+  const resetZoom = () => setTransform({ x: 0, y: 0, k: 1 });
+
   return (
     <section className="sg-rules-graph-panel">
       <header className="sg-rules-graph-head">
@@ -326,20 +385,31 @@ function KnowledgeGraphCanvas({ rule, graph, focusNodeId, onFocusNode }) {
         </div>
       </header>
 
-      <p id="rules-graph-guide" className="sg-rules-graph-guide">
-        图谱节点支持点击和键盘操作，按 <span className="mono">Tab</span> 聚焦，按 <span className="mono">Enter</span> 或{" "}
-        <span className="mono">Space</span> 切换右侧说明。
-      </p>
+      <div className="sg-rules-graph-controls" style={{ display: 'flex', gap: '8px', padding: '0 24px 12px 24px', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p id="rules-graph-guide" className="sg-rules-graph-guide" style={{ margin: 0 }}>
+          支持拖拽和滚轮缩放。点击或按 <span className="mono">Tab</span> 聚焦节点。
+        </p>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="sg-button is-secondary is-small" onClick={zoomOut} title="缩小">-</button>
+          <button className="sg-button is-secondary is-small" onClick={resetZoom} title="重置">1:1</button>
+          <button className="sg-button is-secondary is-small" onClick={zoomIn} title="放大">+</button>
+        </div>
+      </div>
 
       <div className="sg-rules-graph-desktop">
-        <div className="sg-rules-graph-canvas">
+        <div className="sg-rules-graph-canvas" style={{ cursor: isDragging ? 'grabbing' : 'grab', overflow: 'hidden' }}>
           <svg
+            ref={svgRef}
             viewBox={`0 0 ${width} ${height}`}
             width="100%"
             height="100%"
             role="img"
             aria-describedby="rules-graph-guide"
             aria-label={`${rule.displayTitle} 的关系图谱`}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
           >
             <defs>
               {Object.keys(GRAPH_NODE_META).map((key) => (
@@ -349,7 +419,8 @@ function KnowledgeGraphCanvas({ rule, graph, focusNodeId, onFocusNode }) {
               ))}
             </defs>
 
-            {[
+            <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`} style={{ transition: isDragging ? 'none' : 'transform 0.1s ease-out' }}>
+              {[
               { x: 28, y: 28, w: 170, h: height - 56, label: "RULE" },
               { x: 252, y: 28, w: 196, h: height - 56, label: "CLAIM" },
               { x: 520, y: 28, w: 196, h: height - 56, label: "EVIDENCE" },
@@ -413,8 +484,7 @@ function KnowledgeGraphCanvas({ rule, graph, focusNodeId, onFocusNode }) {
                   )}
                 </g>
               );
-            })}
-          </svg>
+            })}            </g>          </svg>
         </div>
       </div>
 

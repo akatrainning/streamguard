@@ -3,13 +3,13 @@ import { Button, SegmentedControl, TextField } from "./ui";
 import "./DataSourceSelector.css";
 
 const QUICK_ROOMS = [
-  { label: "鍚岃绀轰緥", id: "646454278948" },
-  { label: "鍝佺墝涓撳満", id: "208823316033" },
+  { label: "同行示例", id: "646454278948" },
+  { label: "品牌专场", id: "208823316033" },
 ];
 
 const MODE_OPTIONS = [
-  { value: "douyin", label: "鐪熷疄鐩存挱", meta: "Live" },
-  { value: "mock", label: "婕旂ず鏁版嵁", meta: "Demo" },
+  { value: "douyin", label: "真实直播", meta: "Live" },
+  { value: "mock", label: "演示数据", meta: "Demo" },
 ];
 
 export default function DataSourceSelector({ onSelect, onConnect, variant = "modal" }) {
@@ -40,7 +40,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
         const data = res.ok ? await res.json() : { error: `HTTP ${res.status}` };
         setProbeData(data);
       } catch {
-        setProbeData({ error: "鏈嶅姟鏈搷搴? });
+        setProbeData({ error: "服务未响应" });
       } finally {
         setProbeLoading(false);
       }
@@ -50,9 +50,9 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
   }, [roomId, selected, wsBase]);
 
   const probeState = useMemo(() => {
-    if (selected === "mock") return { tone: "ready", label: "DEMO READY", value: "妯℃嫙娴佸凡灏辩华" };
-    if (!roomInput.trim()) return { tone: "idle", label: "WAITING", value: "杈撳叆鐩存挱闂? };
-    if (!roomId) return { tone: "warn", label: "NO ID", value: "鏈瘑鍒埧闂村彿" };
+    if (selected === "mock") return { tone: "ready", label: "DEMO READY", value: "模拟流已就绪" };
+    if (!roomInput.trim()) return { tone: "idle", label: "WAITING", value: "输入直播间" };
+    if (!roomId) return { tone: "warn", label: "NO ID", value: "未识别房间号" };
     if (probeLoading) return { tone: "scan", label: "SCANNING", value: roomId };
     if (probeData?.error) return { tone: "error", label: "OFFLINE", value: probeData.error };
     if (probeData) return { tone: "ready", label: "READY", value: probeData.room_id || roomId };
@@ -118,7 +118,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
           <div className="source-console-head">
             <div>
               <span className="source-kicker">Data Source</span>
-              <h2>杩炴帴鏁版嵁婧?/h2>
+              <h2>连接数据源</h2>
             </div>
             <div className={`source-state is-${probeState.tone}`}>
               <span>{probeState.label}</span>
@@ -136,15 +136,15 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
           {selected === "douyin" && (
             <div className="source-field">
               <TextField
-                label="鐩存挱闂?
+                label="直播间"
                 type="text"
                 value={roomInput}
                 onChange={(event) => setRoomInput(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && handleConnect()}
-                placeholder="绮樿创閾炬帴鎴栬緭鍏ユ埧闂村彿"
+                placeholder="粘贴链接或输入房间号"
                 action={(
                   <Button variant="primary" onClick={handleConnect} disabled={!canConnect}>
-                    杩炴帴
+                    连接
                   </Button>
                 )}
               />
@@ -161,7 +161,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
 
           <div className="source-advanced">
             <Button onClick={() => setShowAdvanced((value) => !value)}>
-              {showAdvanced ? "鏀惰捣鑺傜偣" : "鑺傜偣璁剧疆"}
+              {showAdvanced ? "收起节点" : "节点设置"}
             </Button>
             {showAdvanced && (
               <input
@@ -174,7 +174,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
           </div>
 
           <Button className="source-submit" variant="success" onClick={handleConnect} disabled={!canConnect}>
-            {selected === "mock" ? "杩涘叆婕旂ず" : "寮€濮嬬洃娴?}
+            {selected === "mock" ? "进入演示" : "开始监测"}
           </Button>
         </div>
       </div>

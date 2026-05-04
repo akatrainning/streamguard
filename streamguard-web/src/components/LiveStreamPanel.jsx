@@ -1,21 +1,17 @@
 import { useRef, useMemo } from "react";
 
-// 意图 -> 颜色映射
+// 精简版本向：意图映射只关注风控告警项
 const INTENT_COLOR = {
-  purchase:  { bg: "rgba(0,255,136,0.15)",  text: "#00FF88", border: "rgba(0,255,136,0.3)" },
-  question:  { bg: "rgba(0,150,255,0.15)",  text: "#0096FF", border: "rgba(0,150,255,0.3)" },
-  complaint: { bg: "rgba(255,51,102,0.18)", text: "#FF3366", border: "rgba(255,51,102,0.35)" },
-  doubt:     { bg: "rgba(255,165,0,0.18)",  text: "#FFA500", border: "rgba(255,165,0,0.35)" },
-  support:   { bg: "rgba(0,255,224,0.12)",  text: "#00FFE0", border: "rgba(0,255,224,0.25)" },
-  ad_spam:   { bg: "rgba(180,0,180,0.18)",  text: "#DD00DD", border: "rgba(180,0,180,0.35)" },
-  other:     { bg: "transparent",           text: "var(--text-muted)", border: "transparent" },
+  complaint: { bg: "var(--trap-bg)", text: "var(--trap)", border: "var(--trap-border)" },
+  doubt:     { bg: "var(--hype-bg)", text: "var(--hype)", border: "var(--hype-border)" },
+  ad_spam:   { bg: "var(--trap-bg)", text: "var(--trap)", border: "var(--trap-border)" },
+  other:     { bg: "transparent",    text: "var(--text-muted)", border: "transparent" },
 };
 
-const SENTIMENT_COLOR = { pos: "#00FF88", neg: "#FF3366", neutral: "var(--text-muted)" };
-
 function IntentBadge({ intent, label }) {
+  // 非风险意图不显示 Badge，剔除视觉噪音
+  if (!["complaint", "doubt", "ad_spam"].includes(intent)) return null;
   const c = INTENT_COLOR[intent] || INTENT_COLOR.other;
-  if (intent === "other") return null;
   return (
     <span style={{
       fontSize: 9, padding: "1px 5px", borderRadius: 4, flexShrink: 0,
@@ -104,27 +100,14 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
         </div>
       </div>
 
-      {/* 情感分布条 + 意图 Top */}
-      {chatMessages.length > 0 && (
+      {/* 意图 Top3 (仅展示核心风险项) */}
+      {chatMessages.length > 0 && sentimentStats.topIntents.filter(([i]) => ["complaint", "doubt", "ad_spam"].includes(i)).length > 0 && (
         <div style={{ padding: "8px 14px", borderBottom: "1px solid var(--border)" }}>
-          {/* 情感进度条 */}
-          <div style={{ display: "flex", height: 6, borderRadius: 4, overflow: "hidden", marginBottom: 6 }}>
-            <div style={{ flex: sentimentStats.posP, background: "#00FF88", transition: "flex 0.4s" }} />
-            <div style={{ flex: sentimentStats.neutralP, background: "rgba(228,240,255,0.2)", transition: "flex 0.4s" }} />
-            <div style={{ flex: sentimentStats.negP, background: "#FF3366", transition: "flex 0.4s" }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "var(--text-muted)", marginBottom: 6 }}>
-            <span style={{ color: "#00FF88" }}>正向 {sentimentStats.posP}%</span>
-            <span>中性 {sentimentStats.neutralP}%</span>
-            <span style={{ color: "#FF3366" }}>负向 {sentimentStats.negP}%</span>
-          </div>
-          {/* 意图 Top3 */}
-          {sentimentStats.topIntents.length > 0 && (
-            <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-              {sentimentStats.topIntents.map(([intent, cnt]) => {
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 600 }}>违规与预警弹幕拦截统计：</span>
+              {sentimentStats.topIntents.filter(([i]) => ["complaint", "doubt", "ad_spam"].includes(i)).map(([intent, cnt]) => {
                 const c = INTENT_COLOR[intent] || INTENT_COLOR.other;
-                const labels = { purchase:"购买", question:"提问", complaint:"客诉",
-                                 doubt:"质疑", support:"支持", ad_spam:"广告" };
+                const labels = { complaint:"客诉", doubt:"质疑", ad_spam:"广告" };
                 return (
                   <span key={intent} style={{
                     fontSize: 9, padding: "2px 6px", borderRadius: 4,
@@ -135,7 +118,6 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
                 );
               })}
             </div>
-          )}
         </div>
       )}
 
@@ -157,12 +139,7 @@ export default function LiveStreamPanel({ chatMessages = [], isLive = true }) {
               transition: "background 0.2s",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 1 }}>
-                {/* 情感色点 */}
-                <span style={{
-                  width: 6, height: 6, borderRadius: "50%", flexShrink: 0,
-                  background: SENTIMENT_COLOR[msg.sentiment] || "var(--text-muted)",
-                }} />
-                <span style={{ color: "var(--accent)", fontWeight: 500, fontSize: 11, flexShrink: 0 }}>
+                <span style={{ color: "var(--text-secondary)", fontWeight: 500, fontSize: 11, flexShrink: 0 }}>
                   {msg.user}
                 </span>
                 {/* 意图标签 */}

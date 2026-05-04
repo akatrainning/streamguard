@@ -495,10 +495,11 @@ class RAGPipeline:
             content = ev.get("content", "").strip()
             if content:
                 docs.append(self._doc("evidence_db", ev.get("evidence_id", f"evidence_{len(docs)}"), ev.get("title", ""), content, ev, ev.get("related_claim_types", []), ev.get("score", 0.75)))
-        for ft in self.fetched_texts:
+        for ft in reversed(self.fetched_texts):
             content = ft.get("content", "").strip()
             if content:
-                docs.append(self._doc("asr_context", ft.get("text_id", f"captured_text_{len(docs)}"), "直播抓取文本片段", content, ft, ft.get("related_claim_types", []), ft.get("confidence", 0.8)))
+                # 动态上下文应该具有最高优先级（如 0.95），使其在预制数据之上
+                docs.append(self._doc("asr_context", ft.get("text_id", f"captured_text_{len(docs)}"), "直播抓取文本片段", content, ft, ft.get("related_claim_types", []), ft.get("confidence", 0.95)))
         for node in self.rule_graph.get("nodes", []):
             content = node.get("content", "").strip()
             if content:
