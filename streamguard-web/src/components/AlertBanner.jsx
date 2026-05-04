@@ -28,6 +28,12 @@ export default function AlertBanner({ alerts = [], onDismiss = () => {}, onJumpT
           }}>
             {alert.text}
           </div>
+          {(alert.level || alert.reason) && (
+            <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 6 }}>
+              {alert.level ? `${alert.level} · ` : ""}
+              {alert.reason || `已关联 ${alert.evidenceCount || 0} 条证据`}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <button onClick={() => onJumpTo(alert.utteranceId || alert.id)} style={{
               padding: "2px 8px", borderRadius: 4, cursor: "pointer", fontSize: 10,

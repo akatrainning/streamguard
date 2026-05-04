@@ -281,6 +281,13 @@ def _ensure_sqlite_dir(path: str) -> None:
         os.makedirs(dir_path, exist_ok=True)
 
 
+def _ensure_sqlite_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    existing = {row[1] for row in rows}
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
 def _init_sqlite() -> None:
     if not _SQLITE_DB_PATH:
         return
@@ -340,6 +347,9 @@ def _init_sqlite() -> None:
                 trap INTEGER,
                 score INTEGER,
                 viewers INTEGER,
+                evidence_count INTEGER,
+                risk_level TEXT,
+                rag_score REAL,
                 start_time INTEGER,
                 end_time INTEGER,
                 room_id TEXT,
@@ -371,7 +381,13 @@ def _init_sqlite() -> None:
                 keywords TEXT,
                 violations TEXT,
                 sub_scores TEXT,
-                suggestion TEXT
+                suggestion TEXT,
+                rag_claims TEXT,
+                rag_evidence TEXT,
+                rag_verification TEXT,
+                rag_risk TEXT,
+                rag_report TEXT,
+                rag_trace TEXT
             )
             """
         )
@@ -400,6 +416,15 @@ def _init_sqlite() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_chats_room_time ON chats(room_id, created_at)"
         )
+        _ensure_sqlite_column(conn, "session_history", "evidence_count", "INTEGER")
+        _ensure_sqlite_column(conn, "session_history", "risk_level", "TEXT")
+        _ensure_sqlite_column(conn, "session_history", "rag_score", "REAL")
+        _ensure_sqlite_column(conn, "utterances", "rag_claims", "TEXT")
+        _ensure_sqlite_column(conn, "utterances", "rag_evidence", "TEXT")
+        _ensure_sqlite_column(conn, "utterances", "rag_verification", "TEXT")
+        _ensure_sqlite_column(conn, "utterances", "rag_risk", "TEXT")
+        _ensure_sqlite_column(conn, "utterances", "rag_report", "TEXT")
+        _ensure_sqlite_column(conn, "utterances", "rag_trace", "TEXT")
         conn.commit()
     finally:
         conn.close()
@@ -623,8 +648,9 @@ def _insert_utterance(event: dict, room_id: Optional[str]) -> None:
             """
             INSERT INTO utterances (
                 event_id, room_id, source, text, display_text, type, score,
-                timestamp, created_at, engine, keywords, violations, sub_scores, suggestion
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                timestamp, created_at, engine, keywords, violations, sub_scores, suggestion,
+                rag_claims, rag_evidence, rag_verification, rag_risk, rag_report, rag_trace
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(event_id) if event_id is not None else None,
@@ -641,6 +667,12 @@ def _insert_utterance(event: dict, room_id: Optional[str]) -> None:
                 _json_dump(event.get("violations") or []),
                 _json_dump(event.get("sub_scores") or {}),
                 event.get("suggestion"),
+                _json_dump(event.get("rag_claims") or []),
+                _json_dump(event.get("rag_evidence") or []),
+                _json_dump(event.get("rag_verification") or {}),
+                _json_dump(event.get("rag_risk") or {}),
+                _json_dump(event.get("rag_report") or {}),
+                _json_dump(event.get("rag_trace") or []),
             ),
         )
         conn.commit()
@@ -719,6 +751,12 @@ def _fetch_utterances(room_id: Optional[str], limit: int) -> list:
                 "keywords": _safe_json_loads(row["keywords"], []),
                 "violations": _safe_json_loads(row["violations"], []),
                 "sub_scores": _safe_json_loads(row["sub_scores"], {}),
+                "rag_claims": _safe_json_loads(row["rag_claims"], []),
+                "rag_evidence": _safe_json_loads(row["rag_evidence"], []),
+                "rag_verification": _safe_json_loads(row["rag_verification"], {}),
+                "rag_risk": _safe_json_loads(row["rag_risk"], {}),
+                "rag_report": _safe_json_loads(row["rag_report"], {}),
+                "rag_trace": _safe_json_loads(row["rag_trace"], []),
             })
         return items
     finally:
@@ -762,6 +800,9 @@ def _normalize_history_entry(entry: dict) -> dict:
         "trap": int(entry.get("trap") or 0),
         "score": int(entry.get("score") or 0),
         "viewers": int(entry.get("viewers") or 0),
+        "evidence_count": int(entry.get("evidenceCount") or entry.get("evidence") or 0),
+        "risk_level": entry.get("riskLevel") or None,
+        "rag_score": _safe_float(entry.get("ragScore"), 0.0),
         "start_time": entry.get("startTime"),
         "end_time": entry.get("endTime"),
         "room_id": entry.get("roomId"),
@@ -778,9 +819,9 @@ def _insert_history_session(user_id: int, entry: dict, snapshot: Optional[dict])
             """
             INSERT INTO session_history (
                 user_id, product, brand, date, duration, total, fact, hype, trap,
-                score, viewers, start_time, end_time, room_id, sample_utterances,
-                snapshot_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                score, viewers, evidence_count, risk_level, rag_score, start_time, end_time, room_id,
+                sample_utterances, snapshot_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -794,6 +835,9 @@ def _insert_history_session(user_id: int, entry: dict, snapshot: Optional[dict])
                 normalized["trap"],
                 normalized["score"],
                 normalized["viewers"],
+                normalized["evidence_count"],
+                normalized["risk_level"],
+                normalized["rag_score"],
                 normalized["start_time"],
                 normalized["end_time"],
                 normalized["room_id"],
@@ -823,6 +867,9 @@ def _history_row_to_entry(row: sqlite3.Row) -> dict:
         "trap": row["trap"],
         "score": row["score"],
         "viewers": row["viewers"],
+        "evidenceCount": row["evidence_count"],
+        "riskLevel": row["risk_level"],
+        "ragScore": row["rag_score"],
         "startTime": row["start_time"],
         "endTime": row["end_time"],
         "roomId": row["room_id"],

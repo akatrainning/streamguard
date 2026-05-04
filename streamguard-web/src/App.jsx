@@ -35,11 +35,11 @@ const NAV_ICONS = {
 };
 
 const LOCKED_FEATURE_NAMES = {
-  discover: "鐩存挱鍙戠幇",
-  consumer: "娑堣垂寤鸿",
-  history: "鍘嗗彶璁板綍",
-  analytics: "娣卞害鍒嗘瀽",
-  profile: "涓汉涓婚〉",
+  discover: "直播发现",
+  consumer: "消费建议",
+  history: "历史记录",
+  analytics: "深度分析",
+  profile: "个人主页",
 };
 
 const RulesPage = lazy(() => import("./pages/RulesPage"));
@@ -913,9 +913,9 @@ function LockedFeature({ title, description, onLogin }) {
         <h1>{title}</h1>
         <p>{description}</p>
         <p className="sg-locked-copy">
-          璇ュ姛鑳戒細璇诲彇鎴栨矇娣€璐﹀彿鏁版嵁锛岄渶瑕佸厛鐧诲綍鎴栨敞鍐屽悗浣跨敤銆傚疄鏃舵€昏鍜岄椤典粛鍙洿鎺ヨ闂€?
+          该功能会读取或沉淀账号数据，需要先登录或注册后使用。实时总览和首页仍可直接访问。
         </p>
-        <button className="sg-locked-action" onClick={onLogin} type="button">鐧诲綍 / 娉ㄥ唽</button>
+        <button className="sg-locked-action" onClick={onLogin} type="button">登录 / 注册</button>
       </div>
     </div>
   );

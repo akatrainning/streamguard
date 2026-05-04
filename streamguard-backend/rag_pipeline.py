@@ -192,12 +192,39 @@ VIEW_SOURCES = {
     "hot": {"asr_context"},
 }
 
+REQUIRED_EVIDENCE_ALIASES: Dict[str, List[str]] = {
+    "price_comparison": ["比价", "价格比较", "价格基准", "原价", "到手价", "旗舰店", "最低价", "价格明细"],
+    "price_history": ["历史价格", "价格走势", "价格记录", "价格历史"],
+    "inventory_record": ["库存", "库存记录", "现货", "库存数据"],
+    "activity_rule": ["活动规则", "促销规则", "直播价", "限购", "活动说明"],
+    "clinical_study": ["临床", "临床研究", "人体试验", "功效评价"],
+    "lab_report": ["检测报告", "质检报告", "实验报告", "检验报告"],
+    "authority_certification": ["认证", "证书", "批文", "批准文号", "备案信息"],
+    "expert_endorsement": ["专家", "医生", "权威", "机构名称", "背书"],
+    "ingredient_list": ["成分表", "配方表", "原料", "成分"],
+    "quality_cert": ["质检", "质量资质", "合格证", "执行标准", "质量证明"],
+    "comparison_data": ["对比", "对照", "测评", "比较对象", "比较口径"],
+    "peer_comparison": ["竞品", "同行", "第三方检测", "客观比较"],
+    "policy_document": ["售后政策", "赔付条件", "保修", "政策文件"],
+    "return_policy": ["退换货", "七天无理由", "退货政策", "退款条件"],
+    "time_limit": ["截止时间", "仅限今天", "限时", "倒计时", "活动时间"],
+    "product_spec": ["商品详情", "规格", "参数", "说明书"],
+}
+
+SOURCE_QUOTAS: Dict[str, int] = {
+    "rule_db": 1,
+    "historical_case": 1,
+    "evidence_db": 2,
+    "asr_context": 1,
+}
+
 
 class RAGPipeline:
     def __init__(self):
         self.config = load_rag_config()
         self.embedding_index = None
         self.embedding_docs: List[Dict[str, Any]] = []
+        self.embedding_pending_updates = 0
         self.embedding_status = self._embedding_status("not_built")
         self.claim_cases = self.load_claim_cases()
         self.evidence_db = self.load_evidence_db()
@@ -461,7 +488,14 @@ class RAGPipeline:
         repaired_cjk = sum(1 for ch in repaired if "\u4e00" <= ch <= "\u9fff")
         return repaired if repaired_cjk > original_cjk else value
 
-    def _embedding_status(self, reason: str, ready: bool = False, document_count: int = 0, dimensions: Optional[int] = None) -> Dict[str, Any]:
+    def _embedding_status(
+        self,
+        reason: str,
+        ready: bool = False,
+        document_count: int = 0,
+        dimensions: Optional[int] = None,
+        pending_updates: int = 0,
+    ) -> Dict[str, Any]:
         cfg = self.config["embedding"]
         return {
             "ready": ready,
@@ -471,7 +505,35 @@ class RAGPipeline:
             "provider": cfg["provider"],
             "model": cfg["model"],
             "dimensions": dimensions or cfg["dimensions"],
+            "pending_updates": int(max(0, pending_updates)),
         }
+
+    def _set_embedding_ready(self, reason: str = "ready") -> Dict[str, Any]:
+        dimensions = None
+        if self.embedding_index is not None and hasattr(self.embedding_index, "d"):
+            dimensions = int(self.embedding_index.d)
+        self.embedding_status = self._embedding_status(
+            reason,
+            ready=bool(self.embedding_index),
+            document_count=len(self.embedding_docs),
+            dimensions=dimensions,
+            pending_updates=self.embedding_pending_updates,
+        )
+        return self.embedding_status
+
+    def _mark_embedding_stale(self, reason: str, pending_increment: int = 0) -> Dict[str, Any]:
+        self.embedding_pending_updates += max(0, int(pending_increment))
+        dimensions = None
+        if self.embedding_index is not None and hasattr(self.embedding_index, "d"):
+            dimensions = int(self.embedding_index.d)
+        self.embedding_status = self._embedding_status(
+            reason,
+            ready=bool(self.embedding_index),
+            document_count=len(self.embedding_docs) if self.embedding_docs else 0,
+            dimensions=dimensions,
+            pending_updates=self.embedding_pending_updates,
+        )
+        return self.embedding_status
 
     def _openai_client(self, section: str):
         if OpenAI is None:
@@ -522,18 +584,25 @@ class RAGPipeline:
             "module": SOURCE_TO_MODULE.get(source, "unknown"),
         }
 
-    def _search_documents(
+    def _merge_ranked_hits(self, *groups: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+        merged: Dict[str, Dict[str, Any]] = {}
+        for group in groups:
+            for hit in group or []:
+                key = str(hit.get("id"))
+                current = merged.get(key)
+                if current is None or float(hit.get("score", 0.0)) > float(current.get("score", 0.0)):
+                    merged[key] = hit
+        ranked = list(merged.values())
+        ranked.sort(key=lambda item: float(item.get("score", 0.0)), reverse=True)
+        return ranked[:limit]
+
+    def _tfidf_search_documents(
         self,
         query: str,
         docs: List[Dict[str, Any]],
         sources: Optional[Set[str]] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        if self.embedding_index and self.embedding_docs:
-            hits = self.embedding_search(query, limit=limit, sources=sources)
-            if hits:
-                return hits
-
         scoped_docs = [doc for doc in docs if not sources or doc["source"] in sources]
         if not query.strip() or not scoped_docs:
             return []
@@ -550,6 +619,17 @@ class RAGPipeline:
             hits.append({**doc, "similarity": float(similarity), "score": score})
         hits.sort(key=lambda item: item["score"], reverse=True)
         return hits[:limit]
+
+    def _search_documents(
+        self,
+        query: str,
+        docs: List[Dict[str, Any]],
+        sources: Optional[Set[str]] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        embedding_hits = self.embedding_search(query, limit=limit, sources=sources) if (self.embedding_index and self.embedding_docs) else []
+        tfidf_hits = self._tfidf_search_documents(query, docs, sources=sources, limit=max(limit, 12))
+        return self._merge_ranked_hits(embedding_hits, tfidf_hits, limit=limit)
 
     def _embed_texts(self, texts: List[str]) -> Optional[np.ndarray]:
         if not texts:
@@ -571,6 +651,7 @@ class RAGPipeline:
     def rebuild_embedding_index(self) -> Dict[str, Any]:
         self.embedding_index = None
         self.embedding_docs = []
+        self.embedding_pending_updates = 0
         if not self.config["embedding"].get("enabled"):
             self.embedding_status = self._embedding_status("disabled")
             return self.embedding_status
@@ -590,7 +671,7 @@ class RAGPipeline:
             index.add(vectors)
             self.embedding_index = index
             self.embedding_docs = docs
-            self.embedding_status = self._embedding_status("ready", ready=True, document_count=len(docs), dimensions=int(vectors.shape[1]))
+            self._set_embedding_ready("ready")
         except Exception as exc:
             self.embedding_status = self._embedding_status(f"build_failed: {exc}")
         return self.embedding_status
@@ -621,12 +702,55 @@ class RAGPipeline:
         hits.sort(key=lambda item: item["score"], reverse=True)
         return hits[:limit] if limit else hits
 
+    def _append_documents_to_embedding_index(self, docs: List[Dict[str, Any]]) -> bool:
+        docs = [doc for doc in docs if doc and doc.get("content")]
+        if not docs:
+            return False
+        if not self.config["embedding"].get("enabled"):
+            self._mark_embedding_stale("disabled", pending_increment=len(docs))
+            return False
+        if faiss is None:
+            self._mark_embedding_stale("faiss_not_installed", pending_increment=len(docs))
+            return False
+        if self.embedding_index is None or not self.embedding_docs:
+            self._mark_embedding_stale("pending_full_rebuild", pending_increment=len(docs))
+            return False
+
+        existing_ids = {doc.get("id") for doc in self.embedding_docs}
+        fresh_docs = [doc for doc in docs if doc.get("id") not in existing_ids]
+        if not fresh_docs:
+            return False
+        vectors = self._embed_texts([doc["content"] for doc in fresh_docs])
+        if vectors is None:
+            self._mark_embedding_stale("pending_embedding_sync", pending_increment=len(fresh_docs))
+            return False
+        try:
+            self.embedding_index.add(vectors)
+            self.embedding_docs.extend(fresh_docs)
+            self.embedding_pending_updates = max(0, self.embedding_pending_updates - len(fresh_docs))
+            self._set_embedding_ready("ready")
+            return True
+        except Exception:
+            self._mark_embedding_stale("pending_full_rebuild", pending_increment=len(fresh_docs))
+            return False
+
     def append_fetched_text(self, entry: Dict[str, Any], persist: bool = True) -> None:
         if persist:
             with open(self._kb_path("fetched_texts.jsonl"), "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         self.fetched_texts.append(entry)
         self.rebuild_vector_spaces(rebuild_embedding=False)
+        self._append_documents_to_embedding_index([
+            self._doc(
+                "asr_context",
+                entry.get("text_id", f"captured_text_{len(self.fetched_texts)}"),
+                "鐩存挱鎶撳彇鏂囨湰鐗囨",
+                entry.get("content", "").strip(),
+                entry,
+                entry.get("related_claim_types", []),
+                entry.get("confidence", 0.95),
+            )
+        ])
 
     def append_claim_case(self, entry: Dict[str, Any], persist: bool = True) -> None:
         if persist:
@@ -634,6 +758,17 @@ class RAGPipeline:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         self.claim_cases.append(entry)
         self.rebuild_vector_spaces(rebuild_embedding=False)
+        self._append_documents_to_embedding_index([
+            self._doc(
+                "claim_case",
+                entry.get("case_id", f"claim_case_{len(self.claim_cases)}"),
+                "claim case",
+                entry.get("current_utterance", "").strip(),
+                entry,
+                entry.get("claim_type", []),
+                0.75,
+            )
+        ])
 
     def refresh_from_files(self) -> None:
         self.claim_cases = self.load_claim_cases()
@@ -780,20 +915,69 @@ class RAGPipeline:
 
     def evidence_rag(self, claim: Claim) -> List[Evidence]:
         query_text = " ".join(claim.predicate + claim.value + [claim.subject] + claim.required_evidence)
+        candidates: List[Evidence] = []
         if self.config["retrieval"]["mode"] == "embedding" and self.embedding_index:
-            evidences = []
-            seen_ids = set()
-            for hit in self.embedding_search(query_text, limit=int(self.config["retrieval"]["top_k"])):
+            candidate_limit = max(int(self.config["retrieval"]["top_k"]), int(self.config["retrieval"]["final_k"]) * 4)
+            for hit in self.embedding_search(query_text, limit=candidate_limit):
                 evidence = self._hit_to_evidence(hit)
-                if not evidence or evidence.evidence_id in seen_ids:
-                    continue
-                seen_ids.add(evidence.evidence_id)
-                evidences.append(evidence)
-                if len(evidences) >= int(self.config["retrieval"]["final_k"]):
-                    break
-            if evidences:
-                return evidences
-        return self._tfidf_evidence_rag(claim, query_text)
+                if evidence:
+                    candidates.append(evidence)
+        candidates.extend(self._tfidf_evidence_rag(claim, query_text))
+        return self._select_evidences(claim, candidates)
+
+    def _match_required_evidence(self, title: str, content: str) -> List[str]:
+        haystack = f"{title}\n{content}".lower()
+        matched = []
+        for requirement, aliases in REQUIRED_EVIDENCE_ALIASES.items():
+            if requirement.lower() in haystack or any(alias.lower() in haystack for alias in aliases):
+                matched.append(requirement)
+        return matched
+
+    def _evidence_priority(self, claim: Claim, evidence: Evidence) -> float:
+        source_weight = float(self.config.get("source_weights", {}).get(evidence.source, 1.0))
+        requirement_bonus = 0.08 * len([req for req in evidence.matched_requirements if req in claim.required_evidence])
+        claim_match_bonus = 0.04 if any(claim_type in evidence.related_claim_types for claim_type in claim.claim_type) else 0.0
+        return float(evidence.score) * source_weight + requirement_bonus + claim_match_bonus
+
+    def _select_evidences(self, claim: Claim, evidences: List[Evidence]) -> List[Evidence]:
+        if not evidences:
+            return []
+
+        final_k = int(self.config["retrieval"]["final_k"])
+        quotas = dict(SOURCE_QUOTAS)
+        deduped: List[Evidence] = []
+        seen_ids: Set[str] = set()
+        seen_texts: Set[str] = set()
+
+        ranked = sorted(evidences, key=lambda ev: self._evidence_priority(claim, ev), reverse=True)
+        for evidence in ranked:
+            evidence_id = str(evidence.evidence_id)
+            normalized_text = re.sub(r"\s+", "", f"{evidence.title}|{evidence.content}").lower()
+            if evidence_id in seen_ids or normalized_text in seen_texts:
+                continue
+            seen_ids.add(evidence_id)
+            seen_texts.add(normalized_text)
+            deduped.append(evidence)
+
+        selected: List[Evidence] = []
+        used_per_source: Dict[str, int] = {}
+        leftovers: List[Evidence] = []
+        for evidence in deduped:
+            source = evidence.source
+            quota = quotas.get(source)
+            if quota is not None and used_per_source.get(source, 0) < quota and len(selected) < final_k:
+                used_per_source[source] = used_per_source.get(source, 0) + 1
+                selected.append(evidence)
+            else:
+                leftovers.append(evidence)
+
+        for evidence in leftovers:
+            if len(selected) >= final_k:
+                break
+            selected.append(evidence)
+
+        selected.sort(key=lambda ev: self._evidence_priority(claim, ev), reverse=True)
+        return selected[:final_k]
 
     def _hit_to_evidence(self, hit: Dict[str, Any]) -> Optional[Evidence]:
         if hit["source"] == "claim_case":
@@ -801,25 +985,30 @@ class RAGPipeline:
         meta = hit.get("meta", {})
         related = [ClaimType(ct) for ct in hit.get("related_claim_types", []) if ct in {c.value for c in ClaimType}]
         score = float(max(0.0, min(1.0, hit.get("score", hit.get("base_score", 0.75)))))
+        title = meta.get("title", hit.get("title", ""))
+        content = meta.get("content", hit["content"])
+        matched_requirements = self._match_required_evidence(title, content)
         if hit["source"] == "evidence_db":
             return Evidence(
                 evidence_id=meta.get("evidence_id", hit["id"]),
                 source=meta.get("source", "evidence_db"),
-                title=meta.get("title", hit.get("title", "")),
-                content=meta.get("content", hit["content"]),
+                title=title,
+                content=content,
                 stance=EvidenceStance(meta.get("stance", EvidenceStance.NEUTRAL.value)),
                 score=score,
                 related_claim_types=related,
+                matched_requirements=matched_requirements,
             )
         stance = EvidenceStance.RISK_SUPPORTING if hit["source"] in {"rule_db", "historical_case"} else EvidenceStance.NEUTRAL
         return Evidence(
             evidence_id=meta.get("node_id") or meta.get("case_id") or meta.get("text_id") or hit["id"],
             source=hit["source"],
-            title=hit.get("title", ""),
-            content=hit["content"],
+            title=title,
+            content=content,
             stance=stance,
             score=score,
             related_claim_types=related,
+            matched_requirements=matched_requirements,
         )
 
     def _tfidf_evidence_rag(self, claim: Claim, query_text: str) -> List[Evidence]:
@@ -839,6 +1028,7 @@ class RAGPipeline:
                     stance=EvidenceStance(meta["stance"]),
                     score=meta["score"],
                     related_claim_types=[ClaimType(ct) for ct in meta["related_claim_types"] if ct in valid_claim_type_values],
+                    matched_requirements=self._match_required_evidence(meta.get("title", ""), meta.get("content", "")),
                 ))
 
         if self.fetched_texts:
@@ -852,6 +1042,7 @@ class RAGPipeline:
                 stance=EvidenceStance.NEUTRAL,
                 score=best_text.get("confidence", 0.8),
                 related_claim_types=[ClaimType(ct) for ct in best_text.get("related_claim_types", []) if ct in valid_claim_type_values],
+                matched_requirements=[],
             ))
 
         matched_nodes = [
@@ -868,6 +1059,7 @@ class RAGPipeline:
                 stance=EvidenceStance.RISK_SUPPORTING,
                 score=node.get("score", 0.85),
                 related_claim_types=[ClaimType(ct) for ct in related if ct in valid_claim_type_values],
+                matched_requirements=self._match_required_evidence(node.get("label", ""), node.get("content", "")),
             ))
 
         if self.historical_cases and self.historical_cases_matrix is not None:
@@ -883,11 +1075,64 @@ class RAGPipeline:
                     stance=EvidenceStance.RISK_SUPPORTING,
                     score=float(similarities[int(idx)]),
                     related_claim_types=[ClaimType(ct) for ct in related if ct in valid_claim_type_values],
+                    matched_requirements=self._match_required_evidence(meta.get("title", ""), meta.get("content", "")),
                 ))
         return evidences
 
     def evidence_verifier(self, claim: Claim, evidences: List[Evidence]) -> Verification:
         support_status = {}
+        requirement_coverage = {}
+        present_requirements = []
+        missing_requirements = []
+
+        coverage_sources = {"evidence_db", "rule_db", "historical_case"}
+        for requirement in claim.required_evidence:
+            covered = any(
+                requirement in (evidence.matched_requirements or [])
+                for evidence in evidences
+                if evidence.source in coverage_sources
+            )
+            requirement_coverage[requirement] = covered
+            if covered:
+                present_requirements.append(requirement)
+            else:
+                missing_requirements.append(requirement)
+
+        for ct in claim.claim_type:
+            relevant = [ev for ev in evidences if ct in ev.related_claim_types or ev.source in {"rule_db", "historical_case"}]
+            verdict = VerificationVerdict.SUPPORTED if relevant and not missing_requirements else VerificationVerdict.NOT_ENOUGH_EVIDENCE
+            support_status[ct.value] = verdict
+
+        verdict = (
+            VerificationVerdict.NOT_ENOUGH_EVIDENCE
+            if any(value == VerificationVerdict.NOT_ENOUGH_EVIDENCE for value in support_status.values())
+            else VerificationVerdict.SUPPORTED
+        )
+        if verdict == VerificationVerdict.SUPPORTED:
+            reason = (
+                f"已覆盖关键证据要求：{', '.join(present_requirements[:4])}。"
+                if present_requirements
+                else "已召回与当前主张匹配的关键证据。"
+            )
+        else:
+            if missing_requirements:
+                reason = (
+                    f"当前证据仍缺少：{', '.join(missing_requirements[:4])}。"
+                    + (
+                        f" 已找到：{', '.join(present_requirements[:4])}。"
+                        if present_requirements
+                        else ""
+                    )
+                )
+            else:
+                reason = "当前证据不足，仍需补充价格、库存、功效、背书或售后类凭证。"
+        return Verification(
+            verdict=verdict,
+            support_status=support_status,
+            requirement_coverage=requirement_coverage,
+            reason=reason,
+            human_review_required=verdict == VerificationVerdict.NOT_ENOUGH_EVIDENCE,
+        )
         missing_requirements = []
         for ct in claim.claim_type:
             relevant = [ev for ev in evidences if ct in ev.related_claim_types or ev.source in {"rule_db", "historical_case"}]
@@ -989,7 +1234,10 @@ class RAGPipeline:
         thresholds = self.config["risk"]["thresholds"]
         rule_severity = 0.9 if any(ct in claim.claim_type for ct in [ClaimType.PRICE_CLAIM, ClaimType.SCARCITY_CLAIM]) else 0.5
         claim_risk = 0.9 if len(claim.claim_type) > 1 else 0.6
-        evidence_missing = max(0, 1.0 - (len(evidences) / len(claim.required_evidence))) if claim.required_evidence else 0
+        requirement_coverage = getattr(verification, "requirement_coverage", {}) or {}
+        covered_count = sum(1 for covered in requirement_coverage.values() if covered)
+        required_count = len(claim.required_evidence)
+        evidence_missing = max(0.0, 1.0 - (covered_count / required_count)) if required_count else 0.0
         evidence_conflict = 0.0
         chat_questioning = 0.0
         historical_similarity = max([ev.score for ev in evidences if ev.source == "historical_case"] or [0.5])

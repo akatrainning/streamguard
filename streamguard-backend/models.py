@@ -52,6 +52,7 @@ class Evidence(BaseModel):
     stance: EvidenceStance
     score: float
     related_claim_types: List[ClaimType]
+    matched_requirements: List[str] = []
 
 class VerificationVerdict(str, Enum):
     SUPPORTED = "supported"
@@ -62,6 +63,7 @@ class VerificationVerdict(str, Enum):
 class Verification(BaseModel):
     verdict: VerificationVerdict
     support_status: Dict[str, VerificationVerdict]
+    requirement_coverage: Dict[str, bool] = {}
     reason: str
     human_review_required: bool
 

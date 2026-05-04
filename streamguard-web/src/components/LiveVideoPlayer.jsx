@@ -1,15 +1,15 @@
 ﻿/**
  * LiveVideoPlayer
  * 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
- * 鐩存挱瑙嗛鎾斁 + 瀹炴椂杞啓棣堥€?
+ * 直播视频播放 + 实时转写馈送
  *
- * 宸ヤ綔娴佺▼锛?
- *  1. 鍚庣 _audio_loop 鍙戠幇 m3u8/flv 鍦板潃 鈫?鎺ㄩ€?media_url_discovered 浜嬩欢
- *  2. useRealStream 鎺ユ敹浜嬩欢骞舵妸 mediaUrl 浼犲叆姝ょ粍浠?
- *  3. 缁勪欢鐢?hls.js 鐩存帴鍦ㄦ祻瑙堝櫒鍐呮挱鏀撅紙闇€鍚庣娴佸厑璁歌法鍩燂紝鍚﹀垯閫€鍥?澶栭儴瑙傜湅"閾炬帴锛?
- *  4. 涓嬫柟婊氬姩鏄剧ず鏉ヨ嚜闊抽杞啓鐨?utterances锛坰ource === "audio"锛?
+ * 工作流程：
+ *  1. 后端 _audio_loop 发现 m3u8/flv 地址，推送 media_url_discovered 事件。
+ *  2. useRealStream 接收事件，并把 mediaUrl 传入此组件。
+ *  3. 组件使用 hls.js 在浏览器内播放，无法播放时提供外部观看链接。
+ *  4. 下方滚动展示来自音频转写的 utterances（source === "audio"）。
  *
- * 鍦?mock 妯″紡涓嬶紝鐩存帴灞曠ず妯℃嫙杞啓棣堥€併€?
+ * mock 模式下直接展示模拟转写馈送。
  */
 import { useEffect, useRef, useState, useMemo } from "react";
 import Hls from "hls.js";
@@ -40,7 +40,7 @@ function TranscriptItem({ item }) {
           {item.type?.toUpperCase() || "ASR"}
         </span>
         <span className="mono" style={{ fontSize: 9, color: "var(--text-muted)" }}>
-          {item.score !== undefined ? (item.score * 100).toFixed(0) + "鍒? : ""}
+          {item.score !== undefined ? `${(item.score * 100).toFixed(0)}分` : ""}
         </span>
         <span style={{ fontSize: 9, color: "var(--text-muted)", marginLeft: "auto" }}>
           {item.timestamp}
@@ -95,7 +95,7 @@ function HLSVideoCore({ src, onPlayError }) {
         }
       });
     }).catch(() => {
-      onPlayError?.("hls.js 妯″潡鍔犺浇澶辫触");
+      onPlayError?.("hls.js 模块加载失败");
     });
 
     return () => { hlsRef.current?.destroy(); };
@@ -132,8 +132,8 @@ export default function LiveVideoPlayer({
   );
 
   // 鏋勯€犳渶缁堟挱鏀?src锛?
-  //   - 鏈湴 HLS 璺緞 (/hls/...)  鈫?鐩存帴鎷?apiBase锛屾棤 CORS/杩囨湡闂锛堟渶浼橈級
-  //   - 澶栭儴 URL               鈫?璧板悗绔唬鐞嗭紙澶囩敤锛?
+  //   - 本地 HLS 路径 (/hls/...)：直接拼接 apiBase，无 CORS/过期问题。
+  //   - 外部 URL：走后端代理作为备用。
   const proxiedSrc = useMemo(() => {
     if (!mediaUrl) return null;
     if (mediaUrl.startsWith("/hls/")) {
@@ -147,12 +147,12 @@ export default function LiveVideoPlayer({
   // mediaUrl 鍙樺寲鏃堕噸缃挱鏀鹃敊璇紙渚嬪娴佸埛鏂颁簡锛?
   useEffect(() => { setPlayError(null); }, [mediaUrl]);
 
-  // 鏂板杞啓鏉＄洰鏃惰嚜鍔ㄦ粴鍔ㄥ埌椤堕儴
+  // 新增转写条目时自动滚动到顶部。
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = 0;
   }, [audioUtterances.length]);
 
-  // 濯掍綋娴佺姸鎬?
+  // 媒体流状态
   const streamStatus = !isConnected
     ? "disconnected"
     : mediaUrl === undefined
@@ -167,10 +167,10 @@ export default function LiveVideoPlayer({
     if (dataSource === "mock") {
       return (
         <div style={placeholderStyle}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>馃幀</div>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>妯℃嫙鏁版嵁妯″紡</div>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>MOCK</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>模拟数据模式</div>
           <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-            杞啓棣堥€佺敱涓嬫柟妯℃嫙鏁版嵁椹卞姩
+            转写馈送由下方模拟数据驱动
           </div>
         </div>
       );
@@ -179,8 +179,8 @@ export default function LiveVideoPlayer({
     if (streamStatus === "disconnected") {
       return (
         <div style={placeholderStyle}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>馃攲</div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>绛夊緟杩炴帴鐩存挱闂粹€?/div>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>OFF</div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>等待连接直播间...</div>
         </div>
       );
     }
@@ -189,15 +189,15 @@ export default function LiveVideoPlayer({
       return (
         <div style={placeholderStyle}>
           <div style={{ fontSize: 24, marginBottom: 10 }}>
-            <span style={{ animation: "blink 1.4s infinite", display: "inline-block" }}>鈴?/span>
+            <span style={{ animation: "blink 1.4s infinite", display: "inline-block" }}>...</span>
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>姝ｅ湪鍙戠幇鐩存挱濯掍綋娴佲€?/div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>正在发现直播媒体流...</div>
           <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-            绾﹂渶 15-30 绉掞紙棣栨鍚姩 Selenium锛?
+            约需 15-30 秒（首次启动 Selenium）
           </div>
           {roomUrl && (
             <a href={roomUrl} target="_blank" rel="noopener noreferrer" style={linkStyle}>
-              馃敆 鍚屾椂鍦ㄦ祻瑙堝櫒涓墦寮€鐩存挱闂?
+              同时在浏览器中打开直播间
             </a>
           )}
         </div>
@@ -207,14 +207,14 @@ export default function LiveVideoPlayer({
     if (streamStatus === "not_found") {
       return (
         <div style={placeholderStyle}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>馃摵</div>
-          <div style={{ fontSize: 12, color: "var(--hype)" }}>鏈兘鎻愬彇濯掍綋娴?/div>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>NO STREAM</div>
+          <div style={{ fontSize: 12, color: "var(--hype)" }}>未能提取媒体流</div>
           <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-            鐩存挱闂村彲鑳藉凡涓嬬嚎锛屾垨瀛樺湪鍙嶇埇楠岃瘉
+            直播间可能已下线，或存在反爬验证
           </div>
           {roomUrl && (
             <a href={roomUrl} target="_blank" rel="noopener noreferrer" style={linkStyle}>
-              馃敆 鍦ㄦ祻瑙堝櫒涓煡鐪嬬洿鎾棿
+              在浏览器中查看直播间
             </a>
           )}
         </div>
@@ -225,19 +225,19 @@ export default function LiveVideoPlayer({
     if (playError) {
       return (
         <div style={placeholderStyle}>
-          <div style={{ fontSize: 30, marginBottom: 8 }}>鈿狅笍</div>
+          <div style={{ fontSize: 24, marginBottom: 8 }}>PLAYBACK</div>
           <div style={{ fontSize: 11, color: "var(--hype)", marginBottom: 8 }}>
             {playError}
           </div>
           <a href={roomUrl} target="_blank" rel="noopener noreferrer" style={linkStyle}>
-            馃敆 鍦ㄦ祻瑙堝櫒涓鐪嬶紙鎺ㄨ崘锛?
+            在浏览器中观看（推荐）
           </a>
           <button
             onClick={() => { setPlayError(null); }}
             style={{ ...linkStyle, background: "var(--bg-tertiary)", border: "1px solid var(--border)",
               borderRadius: 5, padding: "4px 12px", cursor: "pointer", marginTop: 8 }}
           >
-            馃攧 閲嶈瘯宓屽叆鎾斁
+            重试嵌入播放
           </button>
         </div>
       );
@@ -258,7 +258,7 @@ export default function LiveVideoPlayer({
               fontSize: 10, textDecoration: "none",
             }}
           >
-            鈫?鏂版爣绛鹃〉
+            新标签页
           </a>
         )}
       </div>
@@ -283,7 +283,7 @@ export default function LiveVideoPlayer({
         alignItems: "center",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>鐩存挱瑙傜湅 + 瀹炴椂杞啓</span>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>直播观看 + 实时转写</span>
           {isConnected && dataSource !== "mock" && (
             <span style={{
               display: "flex", alignItems: "center", gap: 4,
@@ -299,7 +299,7 @@ export default function LiveVideoPlayer({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {audioUtterances.length > 0 && (
             <span style={{ fontSize: 10, color: "#0096FF" }}>
-              馃帳 {audioUtterances.length} 娈佃浆鍐?
+              {audioUtterances.length} 段转写
             </span>
           )}
           <button
@@ -310,7 +310,7 @@ export default function LiveVideoPlayer({
               color: "var(--text-muted)",
             }}
           >
-            {showVideo ? "闅愯棌瑙嗛" : "鏄剧ず瑙嗛"}
+            {showVideo ? "隐藏视频" : "显示视频"}
           </button>
         </div>
       </div>
@@ -322,18 +322,18 @@ export default function LiveVideoPlayer({
         </div>
       )}
 
-      {/* 瀹炴椂杞啓棣堥€?*/}
+      {/* 实时转写馈送 */}
       <div style={{ flex: 1, padding: "10px 12px" }}>
         <div style={{
           display: "flex", justifyContent: "space-between", alignItems: "center",
           marginBottom: 6,
         }}>
           <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-            馃帳 涓绘挱璇濇湳瀹炴椂杞啓
+            主播话术实时转写
           </span>
           {audioUtterances.length === 0 && isConnected && streamStatus === "ready" && (
             <span style={{ fontSize: 9, color: "var(--text-muted)", animation: "blink 2s infinite" }}>
-              绛夊緟涓嬩竴绐楀彛鈥?
+              等待下一窗口...
             </span>
           )}
         </div>
@@ -350,20 +350,20 @@ export default function LiveVideoPlayer({
             <div style={{ textAlign: "center", paddingTop: 30, fontSize: 12, color: "var(--text-muted)" }}>
               {dataSource === "mock" ? (
                 <div>
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>馃攪</div>
-                  妯℃嫙妯″紡涓嬫棤闊抽杞啓<br />
-                  <span style={{ fontSize: 10, opacity: 0.7 }}>鍒囨崲鍒版姈闊虫暟鎹簮鍚庤嚜鍔ㄥ紑濮?/span>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>SIM</div>
+                  模拟模式下无音频转写<br />
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>切换到抖音数据源后自动开始</span>
                 </div>
               ) : isConnected ? (
                 <div>
-                  <div style={{ fontSize: 24, marginBottom: 8, animation: "blink 2s infinite" }}>馃帳</div>
-                  <div style={{ fontSize: 11 }}>杩炵画杞啓宸插惎鍔?/div>
+                  <div style={{ fontSize: 24, marginBottom: 8, animation: "blink 2s infinite" }}>ASR</div>
+                  <div style={{ fontSize: 11 }}>连续转写已启动</div>
                   <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>
-                    姣?15 绉掍骇鍑轰竴娈碉紝棣栨绾﹂渶 30s
+                    每 15 秒产出一段，首次约需 30 秒
                   </div>
                 </div>
               ) : (
-                <div>杩炴帴鐩存挱闂村悗鑷姩寮€濮嬭浆鍐?/div>
+                <div>连接直播间后自动开始转写</div>
               )}
             </div>
           ) : (

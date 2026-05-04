@@ -180,6 +180,8 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
                       <span>总条数 {session.total || 0}</span>
                       <span>事实 {session.fact || 0}</span>
                       <span>陷阱 {session.trap || 0}</span>
+                      <span>证据 {session.evidenceCount || 0}</span>
+                      {session.riskLevel && <span>{session.riskLevel}</span>}
                       <span>观众 {session.viewers || 0}</span>
                     </div>
                   </div>

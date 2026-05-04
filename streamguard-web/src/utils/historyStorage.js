@@ -56,6 +56,25 @@ export function buildHistoryEntry(snapshot, viewerCount = 0, title = "") {
   const hype = speechUtterances.filter((u) => u?.type === "hype").length;
   const trap = speechUtterances.filter((u) => u?.type === "trap").length;
   const total = speechUtterances.length;
+  const ragRiskScores = speechUtterances
+    .map((u) => Number(u?.rag_risk?.score))
+    .filter((value) => Number.isFinite(value));
+  const evidenceCount = speechUtterances.reduce((sum, utterance) => sum + (utterance?.evidence_count || utterance?.rag_evidence?.length || 0), 0);
+  const riskLevels = speechUtterances
+    .map((u) => u?.rag_level)
+    .filter(Boolean);
+  const riskLevel = riskLevels.includes("P0")
+    ? "P0"
+    : riskLevels.includes("P1")
+      ? "P1"
+      : riskLevels.includes("P2")
+        ? "P2"
+        : riskLevels.includes("P3")
+          ? "P3"
+          : null;
+  const avgRagScore = ragRiskScores.length
+    ? ragRiskScores.reduce((sum, value) => sum + value, 0) / ragRiskScores.length
+    : null;
 
   // 合规分：使用 rationalityIndex（0~100），若为0但有数据则推算
   let score = Math.round(rationalityIndex);
@@ -63,6 +82,9 @@ export function buildHistoryEntry(snapshot, viewerCount = 0, title = "") {
     // fallback: 基于陷阱占比推算
     const trapRatio = trap / total;
     score = Math.max(0, Math.round(100 - trapRatio * 100 - (hype / total) * 40));
+  }
+  if ((score === 0 || !Number.isFinite(score)) && avgRagScore != null) {
+    score = Math.round((1 - avgRagScore) * 100);
   }
 
   const product = title || (roomId ? `直播间 ${roomId}` : "本地录制");
@@ -79,6 +101,9 @@ export function buildHistoryEntry(snapshot, viewerCount = 0, title = "") {
     trap,
     score,
     viewers: viewerCount || 0,
+    evidenceCount,
+    riskLevel,
+    ragScore: avgRagScore == null ? null : Number(avgRagScore.toFixed(3)),
     startTime: startTime || Date.now(),
     endTime: endTime || Date.now(),
     roomId,
@@ -88,6 +113,8 @@ export function buildHistoryEntry(snapshot, viewerCount = 0, title = "") {
       type: u.type,
       text: u.text || u.content || "",
       ts: u.ts || u.timestamp,
+      ragLevel: u.rag_level || null,
+      evidenceCount: u.evidence_count || u.rag_evidence?.length || 0,
     })),
   };
 }

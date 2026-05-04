@@ -109,7 +109,7 @@ export default function CommandCenter({
           </div>
           <div className="sg-command-diagnostics">
             <KV k="数据源" v={dataSource || "--"} />
-            <KV k="鎴块棿" v={sourceConfig?.roomId || "--"} mono />
+            <KV k="房间" v={sourceConfig?.roomId || "--"} mono />
             <KV k="最近消息" v={lastSeen} mono />
             <KV k="尝试次数" v={connection.connectionAttempts ?? 0} mono />
           </div>

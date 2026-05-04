@@ -233,7 +233,7 @@ export default function RulesPage() {
 
         <main className="sg-rules-stage">
           <GraphOverview rule={selectedRule} metrics={graphModel.metrics} />
-          <KnowledgeGraphCanvas
+          <KnowledgeGraphCanvas3D
             rule={selectedRule}
             graph={graphModel}
             focusNodeId={focusNodeId}
@@ -302,6 +302,198 @@ function RuleRow({ rule, selected, onSelect }) {
         <span>{claims.slice(0, 2).join(" / ") || "待识别主张"}</span>
       </div>
     </button>
+  );
+}
+
+function KnowledgeGraphCanvas3D({ rule, graph, focusNodeId, onFocusNode }) {
+  const mobileGroups = MOBILE_LANES.map((lane) => ({
+    ...lane,
+    nodes: graph.nodes.filter((node) => lane.kinds.includes(node.kind)),
+  })).filter((lane) => lane.nodes.length > 0);
+
+  const stageRef = useRef(null);
+  const [camera, setCamera] = useState({ rx: 58, ry: -18, scale: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, rx: 58, ry: -18 });
+  const focusedNode = graph.nodes.find((node) => node.id === focusNodeId) || graph.nodes[0];
+
+  const handlePointerDown = (event) => {
+    if (event.button !== 0 || event.target.closest("[data-graph-node]")) return;
+    setIsDragging(true);
+    stageRef.current?.setPointerCapture(event.pointerId);
+    dragStart.current = {
+      x: event.clientX,
+      y: event.clientY,
+      rx: camera.rx,
+      ry: camera.ry,
+    };
+  };
+
+  const handlePointerMove = (event) => {
+    if (!isDragging) return;
+    const dx = event.clientX - dragStart.current.x;
+    const dy = event.clientY - dragStart.current.y;
+    setCamera((prev) => ({
+      ...prev,
+      rx: clamp(dragStart.current.rx - dy * 0.22, 38, 74),
+      ry: clamp(dragStart.current.ry + dx * 0.28, -52, 52),
+    }));
+  };
+
+  const handlePointerUp = (event) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    stageRef.current?.releasePointerCapture(event.pointerId);
+  };
+
+  useEffect(() => {
+    const element = stageRef.current;
+    if (!element) return;
+    const handleWheel = (event) => {
+      event.preventDefault();
+      setCamera((prev) => ({
+        ...prev,
+        scale: clamp(prev.scale + event.deltaY * -0.0012, 0.72, 1.28),
+      }));
+    };
+    element.addEventListener("wheel", handleWheel, { passive: false });
+    return () => element.removeEventListener("wheel", handleWheel);
+  }, []);
+
+  const zoomIn = () => setCamera((prev) => ({ ...prev, scale: clamp(prev.scale + 0.12, 0.72, 1.28) }));
+  const zoomOut = () => setCamera((prev) => ({ ...prev, scale: clamp(prev.scale - 0.12, 0.72, 1.28) }));
+  const resetView = () => setCamera({ rx: 58, ry: -18, scale: 1 });
+
+  return (
+    <section className="sg-rules-graph-panel sg-rules-depth-panel">
+      <header className="sg-rules-graph-head">
+        <div>
+          <div className="sg-ui-eyebrow">3D EVIDENCE MAP</div>
+          <h2>Spatial rule terrain</h2>
+        </div>
+        <div className="sg-rules-graph-note">
+          <span>ACTIVE RULE</span>
+          <strong>{rule.id}</strong>
+        </div>
+      </header>
+
+      <div className="sg-rules-graph-controls">
+        <p id="rules-graph-guide" className="sg-rules-graph-hint">
+          Drag to rotate. Wheel to zoom. Select a node to inspect evidence.
+        </p>
+        <div className="sg-rules-graph-actions" aria-label="3D map controls">
+          <button type="button" onClick={zoomOut} title="Zoom out">-</button>
+          <button type="button" onClick={resetView} title="Reset view">RESET</button>
+          <button type="button" onClick={zoomIn} title="Zoom in">+</button>
+        </div>
+      </div>
+
+      <div className="sg-rules-graph-desktop">
+        <div
+          ref={stageRef}
+          className={`sg-rules-depth-stage ${isDragging ? "is-dragging" : ""}`}
+          role="img"
+          aria-label={`${rule.displayTitle} 3D evidence relationship map`}
+          aria-describedby="rules-graph-guide"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+        >
+          <div className="sg-rules-depth-viewport">
+            <div
+              className="sg-rules-depth-world"
+              style={{
+                transform: `rotateX(${camera.rx}deg) rotateY(${camera.ry}deg) scale(${camera.scale})`,
+              }}
+            >
+              <div className="sg-rules-depth-grid" />
+              <div className="sg-rules-depth-scan" />
+              {["RULE", "CLAIM", "EVIDENCE", "ACTION"].map((label, index) => (
+                <div
+                  key={label}
+                  className="sg-rules-depth-lane"
+                  style={{
+                    "--lane-x": `${-360 + index * 240}px`,
+                    "--lane-z": `${-20 + index * 14}px`,
+                  }}
+                >
+                  <span>{label}</span>
+                </div>
+              ))}
+
+              {graph.edges.map((edge) => {
+                const from = graph.nodes.find((node) => node.id === edge.source);
+                const to = graph.nodes.find((node) => node.id === edge.target);
+                if (!from || !to) return null;
+                return <i key={`${edge.source}-${edge.target}`} className={`sg-rules-depth-edge is-${edge.kind}`} style={depthEdgeStyle(from, to)} />;
+              })}
+
+              {graph.nodes.map((node) => {
+                const active = node.id === focusNodeId;
+                const activate = () => onFocusNode(node.id);
+                return (
+                  <button
+                    key={node.id}
+                    data-graph-node
+                    type="button"
+                    onClick={activate}
+                    className={`sg-rules-depth-node is-${node.kind} ${active ? "is-active" : ""}`}
+                    style={depthNodeStyle(node)}
+                    aria-label={nodeAriaLabel(node, active)}
+                    aria-pressed={active}
+                  >
+                    <span>{GRAPH_NODE_META[node.kind]?.label || "NODE"}</span>
+                    <strong>{truncateText(node.title, node.kind === "rewrite" ? 34 : 22)}</strong>
+                    {node.meta && <em>{truncateText(node.meta, node.kind === "rewrite" ? 34 : 20)}</em>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="sg-rules-depth-readout" aria-hidden="true">
+            <span>FOCUS</span>
+            <strong>{focusedNode ? truncateText(focusedNode.title, 30) : rule.id}</strong>
+            <em className="mono">RX {Math.round(camera.rx)} / RY {Math.round(camera.ry)}</em>
+          </div>
+        </div>
+      </div>
+
+      <div className="sg-rules-graph-mobile" aria-label={`${rule.displayTitle} mobile relationship map`}>
+        {mobileGroups.map((lane) => (
+          <section key={lane.id} className="sg-rules-mobile-lane">
+            <div className="sg-rules-mobile-lane-head">
+              <div>
+                <div className="sg-ui-eyebrow">{lane.system}</div>
+                <h3>{lane.label}</h3>
+              </div>
+              <span className="sg-rules-chip">{lane.nodes.length} nodes</span>
+            </div>
+            <div className="sg-rules-mobile-flow">
+              {lane.nodes.map((node) => {
+                const active = node.id === focusNodeId;
+                return (
+                  <button
+                    key={node.id}
+                    className={`sg-rules-mobile-node is-${node.kind} ${active ? "is-active" : ""}`}
+                    onClick={() => onFocusNode(node.id)}
+                    type="button"
+                    aria-pressed={active}
+                  >
+                    <div className="sg-rules-mobile-node-head">
+                      <span className="sg-rules-mobile-node-kicker">{GRAPH_NODE_META[node.kind]?.label || "NODE"}</span>
+                      <span className={`sg-rules-node-pill is-${node.kind}`}>{active ? "FOCUS" : "SELECT"}</span>
+                    </div>
+                    <strong>{node.title}</strong>
+                    {node.meta && <small>{node.meta}</small>}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -798,6 +990,49 @@ function makeNode(node) {
   return node;
 }
 
+function depthPoint(node) {
+  const depthByKind = {
+    rule: 62,
+    related_rule: 20,
+    claim: 44,
+    evidence: 104,
+    risk: 148,
+    rewrite: 86,
+    case: 58,
+  };
+  return {
+    x: Math.round((node.x - 490) * 0.88),
+    z: Math.round((node.y - 270) * 0.9),
+    y: -1 * (depthByKind[node.kind] || 48),
+  };
+}
+
+function depthNodeStyle(node) {
+  const point = depthPoint(node);
+  return {
+    "--node-x": `${point.x}px`,
+    "--node-y": `${point.y}px`,
+    "--node-z": `${point.z}px`,
+    "--node-w": `${Math.max(132, Math.min(210, node.w || 160))}px`,
+  };
+}
+
+function depthEdgeStyle(from, to) {
+  const a = depthPoint(from);
+  const b = depthPoint(to);
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const length = Math.sqrt(dx * dx + dz * dz);
+  const angle = Math.atan2(dz, dx) * 180 / Math.PI;
+  return {
+    "--edge-x": `${a.x}px`,
+    "--edge-y": `${Math.round((a.y + b.y) / 2)}px`,
+    "--edge-z": `${a.z}px`,
+    "--edge-l": `${Math.max(24, length)}px`,
+    "--edge-r": `${angle}deg`,
+  };
+}
+
 function edgePath(from, to) {
   const startX = from.x + from.w / 2 - 8;
   const endX = to.x - to.w / 2 + 8;
@@ -810,6 +1045,10 @@ function laneY(index, total, center, gap) {
   if (total <= 1) return center;
   const offset = (index - (total - 1) / 2) * gap;
   return center + offset;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function overlapCount(base, target) {

@@ -109,6 +109,7 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
 
                 <span className="sg-semantic-meta">
                   <strong>{cfg.label}</strong>
+                  {item.rag_level && <span>{item.rag_level}</span>}
                   <span>{item.timestamp || "--:--:--"}</span>
                   {["trap", "hype"].includes(item.type) && <span className="sg-semantic-chevron" aria-hidden="true">{isOpen ? "收起" : "详情"}</span>}
                 </span>
@@ -138,6 +139,26 @@ const SemanticFeed = forwardRef(function SemanticFeed({ utterances = [] }, ref) 
                     <aside>
                       <h3>优化建议</h3>
                       <p>{item.suggestion}</p>
+                    </aside>
+                  )}
+
+                  {!!item.rag_claims?.length && (
+                    <aside>
+                      <h3>RAG 判定</h3>
+                      <p>风险等级：{item.rag_level || "P3"}</p>
+                      <p>主张类型：{item.rag_claim_types?.join("、") || "未识别"}</p>
+                      {item.rag_verification?.reason && <p>核验说明：{item.rag_verification.reason}</p>}
+                    </aside>
+                  )}
+
+                  {!!item.rag_evidence?.length && (
+                    <aside>
+                      <h3>RAG 证据</h3>
+                      {item.rag_evidence.slice(0, 3).map((evidence) => (
+                        <p key={evidence.evidence_id || evidence.title}>
+                          [{evidence.source}] {evidence.title || evidence.evidence_id}
+                        </p>
+                      ))}
                     </aside>
                   )}
 

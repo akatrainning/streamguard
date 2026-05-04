@@ -9,6 +9,109 @@ const BASE_RISK = [
   { subject: "Compliance",          value: 72 },
 ];
 
+const EMPTY_STATS = { total: 0, trap: 0, hype: 0, fact: 0, p0: 0, p1: 0, p2: 0, p3: 0, evidence: 0 };
+
+function clamp01(value, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.max(0, Math.min(1, num));
+}
+
+function ragLevelToType(level, fallback = "fact") {
+  if (level === "P0" || level === "P1") return "trap";
+  if (level === "P2") return "hype";
+  if (level === "P3") return "fact";
+  return fallback;
+}
+
+function buildRiskTargets(item) {
+  const ss = item.sub_scores || {};
+  const ragRisk = item.rag_risk || {};
+  const factors = ragRisk.factors || {};
+  const coverage = item.rag_verification?.requirement_coverage || {};
+  const requirementKeys = Object.keys(coverage);
+  const coverageRatio = requirementKeys.length
+    ? requirementKeys.filter((key) => coverage[key]).length / requirementKeys.length
+    : clamp01(ss.fact_verification, 0.5);
+  const claimTypes = item.rag_claim_types || [];
+  const pressureRisk = Math.max(
+    clamp01(factors.chat_questioning, clamp01(ss.subjectivity_index, 0.2)),
+    claimTypes.includes("pressure_claim") ? 0.92 : 0,
+    claimTypes.includes("scarcity_claim") ? 0.78 : 0,
+  );
+  const ruleSeverity = clamp01(factors.rule_severity, 1 - clamp01(ss.compliance_score, 0.5));
+  const claimRisk = clamp01(factors.claim_risk, 1 - clamp01(ss.semantic_consistency, 0.5));
+  const conflictRisk = clamp01(factors.evidence_conflict, 0);
+  return {
+    "Price Transparency": Math.round(clamp01(1 - ruleSeverity) * 100),
+    "Pressure Level": Math.round(pressureRisk * 100),
+    Accuracy: Math.round(clamp01(1 - claimRisk) * 100),
+    Urgency: Math.round(pressureRisk * 100),
+    Evidence: Math.round(clamp01(coverageRatio) * 100),
+    Compliance: Math.round(clamp01(1 - Math.max(ruleSeverity, conflictRisk)) * 100),
+  };
+}
+
+function normalizeUtteranceMessage(msg) {
+  const ragClaims = Array.isArray(msg.rag_claims) ? msg.rag_claims : [];
+  const ragEvidence = Array.isArray(msg.rag_evidence) ? msg.rag_evidence : [];
+  const ragVerification = msg.rag_verification && typeof msg.rag_verification === "object" ? msg.rag_verification : null;
+  const ragRisk = msg.rag_risk && typeof msg.rag_risk === "object" ? msg.rag_risk : null;
+  const ragReport = msg.rag_report && typeof msg.rag_report === "object" ? msg.rag_report : null;
+  const ragTrace = Array.isArray(msg.rag_trace) ? msg.rag_trace : [];
+  const ragLevel = ragRisk?.level || null;
+  const ragClaimTypes = ragClaims.flatMap((claim) => claim?.claim_type || []);
+  const preferredType = ragLevelToType(ragLevel, msg.type || "fact");
+  const ragRiskScore = ragRisk ? clamp01(ragRisk.score) : null;
+  const preferredScore = ragRiskScore == null ? clamp01(msg.score, 0.5) : clamp01(1 - ragRiskScore);
+  const verificationReason = ragVerification?.reason || "";
+  const primarySuggestion = ragReport?.suggestions?.[0] || msg.suggestion || verificationReason || "";
+  const requirementCoverage = ragVerification?.requirement_coverage || {};
+  const requirementKeys = Object.keys(requirementCoverage);
+  const requirementCoverageRatio = requirementKeys.length
+    ? requirementKeys.filter((key) => requirementCoverage[key]).length / requirementKeys.length
+    : clamp01(msg.sub_scores?.fact_verification, 0.5);
+  const subScores = {
+    semantic_consistency: clamp01(1 - clamp01(ragRisk?.factors?.claim_risk, 1 - clamp01(msg.sub_scores?.semantic_consistency, 0.5))),
+    fact_verification: clamp01(requirementCoverageRatio),
+    compliance_score: clamp01(1 - clamp01(ragRisk?.factors?.rule_severity, 1 - clamp01(msg.sub_scores?.compliance_score, 0.5))),
+    subjectivity_index: Math.max(
+      clamp01(ragRisk?.factors?.chat_questioning, clamp01(msg.sub_scores?.subjectivity_index, 0.2)),
+      ragClaimTypes.includes("pressure_claim") ? 0.92 : 0,
+      ragClaimTypes.includes("scarcity_claim") ? 0.78 : 0,
+    ),
+    rag_risk_score: ragRiskScore == null ? clamp01(msg.sub_scores?.rag_risk_score, 1 - preferredScore) : ragRiskScore,
+    historical_similarity: clamp01(ragRisk?.factors?.historical_similarity, clamp01(msg.sub_scores?.historical_similarity, 0)),
+  };
+
+  return {
+    uid: msg.id,
+    id: msg.id,
+    text: msg.text,
+    display_text: msg.display_text || msg.text,
+    type: preferredType,
+    score: preferredScore,
+    timestamp: msg.timestamp,
+    source: msg.source,
+    raw_text: msg.text,
+    keywords: msg.keywords || [],
+    violations: msg.violations?.length ? msg.violations : ragClaimTypes,
+    suggestion: primarySuggestion,
+    sub_scores: subScores,
+    engine: msg.engine,
+    rag_claims: ragClaims,
+    rag_claim_types: ragClaimTypes,
+    rag_evidence: ragEvidence,
+    rag_verification: ragVerification,
+    rag_risk: ragRisk,
+    rag_report: ragReport,
+    rag_trace: ragTrace,
+    rag_level: ragLevel,
+    evidence_count: ragEvidence.length,
+    requirement_coverage_ratio: requirementCoverageRatio,
+  };
+}
+
 export function useRealStream({
   mode = "douyin",
   roomId = "",
@@ -19,13 +122,13 @@ export function useRealStream({
 } = {}) {
   const [utterances,       setUtterances]       = useState([]);
   const [chatMessages,     setChatMessages]     = useState([]);
-  const [rationalityIndex, setRationalityIndex] = useState(0);
+  const [rationalityIndex, setRationalityIndex] = useState(70);
   const [riskData,         setRiskData]         = useState(BASE_RISK);
   const [alerts,           setAlerts]           = useState([]);
   const [viewerCount,      setViewerCount]      = useState(0);
   const [showGate,         setShowGate]         = useState(false);
   const [isPaused,         setIsPaused]         = useState(false);
-  const [sessionStats,     setSessionStats]     = useState({ total:0, trap:0, hype:0, fact:0 });
+  const [sessionStats,     setSessionStats]     = useState(EMPTY_STATS);
   const [messageTotals,    setMessageTotals]    = useState({ utterances: 0, chats: 0, total: 0 });
   const [connected,        setConnected]        = useState(false);
   const [connecting,       setConnecting]       = useState(false);
@@ -88,7 +191,7 @@ export function useRealStream({
       setConnected(true);
       setConnecting(false);
       setError(null);
-      backoffRef.current = 1000; // 杩炴帴鎴愬姛鍚庨噸缃産ackoff
+      backoffRef.current = 1000; // 连接成功后重置 backoff
       pushLog("websocket connected");
       console.log("[StreamGuard] WebSocket connected:", url);
       // 蹇冭烦妫€娴嬶細45s娌℃湁鏀跺埌娑堟伅灏变富鍔ㄩ噸杩?
@@ -124,9 +227,9 @@ export function useRealStream({
         const url = msg.url || null;  // null = not found, string = found
         setMediaUrl(url);
         if (url) {
-          pushLog(`濯掍綋娴佸湴鍧€宸插氨缁? ${url.slice(0, 60)}...`);
+          pushLog(`媒体流地址已就绪: ${url.slice(0, 60)}...`);
         } else {
-          pushLog("鏈兘鎵惧埌濯掍綋娴侊紙鍙兘鏈紑鎾垨鏈夊弽鐖檺鍒讹級");
+          pushLog("未能找到媒体流（可能未开播或受到反爬限制）");
         }
         return;
       }
@@ -145,42 +248,20 @@ export function useRealStream({
       }
 
       if (msg.event === "utterance") {
-        const item = {
-          uid: msg.id, id: msg.id,
-          text: msg.text,                           // 鍘熷杞啓锛堝睍寮€鍖烘樉绀猴級
-          display_text: msg.display_text || msg.text, // 鏁寸悊鍚庢枃鏈紙涓昏灞曠ず锛?
-          type: msg.type,
-          score: msg.score, timestamp: msg.timestamp,
-          source: msg.source,
-          raw_text: msg.text,                       // 淇濈暀鍘熷澶囩敤
-          keywords: msg.keywords || [],
-          violations: msg.violations || [],
-          suggestion: msg.suggestion || "",
-          sub_scores: msg.sub_scores || {},
-          engine: msg.engine,
-        };
+        const item = normalizeUtteranceMessage(msg);
         setUtterances(prev => {
-          // 鍘婚噸锛氬鏋?ID 宸插瓨鍦ㄥ垯璺宠繃锛堥槻姝?WebSocket 閲嶈繛瀵艰嚧閲嶅娑堟伅锛?
           if (prev.some(u => u.id === item.id)) return prev;
           return [item, ...prev].slice(0, recentUtteranceLimit);
         });
         setRationalityIndex(prev => {
-          const delta = msg.type === "trap" ? -8 : msg.type === "hype" ? -3 : +4;
-          return Math.max(15, Math.min(95, prev + delta));
+          const target = item.rag_risk
+            ? Math.round((1 - clamp01(item.rag_risk.score, 0.5)) * 100)
+            : Math.round(clamp01(item.score, 0.5) * 100);
+          const base = Number.isFinite(prev) ? prev : 70;
+          return Math.max(15, Math.min(95, Math.round(base * 0.72 + target * 0.28)));
         });
         setRiskData(prev => {
-          const ss = msg.sub_scores || {};
-          // 鏍规嵁 type 鎺ㄧ畻绱ц揩搴︼細trap=楂樺帇 hype=涓?fact=浣?
-          const urgencyVal = msg.type === "trap" ? 88 : msg.type === "hype" ? 55 : 18;
-          const targets = {
-            "Price Transparency": Math.round((msg.score ?? 0.5) * 100),
-            "Pressure Level":    Math.round((ss.subjectivity_index ?? 0.5) * 100),
-            "Accuracy":          Math.round((ss.semantic_consistency ?? 0.5) * 100),
-            "Urgency":           urgencyVal,
-            "Evidence":          Math.round((ss.fact_verification ?? 0.5) * 100),
-            "Compliance":        Math.round((ss.compliance_score ?? 0.5) * 100),
-          };
-          // EMA 骞虫粦 伪=0.35锛岄伩鍏嶅浘琛ㄨ烦鍔ㄨ繃澶?
+          const targets = buildRiskTargets(item);
           return prev.map(d => ({
             ...d,
             value: Math.round(d.value * 0.65 + (targets[d.subject] ?? d.value) * 0.35),
@@ -188,20 +269,34 @@ export function useRealStream({
         });
         setSessionStats(prev => ({
           total: prev.total + 1,
-          trap:  prev.trap  + (msg.type === "trap"  ? 1 : 0),
-          hype:  prev.hype  + (msg.type === "hype"  ? 1 : 0),
-          fact:  prev.fact  + (msg.type === "fact"  ? 1 : 0),
+          trap: prev.trap + (item.type === "trap" ? 1 : 0),
+          hype: prev.hype + (item.type === "hype" ? 1 : 0),
+          fact: prev.fact + (item.type === "fact" ? 1 : 0),
+          p0: prev.p0 + (item.rag_level === "P0" ? 1 : 0),
+          p1: prev.p1 + (item.rag_level === "P1" ? 1 : 0),
+          p2: prev.p2 + (item.rag_level === "P2" ? 1 : 0),
+          p3: prev.p3 + (item.rag_level === "P3" ? 1 : 0),
+          evidence: prev.evidence + (item.evidence_count || 0),
         }));
         setMessageTotals(prev => ({
           utterances: prev.utterances + 1,
           chats: prev.chats,
           total: prev.total + 1,
         }));
-        if (msg.type === "trap") {
+        if (item.type === "trap") {
           alertId.current++;
           const id = alertId.current;
           setAlerts(prev => [
-            { id, text: msg.text, score: msg.score, utteranceId: msg.id, timestamp: msg.timestamp },
+            {
+              id,
+              text: item.display_text || item.text,
+              score: item.score,
+              utteranceId: item.id,
+              timestamp: item.timestamp,
+              level: item.rag_level || "P1",
+              reason: item.rag_verification?.reason || item.suggestion || "",
+              evidenceCount: item.evidence_count || 0,
+            },
             ...prev,
           ].slice(0, 5));
           setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== id)), 7000);
@@ -226,7 +321,7 @@ export function useRealStream({
               flags:          msg.flags          || [],
               risk_score:     msg.risk_score     || 0,
               label:          msg.label          || "普通弹幕",
-              sentiment_icon: msg.sentiment_icon || "馃槓",
+              sentiment_icon: msg.sentiment_icon || "",
               correlation:    msg.correlation    || "unrelated",
             },
             ...prev,
@@ -287,11 +382,11 @@ export function useRealStream({
   const reset = useCallback(() => {
     setUtterances([]);
     setChatMessages([]);
-    setRationalityIndex();
+    setRationalityIndex(70);
     setRiskData(BASE_RISK);
     setAlerts([]);
     setViewerCount(0);
-    setSessionStats({ total:0, trap:0, hype:0, fact:0 });
+    setSessionStats(EMPTY_STATS);
     setMessageTotals({ utterances: 0, chats: 0, total: 0 });
     setMediaUrl(undefined);
     setRoomIdentity({
@@ -308,7 +403,7 @@ export function useRealStream({
     setReconnectToken(v => v + 1);
   }, [pushLog]);
 
-  /** 涓诲姩鏂紑杩炴帴骞跺仠姝㈣嚜鍔ㄩ噸杩烇紙缁撴潫鐩戞帶鏃朵娇鐢級 */
+  /** 主动断开连接并停止自动重连，结束监控时使用。 */
   const disconnect = useCallback(() => {
     clearTimeout(reconnectTimerRef.current);
     clearTimeout(heartbeatRef.current);
@@ -328,9 +423,9 @@ export function useRealStream({
       `Generated: ${new Date().toLocaleString("zh-CN")}`,
       `Source: ${mode === "douyin" ? "Douyin room " + roomId : "Simulated"}`,
       "", `Rationality Index: ${ri}`,
-      "", `Stats: total=${stats.total} fact=${stats.fact} hype=${stats.hype} trap=${stats.trap}`,
+      "", `Stats: total=${stats.total} fact=${stats.fact} hype=${stats.hype} trap=${stats.trap} p0=${stats.p0 || 0} p1=${stats.p1 || 0} p2=${stats.p2 || 0} evidence=${stats.evidence || 0}`,
       "", "Utterances:",
-      ...uList.map((u,i) => `  [${i+1}] [${u.type.toUpperCase()}] ${u.text} | score:${u.score}`),
+      ...uList.map((u,i) => `  [${i+1}] [${(u.rag_level || u.type || "?").toUpperCase()}] ${u.text} | score:${u.score} | evidence:${u.evidence_count || 0}`),
       "=== End ===",
     ];
     const blob = new Blob([lines.join("\n")], { type:"text/plain;charset=utf-8" });
