@@ -764,7 +764,10 @@ function Dashboard(props) {
             </div>
           )}
 
-          <div className="sg-stream-grid" style={{ display: dashboardSection === "stream" ? "grid" : "none" }}>
+          <div
+            className={`sg-stream-grid ${dataSource === "douyin" ? "is-3col" : "is-2col"}`}
+            style={{ display: dashboardSection === "stream" ? "grid" : "none" }}
+          >
             {dataSource === "douyin" && (
               <div className="sg-video-column">
                 {sourceConfig.roomId ? (
@@ -786,10 +789,11 @@ function Dashboard(props) {
               </div>
             )}
 
-            <div className="sg-stream-column">
-              <div className="sg-stream-chat">
-                <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected} />
-              </div>
+            <div className="sg-chat-column">
+              <LiveStreamPanel chatMessages={chatMessages} isLive={realStream.connected} />
+            </div>
+
+            <div className="sg-evidence-column">
               <SemanticFeed ref={feedRef} utterances={utterances} />
             </div>
           </div>
