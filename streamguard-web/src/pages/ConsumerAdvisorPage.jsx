@@ -1,5 +1,60 @@
 import { useMemo, useState } from "react";
 
+function DecisionBoard({ products, selectedIds, suite, onToggle }) {
+  if (!products.length && !suite) return null;
+  const verdict = suite?.p0?.verdict || "WAIT";
+  const confidence = suite?.p0?.confidence;
+  const ranked = suite?.p1?.ranked || [];
+  const activeProducts = products.filter((product) => selectedIds.includes(product.id));
+
+  return (
+    <section className="sg-advisor-decision-board">
+      <div className={`sg-advisor-decision-core is-${String(verdict).toLowerCase()}`}>
+        <span>DECISION</span>
+        <strong>{verdict}</strong>
+        <em>{Number.isFinite(Number(confidence)) ? `${Math.round(Number(confidence) * 100)}% confidence` : `${activeProducts.length} selected`}</em>
+      </div>
+
+      <div className="sg-advisor-product-matrix">
+        {(products.length ? products : activeProducts).slice(0, 8).map((product, index) => {
+          const active = selectedIds.includes(product.id);
+          const riskCount = (product.known_risks || []).length;
+          const fitCount = (product.fit_for || []).length;
+          return (
+            <button
+              key={product.id || product.name}
+              type="button"
+              className={`sg-advisor-matrix-cell ${active ? "is-active" : ""}`}
+              onClick={() => onToggle(product.id)}
+              aria-pressed={active}
+            >
+              <span className="mono">P{index + 1}</span>
+              <strong>{product.name}</strong>
+              <em>{product.price || "--"} / risk {riskCount}</em>
+              <i style={{ "--fit": `${Math.min(100, fitCount * 22 + 18)}%` }} />
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="sg-advisor-evidence-strip">
+        <div>
+          <span>Best rank</span>
+          <strong>{ranked[0] || activeProducts[0]?.name || "--"}</strong>
+        </div>
+        <div>
+          <span>Must verify</span>
+          <strong>{suite?.p0?.must_verify?.[0] || products[0]?.known_risks?.[0] || "--"}</strong>
+        </div>
+        <div>
+          <span>Next action</span>
+          <strong>{suite?.p2?.action_plan?.[0] || suite?.p2?.buy_timing || "Run full suite"}</strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMessages = [] }) {
   const [query, setQuery] = useState("");
   const [budget, setBudget] = useState("");
@@ -132,6 +187,13 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
           {!!error && <div className="sg-advisor-error">{error}</div>}
         </div>
       </section>
+
+      <DecisionBoard
+        products={products}
+        selectedIds={selectedIds}
+        suite={suite}
+        onToggle={toggleSelect}
+      />
 
       {products.length > 0 && (
         <section className="sg-ui-panel">

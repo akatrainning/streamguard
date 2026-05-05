@@ -32,7 +32,20 @@ function scoreLabel(score) {
   return "高风险";
 }
 
-export default function HistoryPage({ apiBase = "http://localhost:8012", token }) {
+function historyNodeStyle(session, index, total) {
+  const score = Number(session.score || 0);
+  const angle = -88 + (360 / Math.max(total, 1)) * index;
+  const radius = 118 + ((score % 4) * 18);
+  const radians = (angle * Math.PI) / 180;
+  const tone = scoreTone(score);
+  return {
+    "--node-x": `${Math.cos(radians) * radius}px`,
+    "--node-y": `${Math.sin(radians) * radius}px`,
+    "--node-color": `var(--${tone === "success" ? "fact" : tone === "danger" ? "trap" : "hype"})`,
+  };
+}
+
+export default function HistoryPage({ apiBase = "http://localhost:8011", token }) {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -116,6 +129,15 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
     });
   }, [allSessions, filter, search]);
 
+  const archiveStats = useMemo(() => {
+    const total = allSessions.reduce((sum, session) => sum + Number(session.total || 0), 0);
+    const trap = allSessions.reduce((sum, session) => sum + Number(session.trap || 0), 0);
+    const evidence = allSessions.reduce((sum, session) => sum + Number(session.evidenceCount || 0), 0);
+    const highRisk = allSessions.filter((session) => Number(session.score || 0) < 50).length;
+    const riskRate = total ? Math.round((trap / total) * 100) : 0;
+    return { total, trap, evidence, highRisk, riskRate };
+  }, [allSessions]);
+
   return (
     <>
       <main className="sg-history-page">
@@ -147,18 +169,50 @@ export default function HistoryPage({ apiBase = "http://localhost:8012", token }
           )}
         </header>
 
-        <Panel className="sg-history-toolbar" title="检索与筛选" eyebrow="Filters">
-          <div className="sg-history-toolbar-row">
-            <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
-            <TextField
-              label="检索"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="按标题、品牌或房间号过滤"
-            />
+        <section className="sg-history-command-board" aria-label="历史档案检索指挥板">
+          <div className="sg-history-orbit" aria-hidden="true">
+            <div className="sg-history-orbit-core">
+              <span>VISIBLE</span>
+              <strong>{filtered.length}</strong>
+              <em>{allSessions.length} archives</em>
+            </div>
+            {allSessions.slice(0, 10).map((session, index, items) => (
+              <button
+                key={session.id}
+                type="button"
+                className={`sg-history-orbit-node is-${scoreTone(Number(session.score || 0))}`}
+                style={historyNodeStyle(session, index, items.length)}
+                onClick={() => handleReplay(session.id)}
+                title={session.product || session.title || session.id}
+              >
+                {Number(session.score || 0)}
+              </button>
+            ))}
           </div>
-          {error && <div className="sg-history-error">{error}</div>}
-        </Panel>
+
+          <div className="sg-history-console">
+            <div className="sg-history-console-head">
+              <span>Archive Query</span>
+              <strong>{archiveStats.riskRate}% trap ratio</strong>
+            </div>
+            <div className="sg-history-console-metrics">
+              <div><span>signals</span><strong>{archiveStats.total}</strong></div>
+              <div><span>trap</span><strong>{archiveStats.trap}</strong></div>
+              <div><span>evidence</span><strong>{archiveStats.evidence}</strong></div>
+              <div><span>p0/p1</span><strong>{archiveStats.highRisk}</strong></div>
+            </div>
+            <div className="sg-history-command-tools">
+              <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
+              <TextField
+                label="检索"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="按标题、品牌或房间号过滤"
+              />
+            </div>
+            {error && <div className="sg-history-error">{error}</div>}
+          </div>
+        </section>
 
         <div className="sg-history-list">
           {filtered.map((session) => {

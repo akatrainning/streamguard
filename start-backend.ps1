@@ -1,6 +1,6 @@
 ﻿$ErrorActionPreference = "Stop"
 
-$Port = 8012
+$Port = 8011
 $BackendDir = Join-Path $PSScriptRoot "streamguard-backend"
 
 $utf8 = [System.Text.UTF8Encoding]::new($false)
@@ -31,5 +31,6 @@ if (-not (Test-Path ".env") -and (Test-Path ".env.example")) {
     Write-Host "Created streamguard-backend/.env from .env.example" -ForegroundColor Green
 }
 
-python -m uvicorn app:app --reload --host 0.0.0.0 --port $Port
+$env:PORT = $Port
+python run_uvicorn.py
 

@@ -120,8 +120,71 @@ function sortEvidence(items, sortMode) {
   return sorted;
 }
 
+function evidenceOrbitStyle(item, index, total) {
+  const score = Number(item.score ?? item.similarity ?? 0.42);
+  const angle = -94 + (360 / Math.max(total, 1)) * index;
+  const radius = 116 + (index % 4) * 24 + Math.min(24, score * 18);
+  const radians = (angle * Math.PI) / 180;
+  const color = {
+    rule_db: "var(--accent)",
+    historical_case: "var(--hype)",
+    evidence_db: "var(--fact)",
+    asr_context: "var(--trap)",
+    claim_case: "var(--hype)",
+  }[item.source] || "var(--text-secondary)";
+  return {
+    "--node-x": `${Math.cos(radians) * radius}px`,
+    "--node-y": `${Math.sin(radians) * radius}px`,
+    "--node-color": color,
+    "--node-size": `${34 + Math.min(22, score * 24)}px`,
+  };
+}
+
+function EvidenceConstellation({ items, selectedId, onSelect, sourceOptions, activeTab }) {
+  const visibleNodes = items.slice(0, 18);
+  return (
+    <section className="sg-rag-constellation" aria-label="证据星图">
+      <div className="sg-rag-constellation-stage">
+        <div className="sg-rag-constellation-core">
+          <span>{activeTab.label}</span>
+          <strong>{items.length}</strong>
+          <em>retrieved</em>
+        </div>
+        {visibleNodes.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`sg-rag-orbit-node ${selectedId === item.id ? "is-selected" : ""}`}
+            style={evidenceOrbitStyle(item, index, visibleNodes.length)}
+            onClick={() => onSelect(item.id)}
+            title={item.title || item.id}
+          >
+            {Math.round(Number(item.score ?? item.similarity ?? 0) * 100) || index + 1}
+          </button>
+        ))}
+      </div>
+
+      <div className="sg-rag-constellation-ledger">
+        <div>
+          <span>Evidence Sources</span>
+          <strong>{sourceOptions.length || 0} active lanes</strong>
+        </div>
+        <div className="sg-rag-constellation-bars">
+          {sourceOptions.map(({ source, count }) => (
+            <button key={source} type="button" onClick={() => onSelect(items.find((item) => item.source === source)?.id || "")}>
+              <span>{sourceLabel(source)}</span>
+              <i style={{ "--bar": `${Math.min(100, count * 14)}%` }} />
+              <strong>{count}</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function RagSettingsPage({
-  apiBase = "http://localhost:8012",
+  apiBase = "http://localhost:8011",
   utterances = [],
   chatMessages = [],
   sessionStats = {},
@@ -142,6 +205,8 @@ export default function RagSettingsPage({
   const [sortMode, setSortMode] = useState("score");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(null);
+  const [showAnswerModal, setShowAnswerModal] = useState(false);
+  const [answerGeneratedAt, setAnswerGeneratedAt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [asking, setAsking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -347,6 +412,8 @@ export default function RagSettingsPage({
       });
       setAnswer(payload);
       setQuestion(trimmed);
+      setAnswerGeneratedAt(Date.now());
+      setShowAnswerModal(true);
     } catch (err) {
       setError(err.message || "RAG 问答失败，请检查 LLM 配置或稍后重试。");
     } finally {
@@ -393,14 +460,28 @@ export default function RagSettingsPage({
         <div className={`sg-rag-verdict ${riskTone(evaluation?.risk_level)} ${isEvaluationStale ? "is-stale" : ""}`}>
           <span>当前总评</span>
           <strong>{evaluation?.risk_level || "P3"}</strong>
-          <p>{evaluation?.summary || "暂无足够 RAG 命中，建议先检索知识库证据或提出审核问题。"}</p>
-          {isEvaluationStale && <small>评估后新增 {newSignalCount || "若干"} 条信号，建议刷新总评。</small>}
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", minHeight: "4rem" }}>
+            <p style={{ margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+              {evaluation?.summary || "暂无足够 RAG 命中，建议先检索知识库证据或提出审核问题。"}
+            </p>
+            <div style={{ minHeight: "1.25rem", marginTop: "0.25rem", opacity: isEvaluationStale ? 1 : 0, transition: "opacity 0.2s ease", pointerEvents: isEvaluationStale ? "auto" : "none" }}>
+              <small>评估后新增 {newSignalCount || "若干"} 条信号，建议刷新总评。</small>
+            </div>
+          </div>
         </div>
         <Metric label="命中结果" value={evaluation?.matched_count || 0} detail="当前上下文" />
         <Metric label="评估时间" value={formatRelativeTime(evaluationMeta?.evaluatedAt)} detail={isEvaluationStale ? "可能已过期" : "与当前信号同步"} tone={isEvaluationStale ? "is-warning" : "is-good"} />
         <Metric label="索引状态" value={embeddingStatus.ready ? "READY" : "CHECK"} detail={embeddingStatus.ready ? formatTime(embeddingStatus.last_built_at) : embeddingStatus.reason || "未就绪"} tone={embeddingStatus.ready ? "is-good" : "is-warning"} />
         <Metric label="规则节点" value={counts.rule_graph_nodes || 0} detail="法规图谱" />
       </section>
+
+      <EvidenceConstellation
+        items={visibleEvidence}
+        selectedId={selectedEvidenceId}
+        onSelect={setSelectedEvidenceId}
+        sourceOptions={sourceOptions}
+        activeTab={activeTab}
+      />
 
       <div className="sg-rag-workbench-grid">
         <Panel
@@ -569,23 +650,18 @@ export default function RagSettingsPage({
 
           <div className="sg-rag-answer" aria-live="polite">
             {!answer && !asking && (
-              <div className="sg-rag-empty">回答会按“结论、判断依据、关联法规、相似案例、建议处置、引用证据”输出，方便直接用于审核复核。</div>
+              <div className="sg-rag-empty">生成结果将以审核报告弹窗展示，页面内只保留提问入口和最近一次报告状态。</div>
             )}
             {asking && <div className="sg-rag-muted">正在检索知识库并生成证据约束回答...</div>}
             {answer && (
-              <>
-                <div className={`sg-rag-answer-head ${riskTone(answer.risk_level)}`}>
-                  <span>结论</span>
-                  <strong>{answer.risk_level || "待复核"}</strong>
-                  <p>{answer.conclusion}</p>
+              <div className="sg-rag-report-launch">
+                <div>
+                  <span>最近一次审核报告</span>
+                  <strong>{answer.risk_level || "待复核"} · {formatTime(answerGeneratedAt)}</strong>
+                  <p>{answer.conclusion || "报告已生成，可打开查看完整复核内容。"}</p>
                 </div>
-                <AnswerSection title="判断依据" items={answer.basis} />
-                <EvidenceSection title="关联法规" items={answer.regulations} />
-                <EvidenceSection title="相似案例" items={answer.cases} />
-                <AnswerSection title="建议处置" items={answer.action_suggestions} />
-                <EvidenceSection title="引用证据" items={answer.citations} compact />
-                {!answer.used_llm && answer.reason && <div className="sg-rag-answer-note">LLM 未参与：{answer.reason}</div>}
-              </>
+                <Button variant="primary" onClick={() => setShowAnswerModal(true)}>查看审核报告</Button>
+              </div>
             )}
           </div>
         </Panel>
@@ -604,6 +680,16 @@ export default function RagSettingsPage({
           saving={saving}
         />
       </details>
+
+      {showAnswerModal && answer && (
+        <RagAnswerReportModal
+          answer={answer}
+          question={question}
+          generatedAt={answerGeneratedAt}
+          pinnedCount={pinnedEvidences.length}
+          onClose={() => setShowAnswerModal(false)}
+        />
+      )}
     </section>
   );
 }
@@ -618,14 +704,127 @@ function Metric({ label, value, detail, tone = "" }) {
   );
 }
 
+function normalizeTextItems(items) {
+  if (Array.isArray(items)) return items.filter(Boolean).map((item) => String(item));
+  return items ? [String(items)] : [];
+}
+
+function countItems(items) {
+  if (Array.isArray(items)) return items.filter(Boolean).length;
+  return items ? 1 : 0;
+}
+
+function summarizeEvidence(items = []) {
+  if (!Array.isArray(items) || items.length === 0) return "暂无";
+  const first = items.find(Boolean);
+  if (!first) return "暂无";
+  if (typeof first === "string") return first;
+  return first.title || first.id || first.evidence_id || first.content || "暂无";
+}
+
+function summarizeText(items) {
+  const normalized = normalizeTextItems(items);
+  return normalized[0] || "暂无";
+}
+
+function AnswerStats({ answer }) {
+  const stats = [
+    { label: "依据", count: countItems(answer?.basis), summary: summarizeText(answer?.basis) },
+    { label: "法规", count: countItems(answer?.regulations), summary: summarizeEvidence(answer?.regulations) },
+    { label: "案例", count: countItems(answer?.cases), summary: summarizeEvidence(answer?.cases) },
+    { label: "证据", count: countItems(answer?.citations), summary: summarizeEvidence(answer?.citations) },
+  ];
+
+  return (
+    <div className="sg-rag-answer-stats" aria-label="回答摘要">
+      {stats.map((item) => (
+        <article key={item.label} className="sg-rag-answer-stat">
+          <span>{item.label}</span>
+          <strong>{item.count}</strong>
+          <p>{item.summary}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function RagAnswerReportModal({ answer, question, generatedAt, pinnedCount, onClose }) {
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="sg-modal-backdrop sg-rag-report-backdrop" onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <section className="sg-rag-report-modal" role="dialog" aria-modal="true" aria-labelledby="sg-rag-report-title">
+        <header className="sg-rag-report-head">
+          <div>
+            <div className="sg-ui-eyebrow">Audit Report</div>
+            <h2 id="sg-rag-report-title">RAG 审核报告</h2>
+          </div>
+          <div className="sg-rag-report-actions">
+            <Button onClick={onClose}>关闭</Button>
+          </div>
+        </header>
+
+        <div className="sg-rag-report-body">
+          <div className="sg-rag-report-meta">
+            <div>
+              <span>审核问题</span>
+              <strong>{question || "未记录问题"}</strong>
+            </div>
+            <div>
+              <span>生成时间</span>
+              <strong>{formatTime(generatedAt)}</strong>
+            </div>
+            <div>
+              <span>锁定证据</span>
+              <strong>{pinnedCount || 0} 条</strong>
+            </div>
+          </div>
+
+          <div className="sg-rag-answer-layout sg-rag-answer-layout-modal">
+            <div className={`sg-rag-answer-head ${riskTone(answer.risk_level)}`}>
+              <span>审核结论</span>
+              <strong>{answer.risk_level || "待复核"}</strong>
+              <p>{answer.conclusion}</p>
+            </div>
+            <AnswerStats answer={answer} />
+            <div className="sg-rag-answer-main">
+              <div className="sg-rag-answer-column">
+                <AnswerSection title="判断依据" items={answer.basis} />
+                <AnswerSection title="建议处置" items={answer.action_suggestions} />
+              </div>
+              <div className="sg-rag-answer-column sg-rag-answer-evidence">
+                <EvidenceSection title="关联法规" items={answer.regulations} compact />
+                <EvidenceSection title="相似案例" items={answer.cases} compact />
+                <EvidenceSection title="引用证据" items={answer.citations} />
+              </div>
+            </div>
+            {!answer.used_llm && answer.reason && <div className="sg-rag-answer-note">LLM 未参与：{answer.reason}</div>}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function AnswerSection({ title, items = [] }) {
-  const normalized = Array.isArray(items) ? items : [items].filter(Boolean);
+  const normalized = normalizeTextItems(items);
   if (!normalized.length) return null;
   return (
     <section className="sg-rag-answer-section">
       <h3>{title}</h3>
-      <ul>
-        {normalized.map((item, index) => <li key={`${title}-${index}`}>{String(item)}</li>)}
+      <ul className="sg-rag-answer-list">
+        {normalized.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}
       </ul>
     </section>
   );

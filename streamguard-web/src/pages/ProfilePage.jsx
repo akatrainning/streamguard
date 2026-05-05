@@ -89,6 +89,30 @@ export default function ProfilePage({ apiBase, user, token, onUserUpdate, onLogo
           </button>
         </div>
 
+        <section className="sg-profile-command" aria-label="账号身份控制台">
+          <div className="sg-profile-command-avatar">
+            {user.avatar_url ? (
+              <img src={user.avatar_url} alt="用户头像" />
+            ) : (
+              <span>{initials}</span>
+            )}
+          </div>
+          <div className="sg-profile-command-copy">
+            <span>Operator Identity</span>
+            <strong>{user.nickname || "未命名用户"}</strong>
+            <em>{user.email}</em>
+          </div>
+          <div className="sg-profile-command-status">
+            <span>ACCESS</span>
+            <strong>正常</strong>
+          </div>
+          <div className="sg-profile-command-telemetry">
+            <div><span>created</span><strong>{formatDate(user.created_at)}</strong></div>
+            <div><span>last login</span><strong>{user.last_login ? formatDate(user.last_login) : "-"}</strong></div>
+            <div><span>profile</span><strong>{form.bio.trim() ? "READY" : "EMPTY"}</strong></div>
+          </div>
+        </section>
+
         <div className="sg-profile-grid">
           <section className="sg-profile-panel sg-profile-summary">
             <div className="sg-profile-panel-head">

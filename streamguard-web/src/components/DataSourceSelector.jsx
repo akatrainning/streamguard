@@ -15,7 +15,7 @@ const MODE_OPTIONS = [
 export default function DataSourceSelector({ onSelect, onConnect, variant = "modal" }) {
   const [selected, setSelected] = useState("douyin");
   const [roomInput, setRoomInput] = useState("");
-  const [wsBase, setWsBase] = useState("ws://localhost:8012");
+  const [wsBase, setWsBase] = useState("ws://localhost:8011");
   const [probeLoading, setProbeLoading] = useState(false);
   const [probeData, setProbeData] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -35,7 +35,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
 
     const timer = window.setTimeout(async () => {
       try {
-        const httpBase = (wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
+        const httpBase = (wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
         const res = await fetch(`${httpBase}/douyin/room-info/${roomId}`);
         const data = res.ok ? await res.json() : { error: `HTTP ${res.status}` };
         setProbeData(data);
@@ -64,13 +64,13 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
     const config = selected === "douyin"
       ? {
           roomId: roomId.trim(),
-          wsBase: wsBase.trim() || "ws://localhost:8012",
+          wsBase: wsBase.trim() || "ws://localhost:8011",
           roomTitle: probeData?.room_title || "",
           anchorName: probeData?.anchor_name || "",
           avatarUrl: probeData?.avatar_url || probeData?.thumbnail_url || "",
           thumbnailUrl: probeData?.thumbnail_url || "",
         }
-      : { wsBase: wsBase.trim() || "ws://localhost:8012" };
+      : { wsBase: wsBase.trim() || "ws://localhost:8011" };
     onSelect(selected, config);
     onConnect?.(selected, config);
   };
@@ -168,7 +168,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
                 type="text"
                 value={wsBase}
                 onChange={(event) => setWsBase(event.target.value)}
-                placeholder="ws://localhost:8012"
+                placeholder="ws://localhost:8011"
               />
             )}
           </div>

@@ -64,12 +64,14 @@ try:
 
     from rag_pipeline import RAGPipeline
     from models import LiveSemanticEvent, RAGQuestion, Claim, ClaimType, Modality
-    rag_pipeline = RAGPipeline()
+    # Don't initialize RAGPipeline here - defer until first use to avoid blocking on API calls
     RAG_AVAILABLE = True
-except ImportError as e:
-    print(f"[RAG] Import failed: {e}; RAG features disabled")
+    rag_pipeline = None  # Will be initialized lazily on first use
+except (ImportError, Exception) as e:
+    print(f"[RAG] Import preparation failed: {e}; RAG features disabled")
     RAG_AVAILABLE = False
     rag_pipeline = None
+    RAGPipeline = None  # Set to None so we know it failed
 try:
     from openai import AsyncOpenAI, OpenAI
     OPENAI_AVAILABLE = True
@@ -90,6 +92,39 @@ class UTF8JSONResponse(JSONResponse):
 
 
 app = FastAPI(title="StreamGuard Backend", default_response_class=UTF8JSONResponse)
+
+# ============= Lazy RAG Pipeline Initialization =============
+def _get_rag_pipeline():
+    """
+    Lazily initialize RAGPipeline on first use.
+    This defers potentially expensive API calls from module import time to actual use time.
+    """
+    global rag_pipeline, RAG_AVAILABLE
+    
+    if rag_pipeline is not None:
+        return rag_pipeline
+    
+    if not RAG_AVAILABLE or RAGPipeline is None:
+        return None
+    
+    try:
+        rag_pipeline = RAGPipeline()
+        print("[RAG] Successfully initialized RAGPipeline on first use")
+        return rag_pipeline
+    except Exception as e:
+        print(f"[RAG] Failed to initialize RAGPipeline on first use: {e}")
+        RAG_AVAILABLE = False
+        return None
+
+def _require_rag_pipeline():
+    """
+    Get RAGPipeline instance, raising HTTPException if not available.
+    Call this in endpoints that require RAG to be available.
+    """
+    pipeline = _get_rag_pipeline()
+    if not pipeline:
+        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    return pipeline
 
 # ============= Pydantic Models =============
 class RoomInfo(BaseModel):
@@ -1152,7 +1187,8 @@ async def _enrich_utterance_with_rag(
     confidence: float = 0.9,
     persist_discovery: bool = True,
 ) -> dict:
-    if not (RAG_AVAILABLE and rag_pipeline):
+    rag = _get_rag_pipeline()
+    if not rag:
         return payload
 
     text = (payload.get("text") or "").strip()
@@ -1170,7 +1206,7 @@ async def _enrich_utterance_with_rag(
             confidence=confidence,
         )
         rag_result = await asyncio.to_thread(
-            rag_pipeline.process_event,
+            rag.process_event,
             rag_event,
             persist_discovery,
         )
@@ -3023,12 +3059,57 @@ async def analyze_douyin_audio(room_id: str, seconds: int = 20):
 
 # --- Douyin Cookie / Auth ---
 
+def _mask_cookie_value(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return value[:2] + ("*" * max(len(value) - 2, 0))
+    return f"{value[:4]}***{value[-3:]}"
+
+
 @app.get("/consumer/cookie-status")
 async def cookie_status():
     """Check whether douyin cookies are available."""
     if not SEARCH_AVAILABLE:
         return {"exists": False, "count": 0, "message": "search module not available"}
     return get_cookie_status()
+
+
+@app.get("/consumer/cookie-preview")
+async def cookie_preview(limit: int = 8):
+    """Return a masked preview of saved cookies for the frontend status panel."""
+    if not SEARCH_AVAILABLE:
+        return {"exists": False, "total": 0, "cookies": []}
+
+    limit = max(1, min(limit, 20))
+    status = get_cookie_status()
+    if not status.get("exists"):
+        return {
+            "exists": False,
+            "total": 0,
+            "cookies": [],
+            "path": status.get("path"),
+        }
+
+    cookies = _load_douyin_cookies()
+    preview = []
+    for cookie in cookies[:limit]:
+        name = cookie.get("name") or cookie.get("Name") or "-"
+        value = cookie.get("value") or cookie.get("Value") or ""
+        preview.append({
+            "name": name,
+            "domain": cookie.get("domain") or cookie.get("Domain") or "douyin.com",
+            "path": cookie.get("path") or cookie.get("Path") or "/",
+            "value_preview": _mask_cookie_value(value),
+        })
+
+    return {
+        "exists": True,
+        "total": len(cookies),
+        "cookies": preview,
+        "path": status.get("path"),
+        "modified": status.get("modified"),
+    }
 
 
 @app.post("/consumer/auth-douyin")
@@ -3358,7 +3439,7 @@ async def health():
         "openai_configured": LLM_PROVIDER == "openai" and bool(LLM_API_KEY),
         "gpt4_available": LLM_PROVIDER == "openai" and OPENAI_AVAILABLE and bool(LLM_API_KEY),
         "rag_available": RAG_AVAILABLE,
-        "rag_status": "initialized" if RAG_AVAILABLE and rag_pipeline else "failed",
+        "rag_status": "initialized" if RAG_AVAILABLE and _get_rag_pipeline() else "not_initialized",
     }
 
 
@@ -3367,18 +3448,16 @@ async def health():
 @app.get("/rag/config")
 async def rag_get_config():
     """Return sanitized RAG configuration and runtime index status."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
-    return rag_pipeline.get_public_status()
+    pipeline = _require_rag_pipeline()
+    return pipeline.get_public_status()
 
 
 @app.put("/rag/config")
 async def rag_update_config(request: RAGConfigRequest):
     """Update RAG tuning configuration. API keys are read from environment variables only."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     try:
-        return rag_pipeline.update_config(request.config, persist=True, rebuild=bool(request.rebuild))
+        return pipeline.update_config(request.config, persist=True, rebuild=bool(request.rebuild))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"RAG config update failed: {str(e)}")
 
@@ -3386,11 +3465,10 @@ async def rag_update_config(request: RAGConfigRequest):
 @app.post("/rag/reindex")
 async def rag_reindex():
     """Rebuild TF-IDF spaces and the FAISS embedding index."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     try:
-        rag_pipeline.rebuild_vector_spaces(rebuild_embedding=True)
-        return rag_pipeline.get_public_status()
+        pipeline.rebuild_vector_spaces(rebuild_embedding=True)
+        return pipeline.get_public_status()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG reindex failed: {str(e)}")
 
@@ -3398,10 +3476,9 @@ async def rag_reindex():
 @app.get("/rag/architecture")
 async def rag_architecture():
     """Return the layered RAG knowledge-base design and live module counts."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     try:
-        return rag_pipeline.get_knowledge_architecture()
+        return pipeline.get_knowledge_architecture()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG architecture failed: {str(e)}")
 
@@ -3409,13 +3486,12 @@ async def rag_architecture():
 @app.post("/rag/test")
 async def rag_test_query(request: RAGTestRequest):
     """Run a single utterance through the current RAG configuration."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     text = (request.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
     try:
-        return rag_pipeline.test_query(text)
+        return pipeline.test_query(text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG test failed: {str(e)}")
 
@@ -3423,10 +3499,9 @@ async def rag_test_query(request: RAGTestRequest):
 @app.get("/rag/knowledge")
 async def rag_knowledge_view(view: str = "combined", query: str = "", limit: int = 48):
     """Return visualizable knowledge-base evidence for the RAG workbench."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     try:
-        return rag_pipeline.get_knowledge_view(view=view, query=query, limit=max(1, min(limit, 120)))
+        return pipeline.get_knowledge_view(view=view, query=query, limit=max(1, min(limit, 120)))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG knowledge view failed: {str(e)}")
 
@@ -3434,10 +3509,9 @@ async def rag_knowledge_view(view: str = "combined", query: str = "", limit: int
 @app.post("/rag/knowledge")
 async def rag_knowledge_view_post(request: RAGKnowledgeRequest):
     """POST variant for longer search strings."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     try:
-        return rag_pipeline.get_knowledge_view(
+        return pipeline.get_knowledge_view(
             view=request.view or "combined",
             query=request.query or "",
             limit=max(1, min(int(request.limit or 48), 120)),
@@ -3449,13 +3523,12 @@ async def rag_knowledge_view_post(request: RAGKnowledgeRequest):
 @app.post("/rag/ask")
 async def rag_ask_workbench(request: RAGAskRequest):
     """Evidence-bound RAG Q&A for auditors."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     question = (request.question or "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="question is required")
     try:
-        return rag_pipeline.answer_question(question, context=request.context or {}, evidence_ids=request.evidence_ids or [])
+        return pipeline.answer_question(question, context=request.context or {}, evidence_ids=request.evidence_ids or [])
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG answer failed: {str(e)}")
 
@@ -3463,10 +3536,9 @@ async def rag_ask_workbench(request: RAGAskRequest):
 @app.post("/rag/live-evaluation")
 async def rag_live_evaluation(request: RAGLiveEvaluationRequest):
     """Evaluate current livestream context with RAG evidence."""
-    if not RAG_AVAILABLE or not rag_pipeline:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
+    pipeline = _require_rag_pipeline()
     try:
-        return rag_pipeline.evaluate_live_context(request.context or {})
+        return pipeline.evaluate_live_context(request.context or {})
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG live evaluation failed: {str(e)}")
 
@@ -3474,11 +3546,9 @@ async def rag_live_evaluation(request: RAGLiveEvaluationRequest):
 @app.post("/rag/analyze")
 async def rag_analyze_event(event: LiveSemanticEvent):
     """RAG-based analysis of a LiveSemanticEvent"""
-    if not RAG_AVAILABLE:
-        raise HTTPException(status_code=503, detail="RAG pipeline not available")
-
+    pipeline = _require_rag_pipeline()
     try:
-        result = rag_pipeline.process_event(event)
+        result = pipeline.process_event(event)
         return result.dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"RAG analysis failed: {str(e)}")

@@ -47,7 +47,7 @@ export default function CommandCenter({
       generatedAt: new Date().toISOString(),
       source: dataSource,
       roomId: sourceConfig?.roomId || null,
-      wsBase: sourceConfig?.wsBase || "ws://localhost:8012",
+      wsBase: sourceConfig?.wsBase || "ws://localhost:8011",
       connection: {
         connected: connection.connected,
         connecting: connection.connecting,

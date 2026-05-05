@@ -35,7 +35,7 @@ function resolveApiBase(wsBase) {
   const useDevProxy =
     typeof window !== "undefined"
     && ["localhost", "127.0.0.1"].includes(window.location.hostname)
-    && /^https?:\/\/(localhost|127\.0\.0\.1):8012$/i.test(backendBase);
+    && /^https?:\/\/(localhost|127\.0\.0\.1):8011$/i.test(backendBase);
 
   return useDevProxy ? "" : backendBase;
 }
@@ -49,7 +49,7 @@ function toProxiedMediaUrl(rawUrl, apiBase) {
 
 export default function VideoPlayer({
   roomId: roomIdRaw,
-  wsBase = "http://localhost:8012",
+  wsBase = "http://localhost:8011",
   isVisible = true,
   mediaUrl: discoveredMediaUrl,
 }) {

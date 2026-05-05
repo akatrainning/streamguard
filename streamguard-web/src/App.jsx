@@ -97,7 +97,7 @@ export default function App() {
   const realStream = useRealStream({
     mode: dataSource === "douyin" ? "douyin" : "mock",
     roomId: sourceConfig.roomId,
-    wsBase: sourceConfig.wsBase || "ws://localhost:8012",
+    wsBase: sourceConfig.wsBase || "ws://localhost:8011",
     enabled: dataSource === "douyin" || dataSource === "mock",
   });
 
@@ -128,7 +128,7 @@ export default function App() {
     recentLimits = { utterances: 0, chats: 0 },
   } = streamData || {};
 
-  const apiBase = (sourceConfig.wsBase || "ws://localhost:8012").replace(/^ws/i, "http");
+  const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
   const protectedPages = useMemo(() => new Set(["discover", "consumer", "history", "analytics", "rag", "profile"]), []);
 
   useEffect(() => {
@@ -381,7 +381,7 @@ export default function App() {
     setSourceConfig((prev) => ({
       ...prev,
       ...roomMeta,
-      wsBase: prev.wsBase || "ws://localhost:8012",
+      wsBase: prev.wsBase || "ws://localhost:8011",
     }));
     setPage("dashboard");
     setTimeout(() => realStream.reconnectNow?.(), 50);
@@ -773,7 +773,7 @@ function Dashboard(props) {
                 {sourceConfig.roomId ? (
                   <VideoPlayer
                     roomId={sourceConfig.roomId}
-                    wsBase={sourceConfig.wsBase || "http://localhost:8012"}
+                    wsBase={sourceConfig.wsBase || "http://localhost:8011"}
                     isVisible={dashboardSection === "stream"}
                     mediaUrl={realStream.mediaUrl}
                   />

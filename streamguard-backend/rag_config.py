@@ -50,8 +50,8 @@ def default_rag_config() -> Dict[str, Any]:
             "api_key_env": "DEEPSEEK_API_KEY",
             "temperature": float(_env_value("RAG_LLM_TEMPERATURE", "0.0") or "0.0"),
             "top_p": float(_env_value("RAG_LLM_TOP_P", "1.0") or "1.0"),
-            "max_tokens": int(_env_value("RAG_LLM_MAX_TOKENS", "700") or "700"),
-            "timeout_seconds": int(_env_value("RAG_LLM_TIMEOUT_SECONDS", "20") or "20"),
+            "max_tokens": int(_env_value("RAG_LLM_MAX_TOKENS", "4000") or "4000"),
+            "timeout_seconds": int(_env_value("RAG_LLM_TIMEOUT_SECONDS", "30") or "30"),
         },
         "risk": {
             "thresholds": {"p0": 0.80, "p1": 0.50, "p2": 0.30},

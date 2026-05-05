@@ -117,7 +117,7 @@ export default function LiveVideoPlayer({
   utterances = [],
   isConnected = false,
   dataSource = "mock",
-  apiBase = "http://localhost:8012",   // 鏂板锛氱敤浜庢瀯閫犱唬鐞?URL
+  apiBase = "http://localhost:8011",   // 鏂板锛氱敤浜庢瀯閫犱唬鐞?URL
 }) {
   const [playError, setPlayError] = useState(null);
   const [showVideo, setShowVideo] = useState(true);

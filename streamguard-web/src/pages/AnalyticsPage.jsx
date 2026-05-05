@@ -431,7 +431,7 @@ export default function AnalyticsPage({ apiBase = "http://localhost:8011", token
           <p>{headline}</p>
         </div>
         <div className="sg-analytics-head-actions">
-          <StatusBadge tone={isPreset ? "warning" : avgTone}>{isPreset ? "预制数据" : `平均理性 ${avgRI}`}</StatusBadge>
+          <StatusBadge tone={avgTone}>{`平均理性 ${avgRI}`}</StatusBadge>
           <span className="sg-analytics-sync mono">SYNC {syncLabel}</span>
         </div>
       </header>
