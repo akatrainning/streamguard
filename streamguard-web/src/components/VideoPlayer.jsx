@@ -1,6 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import flvjs from "flv.js";
-import Hls from "hls.js";
+
+function ensureScript(src, check) {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (check()) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const existing = document.querySelector(`script[data-sg-src="${src}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(check()), { once: true });
+      existing.addEventListener("error", () => resolve(false), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.sgSrc = src;
+    script.onload = () => resolve(check());
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
 
 function extractRoomId(input = "") {
   const text = decodeURIComponent((input || "").trim());
@@ -108,6 +128,7 @@ export default function VideoPlayer({
     if (!video || !videoUrl) return undefined;
 
     setPlaybackError(null);
+    let cancelled = false;
 
     const clearPlayers = () => {
       if (hlsRef.current) {
@@ -136,14 +157,28 @@ export default function VideoPlayer({
       video.play().catch(() => {});
     };
 
-    if (streamKind === "hls") {
-      if (!Hls.isSupported()) {
-        if (video.canPlayType("application/vnd.apple.mpegurl")) {
-          playNative();
-        } else {
-          setPlaybackError("当前浏览器不支持 HLS 播放");
+    const setupPlayback = async () => {
+      if (streamKind === "hls") {
+        const ok = await ensureScript(
+          "https://cdn.jsdelivr.net/npm/hls.js@latest",
+          () => Boolean(window.Hls),
+        );
+        if (cancelled) return;
+        if (!ok) {
+          setPlaybackError("无法加载 HLS 播放器");
+          return;
         }
-      } else {
+
+        const Hls = window.Hls;
+        if (!Hls?.isSupported?.()) {
+          if (video.canPlayType("application/vnd.apple.mpegurl")) {
+            playNative();
+          } else {
+            setPlaybackError("当前浏览器不支持 HLS 播放");
+          }
+          return;
+        }
+
         const hls = new Hls({
           liveSyncDurationCount: 2,
           liveMaxLatencyDurationCount: 4,
@@ -168,11 +203,26 @@ export default function VideoPlayer({
           setPlaybackError("HLS 播放初始化失败");
         });
         hlsRef.current = hls;
+        return;
       }
-    } else if (streamKind === "flv") {
-      if (!flvjs?.isSupported?.()) {
-        setPlaybackError("当前浏览器不支持 FLV 播放");
-      } else {
+
+      if (streamKind === "flv") {
+        const ok = await ensureScript(
+          "https://cdn.jsdelivr.net/npm/flv.js@latest/dist/flv.min.js",
+          () => Boolean(window.flvjs),
+        );
+        if (cancelled) return;
+        if (!ok) {
+          setPlaybackError("无法加载 FLV 播放器");
+          return;
+        }
+
+        const flvjs = window.flvjs;
+        if (!flvjs?.isSupported?.()) {
+          setPlaybackError("当前浏览器不支持 FLV 播放");
+          return;
+        }
+
         const player = flvjs.createPlayer(
           {
             type: "flv",
@@ -195,12 +245,16 @@ export default function VideoPlayer({
           setPlaybackError(`FLV 播放失败: ${detail || "unknown error"}`);
         });
         flvRef.current = player;
+        return;
       }
-    } else {
+
       playNative();
-    }
+    };
+
+    setupPlayback();
 
     return () => {
+      cancelled = true;
       video.removeEventListener("loadeddata", handlePlayable);
       video.removeEventListener("playing", handlePlayable);
       clearPlayers();
