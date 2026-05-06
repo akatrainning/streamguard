@@ -1,150 +1,169 @@
-/**
- * SwitchRoomModal — 切换直播间时的保存确认弹窗
- * 当用户在"发现直播间"点击"进入直播间"，且当前已有监控数据时弹出
- */
+function formatDuration(startTime) {
+  if (!startTime) return "--";
+  const seconds = Math.max(0, Math.round((Date.now() - startTime) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const remain = seconds % 60;
+  return minutes > 0 ? `${minutes} 分 ${remain} 秒` : `${remain} 秒`;
+}
+
+const primaryButtonStyle = {
+  minHeight: 42,
+  borderRadius: 8,
+  border: "1px solid color-mix(in oklab, var(--accent) 54%, black 46%)",
+  background: "linear-gradient(180deg, color-mix(in oklab, var(--accent) 92%, white 8%), var(--accent-hover))",
+  color: "var(--accent-contrast)",
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: "pointer",
+  boxShadow: "var(--accent-shadow-sm)",
+};
+
+const secondaryButtonStyle = {
+  minHeight: 42,
+  borderRadius: 8,
+  border: "1px solid var(--border)",
+  background: "var(--bg-tertiary)",
+  color: "var(--text-primary)",
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const ghostButtonStyle = {
+  minHeight: 36,
+  border: "none",
+  background: "transparent",
+  color: "var(--text-muted)",
+  fontSize: 12,
+  cursor: "pointer",
+};
+
+function Row({ label, value, tone = "default" }) {
+  const color = tone === "accent" ? "var(--accent)" : tone === "fact" ? "var(--fact)" : "var(--text-primary)";
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 12 }}>
+      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span style={{ color, fontFamily: "JetBrains Mono, Consolas, monospace" }}>{value}</span>
+    </div>
+  );
+}
+
+function StatBox({ label, value, tone = "default" }) {
+  const color = tone === "hype" ? "var(--hype)" : "var(--text-primary)";
+  return (
+    <div
+      style={{
+        padding: "6px 8px",
+        border: "1px solid var(--border)",
+        borderRadius: 6,
+        textAlign: "center",
+        background: "var(--bg-secondary)",
+      }}
+    >
+      <div style={{ color, fontSize: 14, fontWeight: 700 }}>{value}</div>
+      <div style={{ marginTop: 2, color: "var(--text-muted)", fontSize: 10 }}>{label}</div>
+    </div>
+  );
+}
+
 export default function SwitchRoomModal({
-  fromRoomId,   // 当前正在监控的直播间 ID
-  toRoomId,     // 即将切换到的直播间 ID
-  stats = {},   // { total, trap, hype, fact }
-  startTime,    // 会话开始时间戳
-  onSaveAndSwitch,   // () => void  保存报告后切换
-  onDirectSwitch,    // () => void  直接切换不保存
-  onCancel,          // () => void  取消
+  fromRoomId,
+  toRoomId,
+  stats = {},
+  startTime,
+  onSaveAndSwitch,
+  onDirectSwitch,
+  onCancel,
 }) {
-  const total    = stats.total || 0;
-  const trap     = stats.trap  || 0;
-  const duration = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
-  const mins     = Math.floor(duration / 60);
-  const secs     = duration % 60;
-  const durStr   = mins > 0 ? `${mins} 分 ${secs} 秒` : `${secs} 秒`;
+  const total = stats.total || 0;
+  const trap = stats.trap || 0;
   const trapRate = total > 0 ? Math.round((trap / total) * 100) : 0;
 
   return (
     <div
       style={{
-        position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.75)",
-        display: "flex", alignItems: "center", justifyContent: "center",
+        position: "fixed",
+        inset: 0,
         zIndex: 2000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        background: "rgba(0, 0, 0, 0.76)",
         backdropFilter: "blur(4px)",
       }}
-      onClick={(e) => e.target === e.currentTarget && onCancel?.()}
+      onClick={(event) => event.target === event.currentTarget && onCancel?.()}
     >
-      <div style={{
-        width: 420,
-        background: "var(--bg-secondary)",
-        border: "1px solid var(--border)",
-        borderRadius: 14,
-        padding: 24,
-        display: "flex", flexDirection: "column", gap: 16,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
-      }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 22 }}>🔄</span>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
-              切换直播间
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-              检测到当前已有监控数据
-            </div>
-          </div>
-        </div>
-
-        {/* Room info */}
-        <div style={{
-          background: "var(--bg-tertiary)", borderRadius: 10, padding: 12,
-          display: "flex", flexDirection: "column", gap: 8,
+      <section
+        style={{
+          width: 420,
+          maxWidth: "100%",
+          display: "grid",
+          gap: 16,
+          padding: 24,
           border: "1px solid var(--border)",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-            <span style={{ color: "var(--text-muted)" }}>当前直播间</span>
-            <span style={{ fontFamily: "monospace", color: "var(--accent)" }}>
-              {fromRoomId || "—"}
-            </span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-            <span style={{ color: "var(--text-muted)" }}>目标直播间</span>
-            <span style={{ fontFamily: "monospace", color: "var(--fact)" }}>
-              {toRoomId}
-            </span>
-          </div>
-          <div style={{
-            height: 1, background: "var(--border)", margin: "2px 0",
-          }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4 }}>
-            <StatBox label="话术条数" value={total} />
-            <StatBox label="陷阱占比" value={`${trapRate}%`} warn={trapRate >= 20} />
-            <StatBox label="监控时长" value={durStr} />
+          borderRadius: 14,
+          background: "var(--bg-secondary)",
+          boxShadow: "0 20px 60px rgba(0, 0, 0, 0.5)",
+        }}
+      >
+        <header style={{ display: "grid", gap: 4 }}>
+          <strong style={{ color: "var(--text-primary)", fontSize: 16 }}>切换直播间</strong>
+          <span style={{ color: "var(--text-muted)", fontSize: 12 }}>
+            检测到当前会话还有监控数据，建议先保存报告。
+          </span>
+        </header>
+
+        <div
+          style={{
+            display: "grid",
+            gap: 8,
+            padding: 12,
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            background: "var(--bg-tertiary)",
+          }}
+        >
+          <Row label="当前直播间" value={fromRoomId || "--"} tone="accent" />
+          <Row label="目标直播间" value={toRoomId || "--"} tone="fact" />
+          <div style={{ height: 1, background: "var(--border)" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6 }}>
+            <StatBox label="记录数" value={total} />
+            <StatBox label="风险占比" value={`${trapRate}%`} tone={trapRate >= 20 ? "hype" : "default"} />
+            <StatBox label="监控时长" value={formatDuration(startTime)} />
           </div>
         </div>
 
-        {/* Warning */}
         {total > 0 && (
-          <div style={{
-            padding: "8px 12px", borderRadius: 8,
-            background: "rgba(255,165,0,0.08)",
-            border: "1px solid rgba(255,165,0,0.25)",
-            fontSize: 12, color: "var(--hype)", lineHeight: 1.6,
-          }}>
-            ⚠ 直接切换将丢失当前 {total} 条监控记录，建议先保存报告。
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid var(--hype-border)",
+              background: "var(--hype-bg)",
+              color: "var(--hype)",
+              fontSize: 12,
+              lineHeight: 1.6,
+            }}
+          >
+            直接切换会丢失当前 {total} 条监控记录。
           </div>
         )}
 
-        {/* Buttons */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "grid", gap: 8 }}>
           {total > 0 && (
-            <button
-              onClick={onSaveAndSwitch}
-              style={{
-                padding: "10px 0", borderRadius: 8, border: "none",
-                background: "var(--accent)", color: "#fff",
-                fontSize: 13, fontWeight: 600, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              }}
-            >
-              💾 保存报告后切换
+            <button type="button" onClick={onSaveAndSwitch} style={primaryButtonStyle}>
+              保存报告后切换
             </button>
           )}
-          <button
-            onClick={onDirectSwitch}
-            style={{
-              padding: "10px 0", borderRadius: 8,
-              border: "1px solid var(--border)",
-              background: "var(--bg-tertiary)", color: "var(--text-primary)",
-              fontSize: 13, fontWeight: 600, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-            }}
-          >
-            🚀 {total > 0 ? "直接切换（不保存）" : "立即切换"}
+          <button type="button" onClick={onDirectSwitch} style={secondaryButtonStyle}>
+            {total > 0 ? "直接切换，不保存" : "立即切换"}
           </button>
-          <button
-            onClick={onCancel}
-            style={{
-              padding: "8px 0", borderRadius: 8, border: "none",
-              background: "transparent", color: "var(--text-muted)",
-              fontSize: 12, cursor: "pointer",
-            }}
-          >
+          <button type="button" onClick={onCancel} style={ghostButtonStyle}>
             取消
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function StatBox({ label, value, warn = false }) {
-  return (
-    <div style={{
-      background: "var(--bg-secondary)", borderRadius: 6, padding: "6px 8px",
-      textAlign: "center", border: "1px solid var(--border)",
-    }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: warn ? "var(--hype)" : "var(--text-primary)" }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{label}</div>
+      </section>
     </div>
   );
 }

@@ -1870,6 +1870,24 @@ def _merge_room_identity(*parts: dict) -> dict:
     return merged
 
 
+def _is_transient_browser_error(exc: Exception) -> bool:
+    text = str(exc or "").lower()
+    markers = (
+        "connection aborted",
+        "connectionreseterror",
+        "10054",
+        "remote disconnected",
+        "disconnected",
+        "not connected to devtools",
+        "target window already closed",
+        "invalid session id",
+        "chrome not reachable",
+        "failed to establish a new connection",
+        "timed out receiving message from renderer",
+    )
+    return any(marker in text for marker in markers)
+
+
 def _discover_douyin_room_identity_via_browser(room_id: str, timeout_sec: int = 12) -> dict:
     """Open the live room in Chrome and read visible identity metadata from the rendered page."""
     from selenium import webdriver
@@ -1905,97 +1923,107 @@ def _discover_douyin_room_identity_via_browser(room_id: str, timeout_sec: int = 
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option("useAutomationExtension", False)
 
-    driver = None
-    service_pid = None
     identity = _empty_room_identity()
-    try:
+    last_error = None
+    for attempt in range(1, 3):
+        driver = None
+        service_pid = None
         try:
-            service = Service(_get_chromedriver_path(), log_output=subprocess.DEVNULL)
-        except TypeError:
-            service = Service(_get_chromedriver_path())
-        driver = webdriver.Chrome(service=service, options=opts)
-        service_pid = getattr(getattr(service, "process", None), "pid", None)
-        driver.set_page_load_timeout(25)
+            try:
+                service = Service(_get_chromedriver_path(), log_output=subprocess.DEVNULL)
+            except TypeError:
+                service = Service(_get_chromedriver_path())
+            driver = webdriver.Chrome(service=service, options=opts)
+            service_pid = getattr(getattr(service, "process", None), "pid", None)
+            driver.set_page_load_timeout(25)
 
-        try:
-            driver.get(target)
-        except TimeoutException:
-            pass
+            try:
+                driver.get(target)
+            except TimeoutException:
+                pass
 
-        start = time.time()
-        while time.time() - start < timeout_sec:
-            page_source = driver.page_source or ""
-            title = _clean_room_identity_text(driver.title or "")
-            browser_identity = _empty_room_identity()
+            start = time.time()
+            while time.time() - start < timeout_sec:
+                page_source = driver.page_source or ""
+                title = _clean_room_identity_text(driver.title or "")
+                browser_identity = _empty_room_identity()
 
-            if title and title not in ("抖音直播", "直播间", f"直播间 {room_id}"):
-                browser_identity["room_title"] = title
+                if title and title not in ("抖音直播", "直播间", f"直播间 {room_id}"):
+                    browser_identity["room_title"] = title
 
-            for pattern in (
-                r'"nickname"\s*:\s*"([^"]+)"',
-                r'"anchor_name"\s*:\s*"([^"]+)"',
-                r'"owner"\s*:\s*\{.*?"nickname"\s*:\s*"([^"]+)"',
-            ):
-                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
-                if match:
-                    browser_identity["anchor_name"] = _clean_room_identity_text(match.group(1))
-                    break
-
-            for pattern in (
-                r'"room_title"\s*:\s*"([^"]+)"',
-                r'"title"\s*:\s*"([^"]+)"',
-            ):
-                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
-                if match:
-                    browser_identity["room_title"] = _clean_room_identity_text(match.group(1))
-                    break
-
-            for pattern in (
-                r'"avatar_thumb"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
-                r'"avatar_medium"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
-                r'<img[^>]+src="([^"]+)"[^>]*>',
-            ):
-                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
-                if match:
-                    value = html.unescape(match.group(1)).strip()
-                    if "avatar" in pattern or "douyinpic.com" in value or "byteimg.com" in value:
-                        browser_identity["avatar_url"] = value
+                for pattern in (
+                    r'"nickname"\s*:\s*"([^"]+)"',
+                    r'"anchor_name"\s*:\s*"([^"]+)"',
+                    r'"owner"\s*:\s*\{.*?"nickname"\s*:\s*"([^"]+)"',
+                ):
+                    match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        browser_identity["anchor_name"] = _clean_room_identity_text(match.group(1))
                         break
 
-            for pattern in (
-                r'"room_cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
-                r'"cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
-                r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"',
-            ):
-                match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
-                if match:
-                    browser_identity["thumbnail_url"] = html.unescape(match.group(1)).strip()
-                    break
+                for pattern in (
+                    r'"room_title"\s*:\s*"([^"]+)"',
+                    r'"title"\s*:\s*"([^"]+)"',
+                ):
+                    match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        browser_identity["room_title"] = _clean_room_identity_text(match.group(1))
+                        break
 
-            if not browser_identity["anchor_name"] and browser_identity["room_title"] and "的直播间" in browser_identity["room_title"]:
-                browser_identity["anchor_name"] = browser_identity["room_title"].split("的直播间", 1)[0].strip()
+                for pattern in (
+                    r'"avatar_thumb"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                    r'"avatar_medium"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                    r'<img[^>]+src="([^"]+)"[^>]*>',
+                ):
+                    match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        value = html.unescape(match.group(1)).strip()
+                        if "avatar" in pattern or "douyinpic.com" in value or "byteimg.com" in value:
+                            browser_identity["avatar_url"] = value
+                            break
 
-            identity = _merge_room_identity(identity, browser_identity)
-            if identity["anchor_name"] and (identity["avatar_url"] or identity["room_title"]):
-                break
-            time.sleep(0.6)
-    except Exception as exc:
-        print(f"[room-identity] browser fallback failed for room {room_id}: {exc}")
-    finally:
-        try:
-            if driver:
-                driver.quit()
-        except Exception:
-            pass
-        if service_pid:
+                for pattern in (
+                    r'"room_cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                    r'"cover"\s*:\s*\{.*?"url_list"\s*:\s*\[\s*"([^"]+)"',
+                    r'<meta[^>]+property="og:image"[^>]+content="([^"]+)"',
+                ):
+                    match = re.search(pattern, page_source, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        browser_identity["thumbnail_url"] = html.unescape(match.group(1)).strip()
+                        break
+
+                if not browser_identity["anchor_name"] and browser_identity["room_title"] and "的直播间" in browser_identity["room_title"]:
+                    browser_identity["anchor_name"] = browser_identity["room_title"].split("的直播间", 1)[0].strip()
+
+                identity = _merge_room_identity(identity, browser_identity)
+                if identity["anchor_name"] and (identity["avatar_url"] or identity["room_title"]):
+                    return identity
+                time.sleep(0.6)
+        except Exception as exc:
+            last_error = exc
+            if _is_transient_browser_error(exc) and attempt < 2:
+                print(f"[room-identity] transient browser error for room {room_id}, retry {attempt}/2: {exc}")
+                time.sleep(1.0)
+                continue
+            print(f"[room-identity] browser fallback failed for room {room_id}: {exc}")
+            break
+        finally:
             try:
-                subprocess.run(
-                    ["taskkill", "/F", "/T", "/PID", str(service_pid)],
-                    capture_output=True,
-                    timeout=5,
-                )
+                if driver:
+                    driver.quit()
             except Exception:
                 pass
+            if service_pid:
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(service_pid)],
+                        capture_output=True,
+                        timeout=5,
+                    )
+                except Exception:
+                    pass
+    if last_error and _is_transient_browser_error(last_error):
+        print(f"[room-identity] giving up after transient browser failures for room {room_id}: {last_error}")
     return identity
 
 
@@ -2050,83 +2078,97 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     opts.add_experimental_option("useAutomationExtension", False)
     opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
-    driver = None
-    _service_pid = None
-    candidates: list[str] = []
-    try:
-        import sys
-        # `log_output` is supported only in newer Selenium versions.
+    last_error = None
+    for attempt in range(1, 4):
+        driver = None
+        _service_pid = None
+        candidates: list[str] = []
         try:
-            driver_path = _get_chromedriver_path()
-            service = Service(
-                driver_path,
-                log_output=subprocess.DEVNULL,
-            )
-        except TypeError:
-            driver_path = _get_chromedriver_path()
-            service = Service(driver_path)
-        driver = webdriver.Chrome(service=service, options=opts)
-        _service_pid = getattr(getattr(service, 'process', None), 'pid', None)
-        driver.set_page_load_timeout(25)
-        driver.execute_cdp_cmd("Network.enable", {})
+            # `log_output` is supported only in newer Selenium versions.
+            try:
+                driver_path = _get_chromedriver_path()
+                service = Service(
+                    driver_path,
+                    log_output=subprocess.DEVNULL,
+                )
+            except TypeError:
+                driver_path = _get_chromedriver_path()
+                service = Service(driver_path)
+            driver = webdriver.Chrome(service=service, options=opts)
+            _service_pid = getattr(getattr(service, 'process', None), 'pid', None)
+            driver.set_page_load_timeout(25)
+            driver.execute_cdp_cmd("Network.enable", {})
 
-        try:
-            driver.get(target)
-        except TimeoutException:
-            pass
+            try:
+                driver.get(target)
+            except TimeoutException:
+                pass
 
-        start = time.time()
-        while time.time() - start < timeout_sec:
-            logs = driver.get_log("performance")
-            for entry in logs:
+            start = time.time()
+            while time.time() - start < timeout_sec:
                 try:
-                    msg = json.loads(entry["message"])["message"]
-                    if msg.get("method") != "Network.requestWillBeSent":
-                        continue
-                    req = msg.get("params", {}).get("request", {})
-                    url = req.get("url", "")
-                    u = url.lower()
-                    if ".m3u8" in u or ".flv" in u or "pull-hls" in u or "stream" in u:
-                        candidates.append(url)
-                except Exception:
-                    continue
+                    logs = driver.get_log("performance")
+                except Exception as exc:
+                    if _is_transient_browser_error(exc):
+                        raise
+                    logs = []
 
-            if candidates:
-                # Prefer m3u8, then flv, then latest candidate
-                result_url = None
-                for c in reversed(candidates):
-                    if ".m3u8" in c.lower():
-                        result_url = c
-                        break
-                if not result_url:
+                for entry in logs:
+                    try:
+                        msg = json.loads(entry["message"])["message"]
+                        if msg.get("method") != "Network.requestWillBeSent":
+                            continue
+                        req = msg.get("params", {}).get("request", {})
+                        url = req.get("url", "")
+                        u = url.lower()
+                        if ".m3u8" in u or ".flv" in u or "pull-hls" in u or "stream" in u:
+                            candidates.append(url)
+                    except Exception:
+                        continue
+
+                if candidates:
+                    result_url = None
                     for c in reversed(candidates):
-                        if ".flv" in c.lower():
+                        if ".m3u8" in c.lower():
                             result_url = c
                             break
-                if not result_url:
-                    result_url = candidates[-1]
-                # Cache the discovered media URL for a short time.
-                _media_url_cache[room_id] = (result_url, time.time() + _MEDIA_URL_TTL)
-                return result_url
+                    if not result_url:
+                        for c in reversed(candidates):
+                            if ".flv" in c.lower():
+                                result_url = c
+                                break
+                    if not result_url:
+                        result_url = candidates[-1]
+                    _media_url_cache[room_id] = (result_url, time.time() + _MEDIA_URL_TTL)
+                    return result_url
 
-            time.sleep(0.4)
+                time.sleep(0.4)
 
-        return None
-    finally:
-        try:
-            if driver:
-                driver.quit()
-        except Exception:
-            pass
-        # 寮烘潃杩涚▼鏍戯紝纭繚 chrome.exe 瀛愯繘绋嬩笉娈嬬暀
-        if _service_pid:
+            return None
+        except Exception as exc:
+            last_error = exc
+            if _is_transient_browser_error(exc) and attempt < 3:
+                print(f"[media-url] transient CDP/browser error for room {room_id}, retry {attempt}/3: {exc}")
+                time.sleep(1.2 * attempt)
+                continue
+            raise
+        finally:
             try:
-                subprocess.run(
-                    ['taskkill', '/F', '/T', '/PID', str(_service_pid)],
-                    capture_output=True, timeout=5
-                )
+                if driver:
+                    driver.quit()
             except Exception:
                 pass
+            if _service_pid:
+                try:
+                    subprocess.run(
+                        ['taskkill', '/F', '/T', '/PID', str(_service_pid)],
+                        capture_output=True, timeout=5
+                    )
+                except Exception:
+                    pass
+    if last_error:
+        raise last_error
+    return None
 
 
 def _get_ffmpeg_bin() -> str:
@@ -2590,9 +2632,17 @@ class DouyinLiveSource:
             else:
                 await callback(evt)
 
+        async def delayed_media_emit():
+            await asyncio.sleep(1.2)
+            await self._emit_media_url_discovered(callback)
+
+        async def delayed_audio_loop():
+            await asyncio.sleep(4.0)
+            await self._audio_loop(callback)
+
         identity_task = asyncio.create_task(self._emit_room_identity_discovered(callback))
-        media_task = asyncio.create_task(self._emit_media_url_discovered(callback))
-        audio_task = asyncio.create_task(self._audio_loop(callback))
+        media_task = asyncio.create_task(delayed_media_emit())
+        audio_task = asyncio.create_task(delayed_audio_loop())
         try:
             await stream_douyin_cdp(self.room_id, _on_event)
         finally:

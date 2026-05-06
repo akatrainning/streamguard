@@ -211,6 +211,111 @@ REQUIRED_EVIDENCE_ALIASES: Dict[str, List[str]] = {
     "product_spec": ["商品详情", "规格", "参数", "说明书"],
 }
 
+CLAIM_DETECTION_RULES = [
+    {
+        "claim_type": ClaimType.PRICE_CLAIM,
+        "keywords": ["全网最低", "全网最低价", "最低价", "史低", "底价", "跳楼价", "破价", "原价", "到手价", "专柜价", "今天只要", "现在只要"],
+        "required_evidence": ["price_comparison", "price_history"],
+        "subject": "当前商品",
+    },
+    {
+        "claim_type": ClaimType.SCARCITY_CLAIM,
+        "keywords": ["只剩", "最后", "限量", "售完不补", "最后机会", "库存不多", "马上没了", "抢完就没", "手慢无", "最后100单"],
+        "required_evidence": ["inventory_record", "activity_rule"],
+        "subject": "当前商品",
+    },
+    {
+        "claim_type": ClaimType.EFFICACY_CLAIM,
+        "keywords": ["见效", "有效", "改善", "修复", "淡纹", "提亮", "祛斑", "祛痘", "抗衰", "瘦身", "减肥", "治疗"],
+        "required_evidence": ["clinical_study", "lab_report"],
+        "subject": "产品功效",
+    },
+    {
+        "claim_type": ClaimType.AUTHORITY_CLAIM,
+        "keywords": ["专家推荐", "医生推荐", "权威认证", "国家认证", "官方认证", "品牌授权", "授权渠道", "SGS", "检测认证", "临床专家"],
+        "required_evidence": ["authority_certification", "expert_endorsement"],
+        "subject": "产品资质",
+    },
+    {
+        "claim_type": ClaimType.QUALITY_CLAIM,
+        "keywords": ["成分表", "公开透明", "无重金属", "合格", "检测报告", "质检", "配方", "适合敏感肌", "正品", "无添加", "质量", "材质"],
+        "required_evidence": ["ingredient_list", "quality_cert"],
+        "subject": "商品质量",
+    },
+    {
+        "claim_type": ClaimType.COMPARISON_CLAIM,
+        "keywords": ["比别家", "比其他家", "比同类", "吊打", "更好", "更划算", "更便宜", "更强", "领先", "第一"],
+        "required_evidence": ["comparison_data", "peer_comparison"],
+        "subject": "商品对比",
+    },
+    {
+        "claim_type": ClaimType.GUARANTEE_CLAIM,
+        "keywords": ["保证正品", "假一赔十", "假一赔三", "无效包退", "包退", "包赔", "七天无理由", "终身保修", "一定有效", "绝对没问题"],
+        "required_evidence": ["policy_document", "return_policy"],
+        "subject": "售后承诺",
+    },
+    {
+        "claim_type": ClaimType.PRESSURE_CLAIM,
+        "keywords": ["倒计时", "马上下单", "赶紧拍", "错过今天", "手慢就没", "现在不拍", "最后几分钟", "马上抢", "快点下单", "再不拍就没了"],
+        "required_evidence": ["activity_rule", "time_limit"],
+        "subject": "促销压力",
+    },
+]
+
+CLAIM_SUGGESTIONS = {
+    ClaimType.PRICE_CLAIM: [
+        "补充可核验的比价依据，说明比较平台、比较时间和规格口径。",
+        "如引用原价、专柜价或历史最低价，请同步展示来源截图或价格记录。",
+    ],
+    ClaimType.SCARCITY_CLAIM: [
+        "补充真实库存或活动名额说明，避免使用无法核验的稀缺表达。",
+        "明确库存口径、活动期限和补货规则，不要只用情绪化催单措辞。",
+    ],
+    ClaimType.EFFICACY_CLAIM: [
+        "将功效表述收敛到可证明范围，并补充检测、试验或批准依据。",
+        "涉及改善、治疗、见效时间等说法时，优先改成更保守的体验描述。",
+    ],
+    ClaimType.AUTHORITY_CLAIM: [
+        "补充授权书、认证证书或可核验的专家来源，避免泛化的权威背书。",
+        "如提到医生、专家、机构或官方，请同步说明姓名、机构和认证范围。",
+    ],
+    ClaimType.QUALITY_CLAIM: [
+        "补充成分表、质检报告或合格证明，避免仅靠口播做质量保证。",
+        "涉及敏感肌、无添加、材质或安全性时，请明确依据和适用范围。",
+    ],
+    ClaimType.COMPARISON_CLAIM: [
+        "补充同规格、同口径的对比数据，避免笼统说更好、更强或更划算。",
+        "如引用排名或领先结论，请同步说明样本范围、统计周期和出处。",
+    ],
+    ClaimType.GUARANTEE_CLAIM: [
+        "补充售后政策、赔付规则和适用条件，避免无条件承诺。",
+        "将“保证”“包退”“假一赔十”等强承诺改成有条件、可执行的规则表述。",
+    ],
+    ClaimType.PRESSURE_CLAIM: [
+        "降低倒计时和逼单措辞密度，补充清晰的活动起止时间。",
+        "如果确有时效活动，请同步说明规则，避免只用情绪驱动用户立即下单。",
+    ],
+}
+
+REQUIRED_EVIDENCE_ALIASES = {
+    "price_comparison": ["比价", "价格对比", "全网价格", "平台价格", "同规格价格", "价格依据"],
+    "price_history": ["历史价格", "原价", "专柜价", "近30天价格", "价格记录", "价保"],
+    "inventory_record": ["库存", "库存数据", "实时库存", "剩余数量", "销量后台", "库存记录"],
+    "activity_rule": ["活动规则", "促销规则", "限时活动", "活动说明", "活动口径", "名额说明"],
+    "clinical_study": ["临床", "临床试验", "人体试验", "功效测试", "实验结果"],
+    "lab_report": ["检测报告", "检验报告", "实验室", "SGS", "第三方检测", "质检报告"],
+    "authority_certification": ["认证", "资质", "授权书", "备案", "官方授权", "证书"],
+    "expert_endorsement": ["专家", "医生", "教授", "机构推荐", "专家推荐", "医生推荐"],
+    "ingredient_list": ["成分表", "配方", "原料", "含量", "配料", "成分说明"],
+    "quality_cert": ["合格证", "质检", "安全标准", "质量认证", "执行标准", "检测通过"],
+    "comparison_data": ["对比数据", "横向对比", "排名依据", "统计数据", "测试对比"],
+    "peer_comparison": ["同类对比", "竞品对比", "别家", "同行", "同款对比"],
+    "policy_document": ["政策文件", "赔付规则", "售后规则", "服务协议", "承诺说明"],
+    "return_policy": ["退换货", "七天无理由", "包退", "退款规则", "售后政策"],
+    "time_limit": ["截止时间", "倒计时", "限时", "最后几分钟", "活动时间", "结束时间"],
+    "product_spec": ["商品详情页", "规格", "型号", "生产者信息", "适用范围", "有效期"],
+}
+
 SOURCE_QUOTAS: Dict[str, int] = {
     "rule_db": 1,
     "historical_case": 1,
@@ -1628,6 +1733,229 @@ class RAGPipeline:
             trace=trace,
             graph=graph,
             rag_debug=rag_debug,
+        )
+
+    def evidence_verifier(self, claim: Claim, evidences: List[Evidence]) -> Verification:
+        support_status: Dict[str, VerificationVerdict] = {}
+        requirement_coverage: Dict[str, bool] = {}
+        present_requirements: List[str] = []
+        missing_requirements: List[str] = []
+
+        coverage_sources = {"evidence_db", "rule_db", "historical_case"}
+        filtered_evidences = [evidence for evidence in evidences if evidence.source in coverage_sources]
+
+        for requirement in claim.required_evidence:
+            covered = any(requirement in (evidence.matched_requirements or []) for evidence in filtered_evidences)
+            requirement_coverage[requirement] = covered
+            if covered:
+                present_requirements.append(requirement)
+            else:
+                missing_requirements.append(requirement)
+
+        for claim_type in claim.claim_type:
+            relevant = [
+                evidence
+                for evidence in filtered_evidences
+                if claim_type in evidence.related_claim_types or evidence.source in {"rule_db", "historical_case"}
+            ]
+            support_status[claim_type.value] = (
+                VerificationVerdict.SUPPORTED
+                if relevant and not missing_requirements
+                else VerificationVerdict.NOT_ENOUGH_EVIDENCE
+            )
+
+        verdict = (
+            VerificationVerdict.SUPPORTED
+            if support_status and all(value == VerificationVerdict.SUPPORTED for value in support_status.values())
+            else VerificationVerdict.NOT_ENOUGH_EVIDENCE
+        )
+
+        if verdict == VerificationVerdict.SUPPORTED:
+            reason = (
+                f"已覆盖关键证据要求：{', '.join(present_requirements[:4])}。"
+                if present_requirements
+                else "已检索到与当前主张相关的支撑证据。"
+            )
+        elif missing_requirements:
+            reason = f"缺少关键证据：{', '.join(missing_requirements[:4])}。"
+            if present_requirements:
+                reason += f" 已覆盖：{', '.join(present_requirements[:4])}。"
+        else:
+            reason = "已找到关联规则或案例，但不足以完成证据闭环。"
+
+        return Verification(
+            verdict=verdict,
+            support_status=support_status,
+            requirement_coverage=requirement_coverage,
+            reason=reason,
+            human_review_required=verdict != VerificationVerdict.SUPPORTED,
+        )
+
+    def llm_score_claim(self, claim: Claim, evidences: List[Evidence], verification: Verification) -> Optional[Dict[str, Any]]:
+        scoring = self.config["llm_scoring"]
+        if not scoring.get("enabled"):
+            return None
+        client = self._openai_client("llm_scoring")
+        if client is None:
+            return {"enabled": True, "used": False, "reason": "missing_llm_api_key_or_sdk"}
+
+        payload = {
+            "claim": {
+                "claim_id": claim.claim_id,
+                "claim_type": [ct.value for ct in claim.claim_type],
+                "subject": claim.subject,
+                "predicate": claim.predicate,
+                "value": claim.value,
+                "required_evidence": claim.required_evidence,
+                "confidence": claim.confidence,
+            },
+            "verification": {"verdict": verification.verdict.value, "reason": verification.reason},
+            "evidence": [
+                {
+                    "evidence_id": ev.evidence_id,
+                    "source": ev.source,
+                    "title": ev.title,
+                    "content": ev.content[:800],
+                    "stance": ev.stance.value,
+                    "score": ev.score,
+                }
+                for ev in evidences[: int(self.config["retrieval"]["final_k"])]
+            ],
+        }
+
+        try:
+            response = client.chat.completions.create(
+                model=scoring["model"],
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a livestream compliance auditor. "
+                            "Score risk from 0 to 1 and return strict JSON with keys: "
+                            "overall_risk_score, confidence, evidence_support, misleading_risk, "
+                            "missing_evidence_risk, conflict_risk, rationale, evidence_scores. "
+                            "Each evidence_scores item must include evidence_id and usefulness_score."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Assess the following claim package and return JSON only:\n\n{json.dumps(payload, ensure_ascii=False)}",
+                    },
+                ],
+                temperature=float(scoring["temperature"]),
+                top_p=float(scoring["top_p"]),
+                max_tokens=int(scoring["max_tokens"]),
+                timeout=int(scoring["timeout_seconds"]),
+            )
+            content = response.choices[0].message.content or "{}"
+            match = re.search(r"\{.*\}", content, flags=re.S)
+            parsed = json.loads(match.group(0) if match else content)
+            parsed.update({"used": True, "provider": scoring["provider"], "model": scoring["model"]})
+            return parsed
+        except Exception as exc:
+            return {"enabled": True, "used": False, "reason": f"llm_scoring_failed: {exc}"}
+
+    def report_generator(self, claim: Claim, risk: Risk) -> Report:
+        suggestions: List[str] = []
+        if risk.level in [RiskLevel.P0, RiskLevel.P1]:
+            seen = set()
+            for claim_type in claim.claim_type:
+                for suggestion in CLAIM_SUGGESTIONS.get(claim_type, []):
+                    if suggestion not in seen:
+                        seen.add(suggestion)
+                        suggestions.append(suggestion)
+        if not suggestions and risk.level in [RiskLevel.P0, RiskLevel.P1]:
+            suggestions.append("当前风险较高，建议先补足证据，再收敛直播口播中的强主张。")
+        summary = f"检测到 {len(claim.claim_type)} 类风险主张，当前风险等级为 {risk.level.value}。"
+        return Report(summary=summary, suggestions=suggestions, risk_level=risk.level)
+
+    def _fallback_claim_case(self, content: str, claim_types: List[ClaimType], detected_rules: List[Dict[str, Any]]) -> Dict[str, Any]:
+        required_evidence: List[str] = []
+        for rule in detected_rules:
+            for item in rule.get("required_evidence", []):
+                normalized = str(item or "").strip()
+                if normalized and normalized.lower() != "none" and normalized not in required_evidence:
+                    required_evidence.append(normalized)
+        primary_subject = detected_rules[0]["subject"] if detected_rules else "当前商品"
+        return {
+            "current_utterance": content,
+            "slots": {"subject": primary_subject, "value": content},
+            "required_evidence": required_evidence,
+        }
+
+    def _pick_best_claim_case(self, content: str, claim_types: List[ClaimType], detected_rules: List[Dict[str, Any]]) -> tuple[Dict[str, Any], float]:
+        type_values = {claim_type.value for claim_type in claim_types}
+        best_case = None
+        confidence = 0.85
+
+        if self.config["retrieval"]["mode"] == "embedding" and self.embedding_index:
+            hits = self.embedding_search(content, limit=int(self.config["retrieval"]["claim_top_k"]), sources={"claim_case"})
+            for hit in hits:
+                candidate = hit["meta"]
+                candidate_types = set(candidate.get("claim_type", []))
+                similarity = float(hit.get("similarity", confidence))
+                if type_values & candidate_types and similarity >= 0.45:
+                    best_case = candidate
+                    confidence = max(0.65, min(0.95, similarity))
+                    break
+
+        if not best_case and self.claim_cases:
+            query_vector = self.vectorizer.transform([content])
+            similarities = cosine_similarity(query_vector, self.claim_matrix)[0]
+            top_indices = np.argsort(similarities)[-int(self.config["retrieval"]["claim_top_k"]):][::-1]
+            for idx in top_indices:
+                candidate = self.claim_cases[int(idx)]
+                candidate_types = set(candidate.get("claim_type", []))
+                similarity = float(similarities[int(idx)])
+                if type_values & candidate_types and similarity >= 0.3:
+                    best_case = candidate
+                    confidence = max(0.6, min(0.9, similarity))
+                    break
+
+        if not best_case:
+            best_case = self._fallback_claim_case(content, claim_types, detected_rules)
+            confidence = 0.72
+        return best_case, confidence
+
+    def claim_rag(self, event: LiveSemanticEvent) -> Optional[Claim]:
+        content = event.raw_content
+        detected_rules = self._detect_claim_rules(content)
+        claim_types = list(dict.fromkeys(rule["claim_type"] for rule in detected_rules))
+        if not claim_types:
+            return None
+
+        best_case, confidence = self._pick_best_claim_case(content, claim_types, detected_rules)
+        slots = best_case.get("slots", {})
+
+        required_evidence: List[str] = []
+        for rule in detected_rules:
+            for item in rule.get("required_evidence", []):
+                normalized = str(item or "").strip()
+                if normalized and normalized.lower() != "none" and normalized not in required_evidence:
+                    required_evidence.append(normalized)
+        if not required_evidence:
+            required_evidence = ["product_spec"]
+
+        value_candidates = [
+            slots.get("price_term", ""),
+            slots.get("quantity", ""),
+            slots.get("quality", ""),
+            slots.get("authority", ""),
+            slots.get("comparison", ""),
+            slots.get("guarantee", ""),
+            slots.get("time", ""),
+            slots.get("value", ""),
+        ]
+        values = [item for item in value_candidates if item and item != content]
+
+        return Claim(
+            claim_id=f"claim_{event.event_id}",
+            claim_type=claim_types,
+            subject=slots.get("subject", detected_rules[0]["subject"] if detected_rules else "当前商品"),
+            predicate=[content],
+            value=values or [content],
+            required_evidence=required_evidence,
+            confidence=confidence,
         )
 
     def test_query(self, text: str) -> Dict[str, Any]:

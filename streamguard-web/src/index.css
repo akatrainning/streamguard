@@ -4,36 +4,42 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #050608;
-  --bg-secondary: #101112;
-  --bg-tertiary: #17191a;
-  --border: #30332f;
-  --accent: #f6ff5f;
-  --accent-hover: #e6ef4d;
-  --accent-soft: rgba(246, 255, 95, 0.12);
-  --purple: #8d82ff;
-  --cyan: #00d992;
-  --fact: #00d992;
-  --fact-bg: rgba(0, 217, 146, 0.11);
-  --fact-border: rgba(0, 217, 146, 0.32);
-  --hype: #e2a93b;
-  --hype-bg: rgba(226, 169, 59, 0.12);
-  --hype-border: rgba(226, 169, 59, 0.3);
-  --trap: #ff5c68;
-  --trap-bg: rgba(255, 92, 104, 0.12);
-  --trap-border: rgba(255, 92, 104, 0.32);
-  --text-primary: #f4f2ec;
-  /* Higher contrast for readability */
-  --text-secondary: #c8c5bb;
-  --text-muted: #8d918d;
-  --neon-cyan: #00d992;
-  --neon-green: #00d992;
-  --neon-blue: #f6ff5f;
-  --panel-glass: rgba(16, 17, 18, 0.86);
-  --panel-border: rgba(246, 255, 95, 0.18);
+  --bg: oklch(0.15 0.008 148);
+  --bg-secondary: oklch(0.19 0.01 148);
+  --bg-tertiary: oklch(0.23 0.012 148);
+  --border: oklch(0.34 0.014 148);
+  --accent: oklch(0.78 0.19 145);
+  --accent-hover: oklch(0.69 0.16 145);
+  --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
+  --accent-contrast: oklch(0.18 0.01 148);
+  --accent-ring: color-mix(in oklab, var(--accent) 64%, transparent);
+  --accent-shadow-sm:
+    0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent),
+    0 6px 16px rgba(0, 0, 0, 0.16);
+  --accent-shadow-md: 0 18px 34px rgba(0, 0, 0, 0.3);
+  --purple: oklch(0.62 0.05 330);
+  --cyan: oklch(0.7 0.12 190);
+  --fact: oklch(0.72 0.13 160);
+  --fact-bg: color-mix(in oklab, var(--fact) 14%, transparent);
+  --fact-border: color-mix(in oklab, var(--fact) 34%, transparent);
+  --hype: oklch(0.74 0.13 95);
+  --hype-bg: color-mix(in oklab, var(--hype) 14%, transparent);
+  --hype-border: color-mix(in oklab, var(--hype) 34%, transparent);
+  --trap: oklch(0.64 0.14 28);
+  --trap-bg: color-mix(in oklab, var(--trap) 14%, transparent);
+  --trap-border: color-mix(in oklab, var(--trap) 34%, transparent);
+  --text-primary: oklch(0.95 0.006 148);
+  --text-secondary: oklch(0.82 0.008 148);
+  --text-muted: oklch(0.66 0.009 148);
+  --neon-cyan: var(--fact);
+  --neon-green: var(--fact);
+  --neon-blue: var(--accent);
+  --panel-glass: color-mix(in oklab, var(--bg-secondary) 90%, transparent);
+  --panel-border: color-mix(in oklab, var(--accent) 14%, transparent);
   --shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.26);
   --shadow-md: 0 16px 42px rgba(0, 0, 0, 0.34);
   --shadow-lg: 0 32px 80px rgba(0, 0, 0, 0.46);
+  --sg-ink: var(--accent-contrast);
   --font-caption: 0.6875rem;
   --font-small: 0.75rem;
   --font-body-sm: 0.8125rem;
@@ -48,9 +54,9 @@ html { font-size: 15px; }
 body {
   font-family: "Manrope", "Noto Sans SC", sans-serif;
   background:
-    radial-gradient(1000px 680px at 86% -12%, rgba(246, 255, 95, 0.12), transparent 58%),
-    radial-gradient(900px 640px at 0% 100%, rgba(0, 217, 146, 0.08), transparent 60%),
-    linear-gradient(180deg, #050608 0%, #080a0e 48%, #050608 100%);
+    radial-gradient(920px 620px at 100% -10%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 60%),
+    radial-gradient(780px 520px at 0% 100%, color-mix(in oklab, var(--fact) 8%, transparent), transparent 66%),
+    linear-gradient(180deg, oklch(0.13 0.008 148) 0%, oklch(0.16 0.01 148) 48%, oklch(0.12 0.007 148) 100%);
   color: var(--text-primary);
   line-height: 1.58;
   min-height: 100vh;
@@ -63,9 +69,9 @@ body {
 #root { min-height: 100vh; }
 
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: rgba(16, 26, 41, 0.75); }
-::-webkit-scrollbar-thumb { background: #314762; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #3c5676; }
+::-webkit-scrollbar-track { background: color-mix(in oklab, var(--bg-tertiary) 78%, transparent); }
+::-webkit-scrollbar-thumb { background: color-mix(in oklab, var(--border) 82%, var(--accent) 18%); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--border) 68%, var(--accent) 32%); }
 
 .mono { font-family: "JetBrains Mono", Consolas, 'Courier New', monospace; }
 .mono, .sg-app-stat strong, .sg-ui-metric strong { font-variant-numeric: tabular-nums; }
@@ -91,3 +97,4 @@ button:hover {
 button:active {
   transform: translateY(1px);
 }
+

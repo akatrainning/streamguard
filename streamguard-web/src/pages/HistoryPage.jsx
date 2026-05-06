@@ -6,8 +6,8 @@ import {
   listHistorySessions,
   renameHistorySession,
 } from "../utils/historyApi";
-import { Button, Panel, SegmentedControl, StatusBadge, TextField } from "../components/ui";
-import SessionReportModal from "../components/SessionReportModal";
+import { Button, Panel, SegmentedControl, TextField } from "../components/ui";
+import SessionReportModal from "../components/StableSessionReportModal";
 
 const FILTERS = [
   { value: "all", label: "全部", meta: "All" },
@@ -16,8 +16,28 @@ const FILTERS = [
 ];
 
 const DEMO_SESSIONS = [
-  { id: "demo-1", product: "与辉同行专场", brand: "直播间 646454278948", score: 64, total: 42, trap: 8, fact: 19, viewers: 28500, _demo: true },
-  { id: "demo-2", product: "品牌上新场", brand: "直播间 208823316033", score: 82, total: 67, trap: 4, fact: 45, viewers: 89000, _demo: true },
+  {
+    id: "demo-1",
+    product: "与辉同行专场",
+    brand: "直播间 646454278948",
+    score: 64,
+    total: 42,
+    trap: 8,
+    fact: 19,
+    viewers: 28500,
+    _demo: true,
+  },
+  {
+    id: "demo-2",
+    product: "品牌上新场",
+    brand: "直播间 208823316033",
+    score: 82,
+    total: 67,
+    trap: 4,
+    fact: 45,
+    viewers: 89000,
+    _demo: true,
+  },
 ];
 
 function scoreTone(score) {
@@ -96,8 +116,11 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
   const handleReplay = useCallback(async (id) => {
     try {
       const payload = await getHistorySession(apiBase, token, id);
-      if (payload.snapshot) setReplaySnapshot(payload.snapshot);
-      else setError("这条记录没有完整报告数据");
+      if (payload.snapshot) {
+        setReplaySnapshot(payload.snapshot);
+      } else {
+        setError("这条记录没有完整报告数据");
+      }
     } catch (err) {
       setError(err?.message || "报告加载失败");
     }
@@ -169,7 +192,7 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
           )}
         </header>
 
-        <section className="sg-history-command-board" aria-label="历史档案检索指挥板">
+        <section className="sg-history-command-board" aria-label="历史档案检索面板">
           <div className="sg-history-orbit" aria-hidden="true">
             <div className="sg-history-orbit-core">
               <span>VISIBLE</span>
@@ -217,14 +240,18 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
         <div className="sg-history-list">
           {filtered.map((session) => {
             const score = Number(session.score || 0);
+            const tone = scoreTone(score);
             return (
-              <div key={session.id} className={`sg-history-row ${scoreTone(score) === "success" ? "is-success" : scoreTone(score) === "danger" ? "is-danger" : "is-warning"}`}>
+              <div
+                key={session.id}
+                className={`sg-history-row ${tone === "success" ? "is-success" : tone === "danger" ? "is-danger" : "is-warning"}`}
+              >
                 <div className="sg-history-row-main" onClick={() => handleReplay(session.id)}>
-                  <div className="sg-history-score" style={{ "--score-color": `var(--${scoreTone(score) === "success" ? "fact" : scoreTone(score) === "danger" ? "trap" : "hype"})` }}>
+                  <div className="sg-history-score" style={{ "--score-color": `var(--${tone === "success" ? "fact" : tone === "danger" ? "trap" : "hype"})` }}>
                     <strong>{score}</strong>
                     <span>SCORE</span>
                   </div>
-                  
+
                   <div className="sg-history-info">
                     <div className="sg-history-title-line">
                       <strong>{session.product || session.title || "未命名会话"}</strong>
@@ -241,15 +268,25 @@ export default function HistoryPage({ apiBase = "http://localhost:8011", token }
                   </div>
 
                   <div className="sg-history-pills">
-                    <div className={`sg-history-type is-${scoreTone(score)}`}>
-                      <strong style={{color: `var(--${scoreTone(score) === "success" ? "fact" : scoreTone(score) === "danger" ? "trap" : "hype"})`}}>{scoreLabel(score)}</strong>
+                    <div className={`sg-history-type is-${tone}`}>
+                      <strong style={{ color: `var(--${tone === "success" ? "fact" : tone === "danger" ? "trap" : "hype"})` }}>
+                        {scoreLabel(score)}
+                      </strong>
                     </div>
                   </div>
 
                   <div className="sg-history-actions">
-                    <Button onClick={(e) => { e.stopPropagation(); handleReplay(session.id); }}>回看</Button>
-                    {!session._demo && <Button onClick={(e) => { e.stopPropagation(); handleRename(session.id, session.product); }}>重命名</Button>}
-                    {!session._demo && <Button variant="danger" onClick={(e) => { e.stopPropagation(); handleDelete(session.id); }}>删除</Button>}
+                    <Button onClick={(event) => { event.stopPropagation(); handleReplay(session.id); }}>回看</Button>
+                    {!session._demo && (
+                      <Button onClick={(event) => { event.stopPropagation(); handleRename(session.id, session.product); }}>
+                        重命名
+                      </Button>
+                    )}
+                    {!session._demo && (
+                      <Button variant="danger" onClick={(event) => { event.stopPropagation(); handleDelete(session.id); }}>
+                        删除
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

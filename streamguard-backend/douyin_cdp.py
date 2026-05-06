@@ -62,6 +62,23 @@ def _unregister_chrome_pid(pid: int):
             pass
 
 
+def _is_retryable_cdp_error_message(message: str) -> bool:
+    text = (message or "").lower()
+    markers = (
+        "connection aborted",
+        "connectionreseterror",
+        "10054",
+        "remote disconnected",
+        "not connected to devtools",
+        "invalid session id",
+        "target window already closed",
+        "chrome start failed",
+        "chrome not reachable",
+        "timed out receiving message from renderer",
+    )
+    return any(marker in text for marker in markers)
+
+
 atexit.register(_kill_all_tracked_chromes)
 
 from selenium import webdriver
@@ -633,7 +650,7 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
     # 鍚姩鏂拌繛鎺ュ墠鍏堟竻鐞嗘墍鏈夎拷韪腑鐨勬棫 Chrome 杩涚▼锛岄槻姝㈠兊灏歌繘绋嬬Н绱?
     _kill_all_tracked_chromes()
 
-    modes = [headless]  # 鍙皾璇?headless锛屼笉鍐嶈嚜鍔?fallback 鍒?headed(鑺傜渷璧勬簮)
+    modes = [headless, headless, headless]
 
     last_error = None
     for idx, mode in enumerate(modes, start=1):
@@ -683,13 +700,15 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
         if got_data:
             return
 
-        # No data on this attempt: try next mode
+        # No data on this attempt: retry the CDP session before falling back.
         if idx < len(modes):
+            retry_reason = last_error or "no live frames captured"
             await callback({
                 "event": "status",
                 "status": "connecting",
-                "message": "No live frames captured, retrying with alternate browser mode...",
+                "message": f"CDP session ended, retrying ({idx}/{len(modes) - 1}) due to: {retry_reason}",
             })
+            await asyncio.sleep(1.2 * idx)
 
     # Final fallback: JS-level interception (some environments decode better via this path)
     await callback({
@@ -713,6 +732,13 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
             return
     except Exception as exc:
         last_error = str(exc)
+
+    if last_error and _is_retryable_cdp_error_message(last_error):
+        await callback({
+            "event": "status",
+            "status": "connecting",
+            "message": f"CDP transient failure detected: {last_error}",
+        })
 
     raise RuntimeError(last_error or "No live frames captured from Douyin after retries and fallback")
 

@@ -4,9 +4,11 @@
   overflow: hidden;
   color: var(--text-primary);
   background:
-    radial-gradient(900px 620px at 85% -16%, rgba(246, 255, 95, 0.13), transparent 58%),
-    radial-gradient(760px 540px at 0% 100%, rgba(0, 217, 146, 0.08), transparent 62%),
-    linear-gradient(180deg, #050608 0%, #080a0e 48%, #050608 100%);
+    radial-gradient(880px 580px at 85% -16%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 60%),
+    radial-gradient(760px 540px at 0% 100%, color-mix(in oklab, var(--fact) 7%, transparent), transparent 64%),
+    linear-gradient(180deg, oklch(0.13 0.008 148) 0%, oklch(0.16 0.01 148) 48%, oklch(0.12 0.007 148) 100%);
+  --welcome-page-max-width: 1500px;
+  --welcome-page-pad-x: clamp(18px, 2.4vw, 32px);
 }
 
 .welcome-page::before {
@@ -15,8 +17,8 @@
   inset: 64px 0 0;
   pointer-events: none;
   background:
-    linear-gradient(rgba(246, 255, 95, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 217, 146, 0.04) 1px, transparent 1px);
+    linear-gradient(color-mix(in oklab, var(--accent) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--border) 22%, transparent) 1px, transparent 1px);
   background-size: 58px 58px;
   mask-image: linear-gradient(180deg, black 0%, transparent 84%);
 }
@@ -29,12 +31,14 @@
   position: relative;
   z-index: 2;
   height: 64px;
-  padding: 0 clamp(18px, 3.6vw, 48px);
+  padding: 0 var(--welcome-page-pad-x);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--sg-border-base);
-  background: rgba(5, 6, 8, 0.84);
+  border-bottom: 1px solid color-mix(in srgb, var(--sg-border-base) 78%, var(--accent) 22%);
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--accent) 3%, transparent), transparent 28%),
+    color-mix(in oklab, var(--bg) 84%, transparent);
   backdrop-filter: blur(14px);
 }
 
@@ -91,8 +95,10 @@
 .welcome-command {
   position: relative;
   z-index: 1;
+  width: min(var(--welcome-page-max-width), 100%);
+  margin: 0 auto;
   min-height: calc(100vh - 64px);
-  padding: clamp(18px, 3vw, 34px) clamp(18px, 3.6vw, 48px);
+  padding: clamp(18px, 3vw, 34px) var(--welcome-page-pad-x);
   display: grid;
   grid-template-columns: minmax(270px, 0.42fr) minmax(620px, 1.58fr);
   gap: clamp(18px, 3.4vw, 44px);
@@ -133,25 +139,26 @@
   margin-top: 26px;
   height: 44px;
   padding: 0 18px;
-  border: 1px solid rgba(246, 255, 95, 0.5);
+  border: 1px solid color-mix(in oklab, var(--accent) 62%, black 38%);
   border-radius: 6px;
-  background: linear-gradient(180deg, #f6ff5f, #dfe84a);
-  color: #050608;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent) 86%, white 14%), var(--accent));
+  color: var(--sg-ink);
   cursor: pointer;
   font-size: 14px;
   font-weight: 900;
-  box-shadow: 0 0 0 1px rgba(246, 255, 95, 0.08), 0 16px 46px rgba(246, 255, 95, 0.12);
+  box-shadow: var(--accent-shadow-sm), var(--accent-shadow-md);
 }
 
 .ops-screen {
   position: relative;
   min-height: min(670px, calc(100vh - 124px));
-  border: 1px solid var(--sg-border-base);
-  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--sg-border-base) 76%, var(--accent) 24%);
+  border-radius: 16px;
   background:
-    radial-gradient(520px 420px at 72% 45%, rgba(246, 255, 95, 0.1), transparent 68%),
+    radial-gradient(520px 420px at 72% 45%, color-mix(in oklab, var(--accent) 7%, transparent), transparent 68%),
+    radial-gradient(360px 180px at 0% 100%, color-mix(in oklab, var(--border) 18%, transparent), transparent 72%),
     linear-gradient(180deg, rgba(18, 19, 20, 0.96), rgba(9, 10, 11, 0.98));
-  box-shadow: 0 34px 92px rgba(0, 0, 0, 0.48);
+  box-shadow: 0 28px 68px rgba(0, 0, 0, 0.42);
   overflow: hidden;
 }
 
@@ -160,8 +167,8 @@
   position: absolute;
   inset: 44px 0 124px;
   background:
-    linear-gradient(rgba(246, 255, 95, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 217, 146, 0.055) 1px, transparent 1px);
+    linear-gradient(color-mix(in oklab, var(--accent) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--border) 22%, transparent) 1px, transparent 1px);
   background-size: 46px 46px;
   opacity: 0.52;
 }
@@ -172,8 +179,8 @@
   inset: 44px 0 124px;
   pointer-events: none;
   background:
-    linear-gradient(116deg, transparent 0 32%, rgba(246, 255, 95, 0.08) 32% 33.5%, transparent 33.5% 100%),
-    linear-gradient(116deg, transparent 0 70%, rgba(0, 217, 146, 0.07) 70% 71%, transparent 71% 100%);
+    linear-gradient(116deg, transparent 0 32%, color-mix(in oklab, var(--accent) 8%, transparent) 32% 33.5%, transparent 33.5% 100%),
+    linear-gradient(116deg, transparent 0 70%, color-mix(in oklab, var(--border) 18%, transparent) 70% 71%, transparent 71% 100%);
 }
 
 .ops-signal-field {
@@ -191,8 +198,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--sg-border-base);
-  background: rgba(8, 10, 10, 0.76);
+  border-bottom: 1px solid color-mix(in srgb, var(--sg-border-base) 78%, var(--accent) 22%);
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--accent) 5%, transparent), transparent 36%),
+    rgba(8, 10, 10, 0.76);
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 900;
@@ -235,7 +244,7 @@
   transform: perspective(1200px) rotateY(-8deg) rotateZ(-1.2deg);
   transform-origin: left center;
   background:
-    linear-gradient(135deg, rgba(246, 255, 95, 0.16), transparent 46%),
+    linear-gradient(135deg, color-mix(in oklab, var(--accent) 16%, transparent), transparent 46%),
     linear-gradient(180deg, #1b1d1c, #0b0d0d 74%);
   box-shadow: 0 28px 64px rgba(0, 0, 0, 0.42);
 }
@@ -258,11 +267,11 @@
   bottom: 12%;
   width: 28%;
   aspect-ratio: 1;
-  border: 1px solid rgba(246, 255, 95, 0.2);
+  border: 1px solid color-mix(in oklab, var(--accent) 20%, transparent);
   border-radius: 7px;
   background:
-    linear-gradient(90deg, rgba(246, 255, 95, 0.12) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(0, 217, 146, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--accent) 12%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in oklab, var(--border) 18%, transparent) 1px, transparent 1px),
     linear-gradient(145deg, #252820, #141613);
   background-size: 18px 18px, 18px 18px, auto;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.36);
@@ -272,7 +281,7 @@
   position: absolute;
   inset: 0;
   height: 40%;
-  background: linear-gradient(180deg, transparent, rgba(0, 217, 146, 0.18), transparent);
+  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--accent) 16%, transparent), transparent);
   animation: scanMove 3.5s linear infinite;
 }
 
@@ -286,7 +295,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid rgba(246, 255, 95, 0.16);
+  border: 1px solid color-mix(in oklab, var(--accent) 16%, transparent);
   border-radius: 7px;
   background: rgba(5, 6, 8, 0.78);
   color: var(--text-muted);
@@ -307,10 +316,10 @@
   transform: translateY(-50%);
   border-radius: 50%;
   background: rgba(8, 10, 10, 0.86);
-  border: 1px solid rgba(246, 255, 95, 0.42);
+  border: 1px solid color-mix(in oklab, var(--accent) 42%, transparent);
   box-shadow:
     0 28px 76px rgba(0, 0, 0, 0.5),
-    inset 0 0 0 22px rgba(246, 255, 95, 0.045);
+    inset 0 0 0 22px color-mix(in oklab, var(--accent) 4.5%, transparent);
   z-index: 3;
 }
 
@@ -318,7 +327,7 @@
   position: absolute;
   inset: 18px;
   border-radius: 50%;
-  border: 1px solid rgba(0, 217, 146, 0.28);
+  border: 1px solid color-mix(in oklab, var(--accent) 22%, transparent);
 }
 
 .risk-lens-ring::before {
@@ -544,12 +553,12 @@
 @media (max-width: 760px) {
   .welcome-topbar {
     height: 62px;
-    padding: 0 16px;
+    padding: 0 var(--welcome-page-pad-x);
   }
 
   .welcome-command {
     min-height: calc(100vh - 62px);
-    padding: 18px 16px 24px;
+    padding: 18px var(--welcome-page-pad-x) 24px;
     gap: 18px;
   }
 
@@ -652,3 +661,4 @@
   32%, 72% { opacity: 1; transform: translateX(0); }
   88%, 100% { opacity: 0; transform: translateX(10px); }
 }
+

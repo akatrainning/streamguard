@@ -9,7 +9,7 @@ import AlertBanner from "./components/AlertBanner";
 import RationalityGate from "./components/RationalityGate";
 import DataSourceSelector from "./components/DataSourceSelector";
 import CommandCenter from "./components/CommandCenter";
-import SessionReportModal from "./components/SessionReportModal";
+import SessionReportModal from "./components/StableSessionReportModal";
 import SwitchRoomModal from "./components/SwitchRoomModal";
 import HistoryPage from "./pages/HistoryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
@@ -446,7 +446,7 @@ export default function App() {
   }
 
   const activeTab = NAV_TABS.find((tab) => tab.id === page) || NAV_TABS[0];
-  const lockDashboardHeight = dashboardSection === "stream";
+  const lockDashboardHeight = true;
   const activePageLocked = !authUser && protectedPages.has(page);
   const dashboardModuleLabel = dashboardSection === "ops" ? "运营指挥台" : "直播与话术";
   const dashboardModuleDescription = dashboardSection === "ops"
@@ -776,6 +776,9 @@ function Dashboard(props) {
                     wsBase={sourceConfig.wsBase || "http://localhost:8011"}
                     isVisible={dashboardSection === "stream"}
                     mediaUrl={realStream.mediaUrl}
+                    isConnecting={realStream.connecting}
+                    connectionError={realStream.error}
+                    onReconnect={() => realStream.reconnectNow?.()}
                   />
                 ) : (
                   <div className="sg-video-empty">
@@ -909,13 +912,37 @@ function LockedFeature({ title, description, onLogin }) {
   return (
     <div className="sg-locked-shell">
       <div className="sg-locked-panel">
-        <div className="sg-locked-badge">LOCKED</div>
-        <h1>{title}</h1>
-        <p>{description}</p>
-        <p className="sg-locked-copy">
-          该功能会读取或沉淀账号数据，需要先登录或注册后使用。实时总览和首页仍可直接访问。
-        </p>
-        <button className="sg-locked-action" onClick={onLogin} type="button">登录 / 注册</button>
+        <div className="sg-locked-gate" aria-hidden="true">
+          <div className="sg-locked-gate-top">
+            <span>ACCESS</span>
+            <strong>LOCKED</strong>
+          </div>
+          <div className="sg-locked-orbit">
+            <div className="sg-locked-orbit-core">
+              <span>AUTH</span>
+              <strong>401</strong>
+            </div>
+            <i />
+            <i />
+            <i />
+          </div>
+          <div className="sg-locked-ledger">
+            <div><span>history</span><strong>ACCOUNT</strong></div>
+            <div><span>evidence</span><strong>PRIVATE</strong></div>
+            <div><span>action</span><strong>LOGIN</strong></div>
+          </div>
+        </div>
+
+        <section className="sg-locked-console">
+          <div className="sg-locked-badge">LOCKED WORKSPACE</div>
+          <h1>{title}</h1>
+          <p>{description}</p>
+          <div className="sg-locked-copy">
+            <span>需要账号权限</span>
+            <strong>该功能会读取或沉淀账号数据。实时总览和首页仍可直接访问。</strong>
+          </div>
+          <button className="sg-locked-action" onClick={onLogin} type="button">登录 / 注册</button>
+        </section>
       </div>
     </div>
   );

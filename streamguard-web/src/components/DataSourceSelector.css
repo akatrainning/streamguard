@@ -24,8 +24,8 @@
   min-height: 380px;
   overflow: hidden;
   background:
-    linear-gradient(rgba(246, 255, 95, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 217, 146, 0.04) 1px, transparent 1px),
+    linear-gradient(color-mix(in oklab, var(--accent) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--border) 20%, transparent) 1px, transparent 1px),
     linear-gradient(180deg, rgba(16, 17, 18, 0.78), rgba(8, 10, 10, 0.92));
   background-size: 52px 52px, 52px 52px, auto;
 }
@@ -36,8 +36,8 @@
   inset: 44px 0 0;
   pointer-events: none;
   background:
-    linear-gradient(118deg, transparent 0 30%, rgba(246, 255, 95, 0.08) 30% 32%, transparent 32% 100%),
-    radial-gradient(420px 300px at 72% 48%, rgba(0, 217, 146, 0.1), transparent 70%);
+    linear-gradient(118deg, transparent 0 30%, color-mix(in oklab, var(--accent) 7%, transparent) 30% 32%, transparent 32% 100%),
+    radial-gradient(420px 300px at 72% 48%, color-mix(in oklab, var(--border) 18%, transparent), transparent 70%);
 }
 
 .source-stage-top {
@@ -79,7 +79,7 @@
   transform: perspective(1100px) rotateY(-8deg) rotateZ(-1deg);
   transform-origin: left center;
   background:
-    linear-gradient(135deg, rgba(246, 255, 95, 0.16), transparent 46%),
+    linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent 46%),
     linear-gradient(180deg, #1b1d1c, #0b0d0d 74%);
   box-shadow: 0 28px 60px rgba(0, 0, 0, 0.4);
 }
@@ -88,7 +88,7 @@
   position: absolute;
   inset: 0;
   height: 40%;
-  background: linear-gradient(180deg, transparent, rgba(0, 217, 146, 0.18), transparent);
+  background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--accent) 16%, transparent), transparent);
   animation: sourceScan 3.4s linear infinite;
 }
 
@@ -116,7 +116,7 @@
 .source-card-stack i {
   display: block;
   height: 48px;
-  border: 1px solid rgba(246, 255, 95, 0.18);
+  border: 1px solid color-mix(in oklab, var(--accent) 16%, transparent);
   border-radius: 8px;
   background: rgba(16, 17, 18, 0.78);
 }
@@ -129,7 +129,7 @@
 .source-card-stack i:nth-child(3) {
   width: 64%;
   margin-left: auto;
-  background: rgba(246, 255, 95, 0.1);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
 }
 
 .source-radar {
@@ -139,12 +139,12 @@
   width: min(290px, 35vw);
   aspect-ratio: 1;
   transform: translateY(-50%);
-  border: 1px solid rgba(246, 255, 95, 0.4);
+  border: 1px solid color-mix(in oklab, var(--accent) 32%, transparent);
   border-radius: 50%;
   background: rgba(13, 23, 37, 0.86);
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.46),
-    inset 0 0 0 20px rgba(246, 255, 95, 0.05);
+    inset 0 0 0 20px color-mix(in oklab, var(--accent) 4%, transparent);
   z-index: 3;
 }
 
@@ -153,7 +153,7 @@
   content: "";
   position: absolute;
   border-radius: 50%;
-  border: 1px solid rgba(0, 217, 146, 0.22);
+  border: 1px solid color-mix(in oklab, var(--accent) 18%, transparent);
 }
 
 .source-radar::before { inset: 20px; }
@@ -245,8 +245,8 @@
   width: calc(24px + (var(--i) % 5) * 10px);
   height: 2px;
   border-radius: 99px;
-  background: rgba(246, 255, 95, 0.5);
-  box-shadow: 0 0 18px rgba(246, 255, 95, 0.18);
+  background: color-mix(in oklab, var(--accent) 38%, transparent);
+  box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 12%, transparent);
   animation: ribbonFlow 1.7s ease-in-out infinite;
   animation-delay: calc(var(--i) * 70ms);
 }
@@ -256,7 +256,7 @@
   min-width: 4px;
   height: calc(12px + (var(--i) % 8) * 5px);
   border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, var(--fact), rgba(0, 217, 146, 0.14));
+  background: linear-gradient(180deg, var(--fact), color-mix(in oklab, var(--fact) 14%, transparent));
   animation: sourceBars 1.6s ease-in-out infinite;
   animation-delay: calc(var(--i) * 50ms);
 }
@@ -317,7 +317,7 @@
 
 .source-advanced input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(246, 255, 95, 0.18);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 18%, transparent);
 }
 
 .source-advanced input::placeholder {

@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import flvjs from "flv.js";
+import Hls from "hls.js";
 
 function extractRoomId(input = "") {
   const text = decodeURIComponent((input || "").trim());
@@ -47,11 +49,21 @@ function toProxiedMediaUrl(rawUrl, apiBase) {
     : `${apiBase}${rawUrl}`;
 }
 
+function detectStreamKind(rawUrl = "") {
+  const value = rawUrl.toLowerCase();
+  if (value.includes(".m3u8") || value.includes("m3u8")) return "hls";
+  if (value.includes(".flv") || value.includes("flv")) return "flv";
+  return "native";
+}
+
 export default function VideoPlayer({
   roomId: roomIdRaw,
   wsBase = "http://localhost:8011",
   isVisible = true,
   mediaUrl: discoveredMediaUrl,
+  isConnecting = false,
+  connectionError = null,
+  onReconnect,
 }) {
   const roomId = extractRoomId(roomIdRaw || "");
   const apiBase = resolveApiBase(wsBase);
@@ -60,144 +72,44 @@ export default function VideoPlayer({
   const flvRef = useRef(null);
   const wasVisibleRef = useRef(isVisible);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [playbackError, setPlaybackError] = useState(null);
   const [videoUrl, setVideoUrl] = useState(null);
+
+  const streamKind = useMemo(() => detectStreamKind(discoveredMediaUrl || ""), [discoveredMediaUrl]);
 
   useEffect(() => {
     if (!roomId) {
-      setError("未提供直播间 ID");
       setLoading(false);
+      setPlaybackError(null);
       setVideoUrl(null);
       return;
     }
 
     if (discoveredMediaUrl === undefined) {
       setLoading(true);
-      setError(null);
+      setPlaybackError(null);
       setVideoUrl(null);
       return;
     }
 
     setLoading(false);
+    setPlaybackError(null);
+
     if (discoveredMediaUrl) {
-      setError(null);
       setVideoUrl(toProxiedMediaUrl(discoveredMediaUrl, apiBase));
       return;
     }
 
     setVideoUrl(null);
-    setError("未找到直播流 URL");
   }, [apiBase, discoveredMediaUrl, roomId]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !videoUrl) return undefined;
 
-    setError(null);
+    setPlaybackError(null);
 
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    if (flvRef.current) {
-      flvRef.current.destroy();
-      flvRef.current = null;
-    }
-
-    const playNative = () => {
-      video.src = videoUrl;
-      video.play().catch(() => {});
-    };
-
-    const ensureScript = (src, check, onReady, onFail) => {
-      if (check()) {
-        onReady();
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = src;
-      script.async = true;
-      script.onload = () => {
-        if (check()) onReady();
-        else onFail();
-      };
-      script.onerror = onFail;
-      document.head.appendChild(script);
-    };
-
-    const setupHls = () => {
-      if (!(window.Hls && window.Hls.isSupported())) {
-        if (video.canPlayType("application/vnd.apple.mpegurl")) {
-          playNative();
-        } else {
-          setError("当前浏览器不支持 HLS 直播");
-        }
-        return;
-      }
-
-      const hls = new window.Hls({
-        liveSyncDurationCount: 2,
-        liveMaxLatencyDurationCount: 4,
-      });
-      hls.loadSource(videoUrl);
-      hls.attachMedia(video);
-      hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-        video.play().catch(() => {});
-      });
-      hls.on(window.Hls.Events.ERROR, (_, data) => {
-        if (!data.fatal) return;
-        if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
-          setError("网络错误，正在尝试恢复直播流");
-          hls.startLoad();
-          return;
-        }
-        if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
-          setError("媒体解码错误");
-          hls.recoverMediaError();
-          return;
-        }
-        setError("视频播放失败");
-      });
-      hlsRef.current = hls;
-    };
-
-    const setupFlv = () => {
-      if (!(window.flvjs && window.flvjs.isSupported())) {
-        setError("当前浏览器不支持 FLV 直播");
-        return;
-      }
-
-      const flvPlayer = window.flvjs.createPlayer({
-        type: "flv",
-        url: videoUrl,
-        hasAudio: true,
-        hasVideo: true,
-      });
-      flvPlayer.attachMediaElement(video);
-      flvPlayer.load();
-      flvPlayer.play().catch(() => {});
-      flvRef.current = flvPlayer;
-    };
-
-    if (videoUrl.includes(".m3u8")) {
-      ensureScript(
-        "https://cdn.jsdelivr.net/npm/hls.js@latest",
-        () => Boolean(window.Hls),
-        setupHls,
-        () => setError("无法加载 HLS 播放器"),
-      );
-    } else if (videoUrl.includes(".flv")) {
-      ensureScript(
-        "https://cdn.jsdelivr.net/npm/flv.js@latest/dist/flv.min.js",
-        () => Boolean(window.flvjs),
-        setupFlv,
-        () => setError("无法加载 FLV 播放器"),
-      );
-    } else {
-      playNative();
-    }
-
-    return () => {
+    const clearPlayers = () => {
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
@@ -206,8 +118,94 @@ export default function VideoPlayer({
         flvRef.current.destroy();
         flvRef.current = null;
       }
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
     };
-  }, [videoUrl]);
+
+    clearPlayers();
+
+    const handlePlayable = () => {
+      setPlaybackError(null);
+    };
+    video.addEventListener("loadeddata", handlePlayable);
+    video.addEventListener("playing", handlePlayable);
+
+    const playNative = () => {
+      video.src = videoUrl;
+      video.play().catch(() => {});
+    };
+
+    if (streamKind === "hls") {
+      if (!Hls.isSupported()) {
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          playNative();
+        } else {
+          setPlaybackError("当前浏览器不支持 HLS 播放");
+        }
+      } else {
+        const hls = new Hls({
+          liveSyncDurationCount: 2,
+          liveMaxLatencyDurationCount: 4,
+        });
+        hls.loadSource(videoUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(() => {});
+        });
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (!data.fatal) return;
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            setPlaybackError("直播流加载失败，请稍后重试");
+            hls.startLoad();
+            return;
+          }
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            setPlaybackError("HLS 解码失败，正在尝试恢复");
+            hls.recoverMediaError();
+            return;
+          }
+          setPlaybackError("HLS 播放初始化失败");
+        });
+        hlsRef.current = hls;
+      }
+    } else if (streamKind === "flv") {
+      if (!flvjs?.isSupported?.()) {
+        setPlaybackError("当前浏览器不支持 FLV 播放");
+      } else {
+        const player = flvjs.createPlayer(
+          {
+            type: "flv",
+            url: videoUrl,
+            isLive: true,
+            hasAudio: true,
+            hasVideo: true,
+          },
+          {
+            enableWorker: false,
+            stashInitialSize: 128,
+            lazyLoad: false,
+            fixAudioTimestampGap: false,
+          },
+        );
+        player.attachMediaElement(video);
+        player.load();
+        player.play().catch(() => {});
+        player.on(flvjs.Events.ERROR, (_type, detail) => {
+          setPlaybackError(`FLV 播放失败: ${detail || "unknown error"}`);
+        });
+        flvRef.current = player;
+      }
+    } else {
+      playNative();
+    }
+
+    return () => {
+      video.removeEventListener("loadeddata", handlePlayable);
+      video.removeEventListener("playing", handlePlayable);
+      clearPlayers();
+    };
+  }, [streamKind, videoUrl]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -217,10 +215,17 @@ export default function VideoPlayer({
       if (hlsRef.current) {
         hlsRef.current.startLoad(-1);
       }
+      if (flvRef.current) {
+        flvRef.current.load();
+        flvRef.current.play().catch(() => {});
+      }
       video.play().catch(() => {});
     } else if (!isVisible && wasVisibleRef.current) {
       if (hlsRef.current) {
         hlsRef.current.stopLoad();
+      }
+      if (flvRef.current) {
+        flvRef.current.pause();
       }
       video.pause();
     }
@@ -228,165 +233,77 @@ export default function VideoPlayer({
     wasVisibleRef.current = isVisible;
   }, [isVisible]);
 
+  const displayError = !roomId
+    ? "请输入有效的直播间 ID"
+    : connectionError || playbackError || (discoveredMediaUrl === null ? "未能发现可播放的直播流" : null);
+
   return (
-    <div
+    <section
+      className="sg-ui-panel sg-video-shell"
       style={{
-        background: "var(--bg-secondary)",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
         opacity: isVisible ? 1 : 0.5,
         pointerEvents: isVisible ? "auto" : "none",
       }}
     >
-      <div
-        style={{
-          padding: "10px 14px",
-          borderBottom: "1px solid var(--border)",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <span style={{ fontSize: 13, fontWeight: 600 }}>实时直播</span>
-        {loading && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>正在发现直播流...</span>}
-      </div>
+      <header className="sg-ui-panel-head">
+        <div>
+          <div className="sg-ui-eyebrow">Live Stage</div>
+          <h2>实时直播</h2>
+        </div>
 
-      <div
-        style={{
-          position: "relative",
-          background: "#000",
-          flex: 1,
-          minHeight: 240,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
-      >
-        {error && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(0, 0, 0, 0.8)",
-              color: "#ff4d6d",
-              zIndex: 10,
-              padding: 20,
-              textAlign: "center",
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>直播流错误</div>
-            <div style={{ fontSize: 12, color: "rgba(255, 77, 109, 0.9)" }}>{error}</div>
+        <div className="sg-stream-head-meta">
+          {(loading || isConnecting) && (
+            <span className="sg-ui-status is-neutral">
+              <i />
+              连接中
+            </span>
+          )}
+          {videoUrl && !displayError && (
+            <span className="sg-ui-status is-success">
+              <i />
+              LIVE
+            </span>
+          )}
+        </div>
+      </header>
+
+      <div className="sg-stream-stage">
+        {displayError && (
+          <div className="sg-video-overlay is-error">
+            <div className="sg-video-overlay-title">直播连接异常</div>
+            <div className="sg-video-overlay-copy">{displayError}</div>
+            {typeof onReconnect === "function" && (
+              <button className="sg-ui-button is-secondary" onClick={onReconnect} type="button">
+                重新连接
+              </button>
+            )}
           </div>
         )}
 
-        {loading && !videoUrl && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(0, 0, 0, 0.65)",
-              color: "#4da3ff",
-              zIndex: 10,
-            }}
-          >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                border: "3px solid rgba(77, 163, 255, 0.3)",
-                borderTop: "3px solid #4da3ff",
-                borderRadius: "50%",
-                animation: "sg-spin 1s linear infinite",
-                marginBottom: 12,
-              }}
-            />
-            <div style={{ fontSize: 12 }}>正在连接直播...</div>
+        {(loading || isConnecting) && !videoUrl && !displayError && (
+          <div className="sg-video-overlay is-loading">
+            <div className="sg-video-spinner" />
+            <div className="sg-video-overlay-copy">正在发现直播流...</div>
           </div>
         )}
 
         <video
           ref={videoRef}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            background: "#000",
-          }}
+          className="sg-stream-stage-video"
           controls
+          autoPlay
+          muted
+          playsInline
           crossOrigin="anonymous"
         />
-
-        {videoUrl && !error && (
-          <div
-            style={{
-              position: "absolute",
-              bottom: 8,
-              right: 8,
-              padding: "2px 8px",
-              borderRadius: 999,
-              background: "rgba(0, 255, 136, 0.18)",
-              color: "#00ff88",
-              fontSize: 10,
-              fontWeight: 600,
-              border: "1px solid rgba(0, 255, 136, 0.28)",
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
-            <span
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: "#00ff88",
-                animation: "sg-blink 1.2s infinite",
-              }}
-            />
-            LIVE
-          </div>
-        )}
       </div>
 
       {videoUrl && (
-        <div
-          style={{
-            padding: "8px 14px",
-            fontSize: 11,
-            color: "var(--text-muted)",
-            borderTop: "1px solid var(--border)",
-            backgroundColor: "rgba(0, 255, 136, 0.05)",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <span>直播流: {videoUrl.includes(".m3u8") ? "HLS" : videoUrl.includes(".flv") ? "FLV" : "其他"}</span>
-            <span>房间号: {roomId}</span>
-          </div>
+        <div className="sg-video-meta-bar">
+          <span>流类型 {streamKind === "hls" ? "HLS" : streamKind === "flv" ? "FLV" : "Native"}</span>
+          <span className="mono">房间 {roomId}</span>
         </div>
       )}
-
-      <style>{`
-        @keyframes sg-spin {
-          to { transform: rotate(360deg); }
-        }
-        @keyframes sg-blink {
-          0%, 49% { opacity: 1; }
-          50%, 100% { opacity: 0.45; }
-        }
-      `}</style>
-    </div>
+    </section>
   );
 }

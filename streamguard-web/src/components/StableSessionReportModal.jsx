@@ -1,16 +1,79 @@
 import { useEffect, useMemo, useState } from "react";
 
-function fmtTime(ts) {
+function formatTime(ts) {
   if (!ts) return "--:--:--";
   return new Date(ts).toLocaleTimeString("zh-CN", { hour12: false });
 }
 
-function fmtDuration(startTime, endTime) {
+function formatDuration(startTime, endTime) {
   if (!startTime || !endTime) return "--";
-  const sec = Math.max(0, Math.round((endTime - startTime) / 1000));
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m}分${s}秒` : `${s}秒`;
+  const seconds = Math.max(0, Math.round((endTime - startTime) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const remain = seconds % 60;
+  return minutes > 0 ? `${minutes} 分 ${remain} 秒` : `${remain} 秒`;
+}
+
+function exportSnapshotJson(snapshot, aiSummary, aiAdvice) {
+  const payload = {
+    meta: {
+      generatedAt: new Date().toISOString(),
+      roomId: snapshot?.roomId || null,
+      startTime: snapshot?.startTime || null,
+      endTime: snapshot?.endTime || null,
+    },
+    summary: {
+      aiSummary,
+      aiAdvice,
+      rationalityIndex: snapshot?.rationalityIndex || 0,
+      stats: snapshot?.stats || {},
+    },
+    utterances: snapshot?.utterances || [],
+    chatMessages: snapshot?.chatMessages || [],
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `streamguard_report_${new Date().toISOString().slice(0, 10)}.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+const primaryButtonStyle = {
+  border: "1px solid color-mix(in oklab, var(--accent) 54%, black 46%)",
+  background: "linear-gradient(180deg, color-mix(in oklab, var(--accent) 92%, white 8%), var(--accent-hover))",
+  color: "var(--accent-contrast)",
+  borderRadius: 8,
+  padding: "8px 18px",
+  fontWeight: 700,
+  cursor: "pointer",
+  boxShadow: "var(--accent-shadow-sm)",
+};
+
+const secondaryButtonStyle = {
+  border: "1px solid var(--border)",
+  background: "var(--bg)",
+  color: "var(--text-secondary)",
+  borderRadius: 8,
+  padding: "8px 14px",
+  cursor: "pointer",
+};
+
+function MetricCard({ label, value, tone = "default" }) {
+  const color = tone === "fact"
+    ? "var(--fact)"
+    : tone === "hype"
+      ? "var(--hype)"
+      : tone === "trap"
+        ? "var(--trap)"
+        : "var(--text-primary)";
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, background: "var(--bg)" }}>
+      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</div>
+      <div style={{ marginTop: 6, fontSize: 24, lineHeight: 1.15, fontWeight: 700, color }}>{value}</div>
+    </div>
+  );
 }
 
 export default function StableSessionReportModal({ snapshot, apiBase, onClose, onDismiss }) {
@@ -20,10 +83,18 @@ export default function StableSessionReportModal({ snapshot, apiBase, onClose, o
 
   const stats = useMemo(() => {
     const utterances = snapshot?.utterances || [];
-    const fact = utterances.filter((u) => u?.type === "fact").length;
-    const hype = utterances.filter((u) => u?.type === "hype").length;
-    const trap = utterances.filter((u) => u?.type === "trap").length;
+    const fact = utterances.filter((item) => item?.type === "fact").length;
+    const hype = utterances.filter((item) => item?.type === "hype").length;
+    const trap = utterances.filter((item) => item?.type === "trap").length;
     return { total: utterances.length, fact, hype, trap };
+  }, [snapshot]);
+
+  const topRisks = useMemo(() => {
+    const utterances = snapshot?.utterances || [];
+    return [...utterances]
+      .filter((item) => item?.type === "trap" || item?.type === "hype")
+      .sort((a, b) => (a?.score ?? 1) - (b?.score ?? 1))
+      .slice(0, 5);
   }, [snapshot]);
 
   useEffect(() => {
@@ -32,6 +103,9 @@ export default function StableSessionReportModal({ snapshot, apiBase, onClose, o
     const durationSeconds = snapshot.startTime && snapshot.endTime
       ? Math.max(0, Math.round((snapshot.endTime - snapshot.startTime) / 1000))
       : 0;
+
+    setAiLoading(true);
+
     fetch(`${apiBase}/session/summary`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -44,138 +118,140 @@ export default function StableSessionReportModal({ snapshot, apiBase, onClose, o
         durationSeconds,
       }),
     })
-      .then((r) => r.json())
+      .then((response) => response.json())
       .then((data) => {
         if (cancelled) return;
         setAiSummary(data?.ai_summary || "");
         setAiAdvice(Array.isArray(data?.ai_advice) ? data.ai_advice : []);
       })
-      .catch((e) => {
-        console.error("[StableSessionReportModal] AI summary request failed:", e);
+      .catch(() => {
+        if (cancelled) return;
+        setAiSummary("");
+        setAiAdvice([]);
       })
       .finally(() => {
         if (!cancelled) setAiLoading(false);
       });
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [apiBase, snapshot, stats]);
 
   if (!snapshot) return null;
 
   return (
-    <div style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 2200,
-      background: "rgba(0,0,0,0.72)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 16,
-    }}>
-      <div style={{
-        width: "min(960px, 100%)",
-        maxHeight: "92vh",
-        overflow: "auto",
-        borderRadius: 12,
-        border: "1px solid var(--border)",
-        background: "var(--bg-secondary)",
-      }}>
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "14px 16px",
-          borderBottom: "1px solid var(--border)",
-          position: "sticky",
-          top: 0,
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 2200,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        background: "rgba(0, 0, 0, 0.72)",
+      }}
+    >
+      <section
+        style={{
+          width: "min(960px, 100%)",
+          maxHeight: "92vh",
+          overflow: "auto",
+          border: "1px solid var(--border)",
+          borderRadius: 14,
           background: "var(--bg-secondary)",
-          zIndex: 1,
-        }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", flex: 1 }}>
-            本次监控总结报告
+          boxShadow: "0 24px 72px rgba(0, 0, 0, 0.48)",
+        }}
+      >
+        <header
+          style={{
+            position: "sticky",
+            top: 0,
+            zIndex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "14px 16px",
+            borderBottom: "1px solid var(--border)",
+            background: "var(--bg-secondary)",
+          }}
+        >
+          <div>
+            <div style={{ color: "var(--text-primary)", fontSize: 18, fontWeight: 700 }}>本次监控总结报告</div>
+            <div style={{ marginTop: 4, color: "var(--text-muted)", fontSize: 12 }}>
+              直播间 {snapshot.roomId || "--"} · {formatTime(snapshot.startTime)} - {formatTime(snapshot.endTime)} · {formatDuration(snapshot.startTime, snapshot.endTime)}
+            </div>
           </div>
-          <button
-            onClick={onDismiss}
-            style={{
-              border: "1px solid var(--border)",
-              background: "var(--bg)",
-              color: "var(--text-secondary)",
-              borderRadius: 8,
-              padding: "6px 12px",
-              cursor: "pointer",
-            }}
-          >
-            ×
-          </button>
-        </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" onClick={() => exportSnapshotJson(snapshot, aiSummary, aiAdvice)} style={secondaryButtonStyle}>导出 JSON</button>
+            <button type="button" onClick={onDismiss || onClose} style={secondaryButtonStyle}>关闭</button>
+          </div>
+        </header>
 
-        <div style={{ padding: 16, display: "grid", gap: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            直播间 {snapshot.roomId || "--"} · {fmtTime(snapshot.startTime)} - {fmtTime(snapshot.endTime)} · {fmtDuration(snapshot.startTime, snapshot.endTime)}
+        <div style={{ display: "grid", gap: 14, padding: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+            <MetricCard label="话术总数" value={stats.total} />
+            <MetricCard label="事实" value={stats.fact} tone="fact" />
+            <MetricCard label="夸大" value={stats.hype} tone="hype" />
+            <MetricCard label="陷阱" value={stats.trap} tone="trap" />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(120px, 1fr))", gap: 10 }}>
-            <Card label="话术总数" value={stats.total} />
-            <Card label="事实" value={stats.fact} />
-            <Card label="夸大" value={stats.hype} />
-            <Card label="陷阱" value={stats.trap} />
-          </div>
-
-          <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>AI 综合分析</div>
+          <section style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14, background: "var(--bg)" }}>
+            <div style={{ color: "var(--text-primary)", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>AI 综合分析</div>
             {aiLoading ? (
-              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>正在生成 AI 报告...</div>
+              <div style={{ color: "var(--text-muted)", fontSize: 12 }}>正在生成 AI 报告...</div>
             ) : (
               <>
-                <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7 }}>
+                <div style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7 }}>
                   {aiSummary || "本次会话暂无可生成摘要的数据。"}
                 </div>
                 {aiAdvice.length > 0 && (
                   <ul style={{ margin: "10px 0 0", paddingLeft: 18, color: "var(--text-secondary)" }}>
-                    {aiAdvice.slice(0, 5).map((item, i) => (
-                      <li key={i} style={{ marginBottom: 6 }}>
-                        <strong>{item.title || "建议"}</strong>：{item.body || ""}
+                    {aiAdvice.slice(0, 5).map((item, index) => (
+                      <li key={index} style={{ marginBottom: 6 }}>
+                        <strong style={{ color: "var(--text-primary)" }}>{item.title || "建议"}</strong>
+                        <span>：{item.body || ""}</span>
                       </li>
                     ))}
                   </ul>
                 )}
               </>
             )}
-          </div>
+          </section>
+
+          <section style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 14, background: "var(--bg)" }}>
+            <div style={{ color: "var(--text-primary)", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>高风险话术</div>
+            {topRisks.length === 0 ? (
+              <div style={{ color: "var(--text-muted)", fontSize: 12 }}>本次会话未发现明显高风险话术。</div>
+            ) : (
+              <div style={{ display: "grid", gap: 8 }}>
+                {topRisks.map((item, index) => {
+                  const tone = item?.type === "trap" ? "var(--trap)" : "var(--hype)";
+                  const toneBg = item?.type === "trap" ? "var(--trap-bg)" : "var(--hype-bg)";
+                  const toneBorder = item?.type === "trap" ? "var(--trap-border)" : "var(--hype-border)";
+                  return (
+                    <div key={`${item?.id || index}-${index}`} style={{ border: `1px solid ${toneBorder}`, borderRadius: 8, padding: 10, background: toneBg }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 6 }}>
+                        <strong style={{ color: tone, fontSize: 12 }}>{(item?.type || "risk").toUpperCase()}</strong>
+                        <span style={{ color: tone, fontSize: 12 }}>
+                          {item?.score !== undefined ? `${Math.round((item.score || 0) * 100)} 分` : "--"}
+                        </span>
+                      </div>
+                      <div style={{ color: "var(--text-primary)", fontSize: 13, lineHeight: 1.6 }}>{item?.text || "--"}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
         </div>
 
-        <div style={{
-          borderTop: "1px solid var(--border)",
-          padding: 14,
-          display: "flex",
-          justifyContent: "flex-end",
-        }}>
-          <button
-            onClick={onClose}
-            style={{
-              border: "none",
-              background: "var(--accent)",
-              color: "#fff",
-              borderRadius: 8,
-              padding: "8px 18px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            确定关闭并继续连接
-          </button>
-        </div>
-      </div>
+        <footer style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: 14, borderTop: "1px solid var(--border)" }}>
+          <button type="button" onClick={onClose} style={primaryButtonStyle}>关闭报告并继续</button>
+        </footer>
+      </section>
     </div>
   );
 }
-
-function Card({ label, value }) {
-  return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
-      <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.2 }}>{value}</div>
-    </div>
-  );
-}
-

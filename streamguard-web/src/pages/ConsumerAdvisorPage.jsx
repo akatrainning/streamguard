@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import StatusBadge from "../components/ui/StatusBadge";
+import { requestJson } from "../utils/authClient";
 
 function DecisionBoard({ products, selectedIds, suite, onToggle }) {
   if (!products.length && !suite) return null;
@@ -12,7 +14,11 @@ function DecisionBoard({ products, selectedIds, suite, onToggle }) {
       <div className={`sg-advisor-decision-core is-${String(verdict).toLowerCase()}`}>
         <span>DECISION</span>
         <strong>{verdict}</strong>
-        <em>{Number.isFinite(Number(confidence)) ? `${Math.round(Number(confidence) * 100)}% confidence` : `${activeProducts.length} selected`}</em>
+        <em>
+          {Number.isFinite(Number(confidence))
+            ? `${Math.round(Number(confidence) * 100)}% confidence`
+            : `${activeProducts.length} selected`}
+        </em>
       </div>
 
       <div className="sg-advisor-product-matrix">
@@ -55,6 +61,61 @@ function DecisionBoard({ products, selectedIds, suite, onToggle }) {
   );
 }
 
+function normalizeProduct(product = {}, index = 0, query = "") {
+  return {
+    id: product.id || `product-${index + 1}`,
+    name: product.name || `${query || "商品"} 候选 ${index + 1}`,
+    brand: product.brand || "",
+    channel: product.channel || "",
+    price: product.price || "",
+    spec: product.spec || "",
+    fit_for: Array.isArray(product.fit_for) ? product.fit_for : [],
+    known_risks: Array.isArray(product.known_risks) ? product.known_risks : [],
+  };
+}
+
+function buildFallbackProducts(query = "") {
+  return [
+    {
+      id: `${query}-official`,
+      name: `${query} 官方旗舰款`,
+      brand: "品牌官方",
+      channel: "官方店",
+      price: "199-299 元",
+      spec: "标准装",
+      fit_for: ["证据优先", "售后明确"],
+      known_risks: ["需核验检测报告"],
+    },
+    {
+      id: `${query}-deal`,
+      name: `${query} 直播优惠款`,
+      brand: "直播间",
+      channel: "主播推荐",
+      price: "129-199 元",
+      spec: "组合装",
+      fit_for: ["价格敏感", "短期促销"],
+      known_risks: ["关注极限词", "确认退换货"],
+    },
+    {
+      id: `${query}-alt`,
+      name: `${query} 同类替代款`,
+      brand: "同类品牌",
+      channel: "综合电商",
+      price: "159-259 元",
+      spec: "对比装",
+      fit_for: ["横向比较", "理性决策"],
+      known_risks: ["对比规格差异"],
+    },
+  ].map((item, index) => normalizeProduct(item, index, query));
+}
+
+function parseTagInput(value) {
+  return String(value || "")
+    .split(/[,，\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMessages = [] }) {
   const [query, setQuery] = useState("");
   const [budget, setBudget] = useState("");
@@ -62,9 +123,11 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
   const [searching, setSearching] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [searchResult, setSearchResult] = useState(null);
+  const [editableProducts, setEditableProducts] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [suite, setSuite] = useState(null);
   const [error, setError] = useState("");
+  const [searchStatus, setSearchStatus] = useState(null);
 
   const streamEvidence = useMemo(() => {
     const us = utterances.slice(0, 60).map((u) => ({
@@ -86,34 +149,90 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
     return { utterances: us, chats: cs };
   }, [utterances, chatMessages]);
 
-  const products = searchResult?.products || [];
+  const products = editableProducts;
   const selectedProducts = products.filter((p) => selectedIds.includes(p.id));
+
+  const updateProduct = (id, field, value) => {
+    setEditableProducts((prev) => prev.map((product) => {
+      if (product.id !== id) return product;
+      if (field === "fit_for" || field === "known_risks") {
+        return { ...product, [field]: parseTagInput(value) };
+      }
+      return { ...product, [field]: value };
+    }));
+  };
+
+  const addCustomProduct = () => {
+    const id = `custom-${Date.now()}`;
+    setEditableProducts((prev) => [
+      ...prev,
+      {
+        id,
+        name: `${query.trim() || "自定义商品"} 自定义款`,
+        brand: "手动录入",
+        channel: "待核验",
+        price: "",
+        spec: "",
+        fit_for: [],
+        known_risks: [],
+      },
+    ]);
+    setSelectedIds((prev) => [...prev, id]);
+  };
 
   const runSearch = async () => {
     const q = query.trim();
     if (!q) {
       setError("请输入商品关键词");
+      setSearchStatus(null);
       return;
     }
     setError("");
+    setSearchStatus({ tone: "neutral", text: "正在搜索候选商品..." });
     setSearching(true);
     setSuite(null);
     try {
-      const res = await fetch(`${apiBase}/consumer/search-products?q=${encodeURIComponent(q)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || "商品搜索失败");
-      setSearchResult(data);
-      setSelectedIds((data.products || []).slice(0, 3).map((x) => x.id));
+      const data = await requestJson(apiBase, `/consumer/search-products?q=${encodeURIComponent(q)}`);
+      const nextProducts = (data.products || []).map((item, index) => normalizeProduct(item, index, q));
+      const productsToUse = nextProducts.length ? nextProducts : buildFallbackProducts(q);
+      const source = nextProducts.length ? data.source || "rules" : "local-fallback";
+      setSearchResult({ ...data, source, products: productsToUse });
+      setEditableProducts(productsToUse);
+      setSelectedIds(productsToUse.slice(0, 3).map((item) => item.id));
+      setSearchStatus({
+        tone: source === "local-fallback" ? "warning" : "success",
+        text: source === "local-fallback"
+          ? "服务未返回候选结果，已切换为本地候选商品。"
+          : `已找到 ${productsToUse.length} 个候选商品。`,
+      });
     } catch (e) {
-      setError(e?.message || "商品搜索失败");
+      const fallbackProducts = buildFallbackProducts(q);
+      setSearchResult({ query: q, source: "local-fallback", products: fallbackProducts });
+      setEditableProducts(fallbackProducts);
+      setSelectedIds(fallbackProducts.slice(0, 3).map((item) => item.id));
+      setSearchStatus({
+        tone: "warning",
+        text: "搜索服务暂不可用，已切换为本地候选商品。",
+      });
+      setError("");
     } finally {
       setSearching(false);
     }
   };
 
+  const handleSearchKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    runSearch();
+  };
+
   const runFullSuite = async () => {
     if (!query.trim()) {
       setError("请先输入商品关键词");
+      return;
+    }
+    if (!selectedProducts.length) {
+      setError("请至少选择一个候选商品");
       return;
     }
     setError("");
@@ -128,13 +247,10 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
         },
         stream_context: streamEvidence,
       };
-      const res = await fetch(`${apiBase}/consumer/full-suite`, {
+      const data = await requestJson(apiBase, "/consumer/full-suite", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: payload,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || "消费建议生成失败");
       setSuite(data);
     } catch (e) {
       setError(e?.message || "消费建议生成失败");
@@ -153,7 +269,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
         <div>
           <div className="sg-ui-eyebrow">Consumer Decision</div>
           <h1>消费建议工作台</h1>
-          <p>把直播间话术、弹幕反馈和商品候选放在同一张审查桌上，先验风险，再谈购买。</p>
+          <p>把直播话术、弹幕反馈和候选商品放在同一张审查桌上，先核验风险，再决定是否购买。</p>
         </div>
         <div className="sg-advisor-meter">
           <span>证据池</span>
@@ -166,24 +282,44 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
         <div className="sg-ui-panel-body">
           <label className="sg-ui-field">
             <span>商品关键词</span>
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="如：护肤精华、家用取暖器" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="如：护肤精华、家用取暖器"
+            />
           </label>
           <label className="sg-ui-field">
             <span>预算</span>
-            <input value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="如：300 元以内" />
+            <input
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="如：300 元以内"
+            />
           </label>
           <label className="sg-ui-field">
             <span>核心需求</span>
-            <input value={need} onChange={(e) => setNeed(e.target.value)} placeholder="如：敏感肌、低噪音、送父母" />
+            <input
+              value={need}
+              onChange={(e) => setNeed(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="如：敏感肌、低噪音、送父母"
+            />
           </label>
           <div className="sg-advisor-actions">
             <button className="sg-ui-button is-secondary" onClick={runSearch} disabled={searching} type="button">
-              {searching ? "检索中..." : "检索商品"}
+              {searching ? "搜索中..." : "搜索商品"}
             </button>
             <button className="sg-ui-button is-primary" onClick={runFullSuite} disabled={analyzing} type="button">
               {analyzing ? "分析中..." : "生成建议"}
             </button>
           </div>
+          {!!searchStatus && (
+            <StatusBadge tone={searchStatus.tone} className="sg-advisor-search-status">
+              {searchStatus.text}
+            </StatusBadge>
+          )}
           {!!error && <div className="sg-advisor-error">{error}</div>}
         </div>
       </section>
@@ -202,10 +338,27 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
               <div className="sg-ui-eyebrow">Candidate Set</div>
               <h2>候选商品</h2>
             </div>
-            <span className={`sg-ui-status ${searchResult?.source === "llm" ? "is-warning" : "is-neutral"}`}>
-              <i />
-              {searchResult?.source === "llm" ? "AI 补全" : "检索结果"}
-            </span>
+            <div className="sg-ui-panel-actions">
+              <span
+                className={`sg-ui-status ${
+                  searchResult?.source === "llm"
+                    ? "is-warning"
+                    : searchResult?.source === "local-fallback"
+                      ? "is-warning"
+                      : "is-neutral"
+                }`}
+              >
+                <i />
+                {searchResult?.source === "llm"
+                  ? "AI 补全"
+                  : searchResult?.source === "local-fallback"
+                    ? "离线候选"
+                    : "预置候选"}
+              </span>
+              <button className="sg-ui-button is-secondary" type="button" onClick={addCustomProduct}>
+                添加自定义商品
+              </button>
+            </div>
           </header>
           <div className="sg-advisor-products">
             {products.map((p) => {
@@ -216,9 +369,50 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
                     <input type="checkbox" checked={active} onChange={() => toggleSelect(p.id)} />
                     <span>{active ? "纳入分析" : "暂不纳入"}</span>
                   </label>
-                  <h3>{p.name}</h3>
-                  <p>{p.brand} / {p.channel}</p>
-                  <strong>{p.price || "--"} <small>{p.spec || ""}</small></strong>
+
+                  <div className="sg-advisor-product-editor">
+                    <label className="sg-advisor-product-field">
+                      <span>商品名</span>
+                      <input value={p.name || ""} onChange={(e) => updateProduct(p.id, "name", e.target.value)} />
+                    </label>
+                    <div className="sg-advisor-product-row">
+                      <label className="sg-advisor-product-field">
+                        <span>品牌</span>
+                        <input value={p.brand || ""} onChange={(e) => updateProduct(p.id, "brand", e.target.value)} />
+                      </label>
+                      <label className="sg-advisor-product-field">
+                        <span>渠道</span>
+                        <input value={p.channel || ""} onChange={(e) => updateProduct(p.id, "channel", e.target.value)} />
+                      </label>
+                    </div>
+                    <div className="sg-advisor-product-row">
+                      <label className="sg-advisor-product-field">
+                        <span>价格</span>
+                        <input value={p.price || ""} onChange={(e) => updateProduct(p.id, "price", e.target.value)} placeholder="如：199 元" />
+                      </label>
+                      <label className="sg-advisor-product-field">
+                        <span>规格</span>
+                        <input value={p.spec || ""} onChange={(e) => updateProduct(p.id, "spec", e.target.value)} placeholder="如：50ml / 单件装" />
+                      </label>
+                    </div>
+                    <label className="sg-advisor-product-field">
+                      <span>适配人群</span>
+                      <textarea
+                        value={(p.fit_for || []).join("，")}
+                        onChange={(e) => updateProduct(p.id, "fit_for", e.target.value)}
+                        placeholder="多个标签用逗号分隔"
+                      />
+                    </label>
+                    <label className="sg-advisor-product-field">
+                      <span>已知风险</span>
+                      <textarea
+                        value={(p.known_risks || []).join("，")}
+                        onChange={(e) => updateProduct(p.id, "known_risks", e.target.value)}
+                        placeholder="多个风险点用逗号分隔"
+                      />
+                    </label>
+                  </div>
+
                   <TagList label="适配人群" items={p.fit_for || []} />
                   <TagList label="已知风险" items={p.known_risks || []} risk />
                 </article>
@@ -281,7 +475,7 @@ export default function ConsumerAdvisorPage({ apiBase, utterances = [], chatMess
       ) : (
         <div className="sg-advisor-empty">
           <strong>尚未生成消费建议</strong>
-          <span>先检索商品，再把候选和直播证据一起送入分析。</span>
+          <span>先搜索商品，再把候选商品和直播证据一起送入分析。</span>
         </div>
       )}
     </main>

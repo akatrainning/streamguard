@@ -9,6 +9,7 @@
     "preview": "node ./node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {
+    "flv.js": "^1.6.2",
     "framer-motion": "^12.34.3",
     "hls.js": "^1.6.15",
     "react": "^19.2.0",
