@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Panel } from "../components/ui";
 
 const VIEW_TABS = [
@@ -208,11 +208,15 @@ export default function RagSettingsPage({
   const [showAnswerModal, setShowAnswerModal] = useState(false);
   const [answerGeneratedAt, setAnswerGeneratedAt] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [asking, setAsking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const initialLoadDoneRef = useRef(false);
+  const knowledgeRequestRef = useRef(0);
+  const knowledgeCacheRef = useRef(new Map());
 
   const contextPayload = useMemo(() => ({
     roomId: sourceConfig.roomId || null,
@@ -267,16 +271,37 @@ export default function RagSettingsPage({
     setConfig(payload.config);
   }, [fetchJson]);
 
-  const loadKnowledge = useCallback(async (view = activeView, query = knowledgeQuery) => {
+  const loadKnowledge = useCallback(async (view, query = "") => {
+    const trimmedQuery = String(query || "").trim();
+    const cacheKey = `${view}::${trimmedQuery}`;
+    const cached = knowledgeCacheRef.current.get(cacheKey);
+    if (cached) {
+      setKnowledge(cached);
+      setSelectedEvidenceId((current) => {
+        if (current && cached.items?.some((item) => item.id === current)) return current;
+        return cached.items?.[0]?.id || "";
+      });
+      return cached;
+    }
+
+    const requestId = knowledgeRequestRef.current + 1;
+    knowledgeRequestRef.current = requestId;
     const params = new URLSearchParams({ view, limit: "120" });
-    if (query.trim()) params.set("query", query.trim());
+    if (trimmedQuery) params.set("query", trimmedQuery);
     const payload = await fetchJson(`/rag/knowledge?${params.toString()}`);
+    if (requestId !== knowledgeRequestRef.current) return null;
+    knowledgeCacheRef.current.set(cacheKey, payload);
+    if (knowledgeCacheRef.current.size > 20) {
+      const oldestKey = knowledgeCacheRef.current.keys().next().value;
+      knowledgeCacheRef.current.delete(oldestKey);
+    }
     setKnowledge(payload);
     setSelectedEvidenceId((current) => {
       if (current && payload.items?.some((item) => item.id === current)) return current;
       return payload.items?.[0]?.id || "";
     });
-  }, [activeView, fetchJson, knowledgeQuery]);
+    return payload;
+  }, [fetchJson]);
 
   const loadEvaluation = useCallback(async () => {
     const payload = await fetchJson("/rag/live-evaluation", {
@@ -296,6 +321,7 @@ export default function RagSettingsPage({
   useEffect(() => {
     let alive = true;
     const load = async () => {
+      initialLoadDoneRef.current = false;
       setLoading(true);
       setError("");
       try {
@@ -304,14 +330,39 @@ export default function RagSettingsPage({
       } catch (err) {
         if (alive) setError(err.message || "RAG 工作台加载失败。");
       } finally {
-        if (alive) setLoading(false);
+        if (alive) {
+          initialLoadDoneRef.current = true;
+          setLoading(false);
+        }
       }
     };
     load();
     return () => {
       alive = false;
     };
-  }, [activeView, knowledgeQuery, loadConfig, loadKnowledge]);
+  }, [loadConfig, loadKnowledge]);
+
+  useEffect(() => {
+    if (!initialLoadDoneRef.current) return undefined;
+    let alive = true;
+    const refreshKnowledge = async () => {
+      let didFinishLatest = false;
+      setKnowledgeLoading(true);
+      setError("");
+      try {
+        didFinishLatest = Boolean(await loadKnowledge(activeView, knowledgeQuery));
+      } catch (err) {
+        didFinishLatest = true;
+        if (alive) setError(err.message || "RAG 证据检索失败。");
+      } finally {
+        if (alive && didFinishLatest) setKnowledgeLoading(false);
+      }
+    };
+    refreshKnowledge();
+    return () => {
+      alive = false;
+    };
+  }, [activeView, knowledgeQuery, loadKnowledge]);
 
   useEffect(() => {
     let alive = true;
@@ -327,7 +378,7 @@ export default function RagSettingsPage({
     return () => {
       alive = false;
     };
-  }, [loadEvaluation, loadKnowledge, activeView, knowledgeQuery]);
+  }, [loadEvaluation, loadKnowledge]);
 
   const updateConfig = useCallback((path, value) => {
     setConfig((current) => {
@@ -357,10 +408,15 @@ export default function RagSettingsPage({
       setStatus(payload);
       setConfig(payload.config);
       setNotice(rebuild ? "高级设置已保存，索引已重建。" : "高级设置已保存。");
-      if (rebuild) await loadKnowledge(activeView, knowledgeQuery);
+      if (rebuild) {
+        knowledgeCacheRef.current.clear();
+        setKnowledgeLoading(true);
+        await loadKnowledge(activeView, knowledgeQuery);
+      }
     } catch (err) {
       setError(err.message || "高级设置保存失败，请检查参数后重试。");
     } finally {
+      if (rebuild) setKnowledgeLoading(false);
       setSaving(false);
     }
   }, [activeView, config, fetchJson, knowledgeQuery, loadKnowledge]);
@@ -373,11 +429,14 @@ export default function RagSettingsPage({
       const payload = await fetchJson("/rag/reindex", { method: "POST" });
       setStatus(payload);
       setConfig(payload.config);
+      knowledgeCacheRef.current.clear();
+      setKnowledgeLoading(true);
       await loadKnowledge(activeView, knowledgeQuery);
       setNotice("索引已重建，证据地图已刷新。");
     } catch (err) {
       setError(err.message || "索引重建失败，请检查 embedding 配置和 API Key。");
     } finally {
+      setKnowledgeLoading(false);
       setReindexing(false);
     }
   }, [activeView, fetchJson, knowledgeQuery, loadKnowledge]);
@@ -422,8 +481,10 @@ export default function RagSettingsPage({
   }, [contextPayload, fetchJson, pinnedEvidences, question]);
 
   const applySearch = useCallback(() => {
-    setKnowledgeQuery(searchInput.trim());
-  }, [searchInput]);
+    const trimmed = searchInput.trim();
+    if (trimmed === knowledgeQuery) return;
+    setKnowledgeQuery(trimmed);
+  }, [knowledgeQuery, searchInput]);
 
   if (loading || !config) {
     return (
@@ -536,7 +597,9 @@ export default function RagSettingsPage({
                 {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
-            <Button onClick={applySearch}>检索</Button>
+            <Button onClick={applySearch} disabled={knowledgeLoading}>
+              {knowledgeLoading ? "检索中" : "检索"}
+            </Button>
           </div>
 
           <div className="sg-rag-source-meter" aria-label="知识源分布">
@@ -552,7 +615,16 @@ export default function RagSettingsPage({
             ))}
           </div>
 
-          <div className="sg-rag-evidence-browser" id="sg-rag-evidence-results">
+          <div
+            className={`sg-rag-evidence-browser ${knowledgeLoading ? "is-refreshing" : ""}`}
+            id="sg-rag-evidence-results"
+            aria-busy={knowledgeLoading ? "true" : "false"}
+          >
+            {knowledgeLoading && (
+              <div className="sg-rag-refresh-indicator" role="status">
+                正在刷新证据命中
+              </div>
+            )}
             <div className="sg-rag-evidence-list" aria-label="证据列表">
               {visibleEvidence.map((item) => (
                 <button

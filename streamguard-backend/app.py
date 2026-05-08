@@ -141,6 +141,7 @@ class CompareStreamsRequest(BaseModel):
     rooms: List[RoomInfo]
     user_profile: Optional[dict] = None
     stream_context: Optional[dict] = None   # { utterances: [...], chats: [...] }
+    data_source: Optional[str] = None
 
 
 class RegisterRequest(BaseModel):
@@ -1396,6 +1397,209 @@ def _build_dynamic_consumer_p0(best_name: str, overall_score: float, signals: di
         "must_verify": must_verify[:5],
         "consumer_summary": consumer_summary,
     }
+
+
+def _room_display_name(room) -> str:
+    return room.anchor_name or room.room_title or room.room_id or "候选直播间"
+
+
+def _score_to_percent(value) -> int:
+    return int(round(_clamp01(_safe_float(value, 0.0)) * 100))
+
+
+def _clean_report_list(value, fallback: list, limit: int = 4) -> list:
+    if not isinstance(value, list):
+        value = []
+    cleaned = []
+    for item in value:
+        text = str(item or "").strip()
+        if text:
+            cleaned.append(text[:180])
+        if len(cleaned) >= limit:
+            break
+    return cleaned or fallback[:limit]
+
+
+def _build_local_compare_report(keyword: str, rooms: list, products: list, signals: dict, evidence_stats: dict, data_source: str = "") -> dict:
+    best = products[0] if products else {}
+    confidence = round(_clamp01(_safe_float(best.get("overall"), 0.0) * 0.55 + evidence_stats.get("confidence", 0.0) * 0.45), 3)
+    viewer_total = sum(max(0, _safe_int(getattr(room, "viewer_count", 0), 0)) for room in rooms)
+    active_viewer_rooms = sum(1 for room in rooms if _safe_int(getattr(room, "viewer_count", 0), 0) > 0)
+    has_fallback_source = (data_source or "").lower() == "fallback"
+
+    if confidence >= 0.72 and not has_fallback_source:
+        verdict_label = "建议优先观察"
+    elif confidence >= 0.5:
+        verdict_label = "继续补证后观察"
+    else:
+        verdict_label = "暂缓判断"
+
+    recommendation_reasons = []
+    if best.get("name"):
+        recommendation_reasons.append(f"{best['name']} 在当前候选中综合分最高，为 {_score_to_percent(best.get('overall'))}%。")
+    if viewer_total > 0:
+        recommendation_reasons.append(f"已采集到 {active_viewer_rooms}/{len(rooms)} 个直播间的观看人数，总观看人数 {viewer_total}。")
+    if signals["fact_count"] > 0:
+        recommendation_reasons.append(f"实时话术中有 {signals['fact_count']} 条事实型表达，可作为继续核验的线索。")
+    if not recommendation_reasons:
+        recommendation_reasons.append("当前只有候选房间基础信息和有限上下文，建议先补齐观看人数、主播说明和弹幕反馈。")
+
+    risk_factors = []
+    if has_fallback_source:
+        risk_factors.append("当前搜索命中兜底数据源，不能当作真实直播间结论，需要先完成 Chrome 登录并重新搜索。")
+    if viewer_total == 0:
+        risk_factors.append("未采集到有效观看人数，无法判断直播间是否活跃或是否存在互动基础。")
+    if signals["high_risk_count"] > 0:
+        risk_factors.append(f"实时上下文包含 {signals['high_risk_count']} 条风险话术，需复核是否存在夸大、压迫式促销或绝对化表达。")
+    if signals["complaint_count"] or signals["doubt_count"]:
+        risk_factors.append(f"弹幕中出现 {signals['complaint_count']} 条客诉和 {signals['doubt_count']} 条质疑信号。")
+    if signals["utterance_count"] == 0 and signals["chat_count"] == 0:
+        risk_factors.append("本次对比没有实时话术和弹幕样本，模型只能依据直播间搜索结果做低置信分析。")
+    if not risk_factors:
+        risk_factors.append("暂未看到强风险信号，但仍需核验价格口径、检测报告、规格和售后政策。")
+
+    evidence_notes = [
+        f"关键词：{keyword}",
+        f"候选直播间：{len(rooms)} 个",
+        f"话术样本：{signals['utterance_count']} 条，弹幕样本：{signals['chat_count']} 条",
+        f"风险话术：{signals['high_risk_count']} 条，置信度：{_score_to_percent(evidence_stats.get('confidence'))}%",
+    ]
+    if data_source:
+        evidence_notes.append(f"搜索数据源：{data_source}")
+
+    return {
+        "summary": (
+            f"本次对比覆盖 {len(rooms)} 个候选直播间，当前建议为“{verdict_label}”。"
+            f"结论主要依据候选房间元数据、观看人数、推荐分、实时话术和弹幕样本生成。"
+        ),
+        "verdict_label": verdict_label,
+        "confidence": confidence,
+        "recommendation_reasons": recommendation_reasons[:4],
+        "risk_factors": risk_factors[:4],
+        "ask_anchor_questions": [
+            f"{keyword} 的检测报告、授权凭证或品牌资质是否可以现场展示？",
+            "当前直播间到手价、套餐规格、赠品数量分别是多少？",
+            "退换货政策、售后时效和质量问题举证方式是什么？",
+        ],
+        "alternatives": [
+            "前往品牌官方旗舰店或线下门店复核同款信息",
+            "在电商平台搜索同款，查看已购用户的详细评价和晒图",
+        ],
+        "buy_timing": "等主播能清楚展示商品细节、关键凭证和售后规则后再决策。",
+        "action_plan": [
+            "优先观察综合分最高的直播间",
+            "截图保存价格、规格、赠品和售后承诺",
+            "向主播追问关键凭证并等待明确回复",
+            "切到实时监测继续观察高风险话术",
+        ],
+        "evidence_notes": evidence_notes,
+        "source_limits": [
+            "未在输入中出现的数据不会被补写为事实",
+            "直播间搜索结果如果来自兜底源，需要重新获取真实结果",
+        ],
+        "used_llm": False,
+        "model": "",
+        "provider": "local",
+    }
+
+
+async def _generate_stream_compare_report(keyword: str, rooms: list, products: list, dimensions: list, signals: dict, evidence_stats: dict, data_source: str = "") -> dict:
+    fallback = _build_local_compare_report(keyword, rooms, products, signals, evidence_stats, data_source)
+    if not client_async or not LLM_API_KEY:
+        return {**fallback, "llm_reason": _LLM_DISABLED_REASON or "missing_llm_api_key_or_sdk"}
+
+    room_payload = [
+        {
+            "room_id": room.room_id,
+            "anchor_name": room.anchor_name,
+            "room_title": room.room_title,
+            "viewer_count": room.viewer_count,
+            "status": room.status,
+            "recommendation_score": room.recommendation_score,
+        }
+        for room in rooms
+    ]
+    model_input = {
+        "keyword": keyword,
+        "data_source": data_source or "unknown",
+        "rooms": room_payload,
+        "dimensions": dimensions,
+        "scored_products": products,
+        "evidence_stats": evidence_stats,
+        "stream_signals": {
+            "utterance_count": signals["utterance_count"],
+            "chat_count": signals["chat_count"],
+            "fact_count": signals["fact_count"],
+            "hype_count": signals["hype_count"],
+            "trap_count": signals["trap_count"],
+            "complaint_count": signals["complaint_count"],
+            "doubt_count": signals["doubt_count"],
+            "purchase_count": signals["purchase_count"],
+            "question_count": signals["question_count"],
+            "high_risk_samples": signals["high_risk_samples"],
+        },
+    }
+
+    system_prompt = """
+你是直播电商对比分析师，只能基于输入 JSON 生成分析报告。
+必须遵守：
+1. 只返回 JSON 对象，不要 Markdown。
+2. 不得虚构观看人数、价格、品牌、销量、检测报告、主播承诺、用户评价。
+3. 输入没有的数据要明确写“未采集到”或“需要追问”，不能编造。
+4. 如果 data_source 是 fallback，必须把“需要重新获取真实直播结果”写进 risk_factors 或 source_limits。
+5. 保留系统已给出的综合分和维度分，不要自行改分。
+6. 文风直接、可执行，适合监管/风控人员快速阅读。
+返回字段：
+{
+  "summary": "一段 60-120 字总结",
+  "verdict_label": "建议优先观察|继续补证后观察|暂缓判断",
+  "confidence": 0-1,
+  "recommendation_reasons": ["..."],
+  "risk_factors": ["..."],
+  "ask_anchor_questions": ["..."],
+  "alternatives": ["..."],
+  "buy_timing": "...",
+  "action_plan": ["..."],
+  "evidence_notes": ["..."],
+  "source_limits": ["..."]
+}
+"""
+    try:
+        resp = await client_async.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(model_input, ensure_ascii=False)},
+            ],
+            temperature=0.2,
+            max_tokens=1200,
+            response_format={"type": "json_object"},
+        )
+        parsed = _parse_json_object_from_model(resp.choices[0].message.content or "")
+        return {
+            **fallback,
+            "summary": str(parsed.get("summary") or fallback["summary"])[:260],
+            "verdict_label": str(parsed.get("verdict_label") or fallback["verdict_label"])[:24],
+            "confidence": round(_clamp01(_safe_float(parsed.get("confidence"), fallback["confidence"])), 3),
+            "recommendation_reasons": _clean_report_list(parsed.get("recommendation_reasons"), fallback["recommendation_reasons"], 4),
+            "risk_factors": _clean_report_list(parsed.get("risk_factors"), fallback["risk_factors"], 4),
+            "ask_anchor_questions": _clean_report_list(parsed.get("ask_anchor_questions"), fallback["ask_anchor_questions"], 4),
+            "alternatives": _clean_report_list(parsed.get("alternatives"), fallback["alternatives"], 3),
+            "buy_timing": str(parsed.get("buy_timing") or fallback["buy_timing"])[:220],
+            "action_plan": _clean_report_list(parsed.get("action_plan"), fallback["action_plan"], 5),
+            "evidence_notes": _clean_report_list(parsed.get("evidence_notes"), fallback["evidence_notes"], 6),
+            "source_limits": _clean_report_list(parsed.get("source_limits"), fallback["source_limits"], 4),
+            "used_llm": True,
+            "model": LLM_MODEL,
+            "provider": LLM_PROVIDER,
+            "llm_reason": "",
+        }
+    except Exception as e:
+        if _is_auth_error(e):
+            _disable_llm("invalid API key")
+        else:
+            print(f"[compare] LLM report fallback: {e}")
+        return {**fallback, "llm_reason": f"llm_report_failed: {str(e)[:120]}"}
 
 
 def _build_session_summary_response(utterances: list, chats: list, duration_seconds: int = 0, room_id: str = "") -> dict:
@@ -3248,6 +3452,7 @@ async def compare_streams(request: CompareStreamsRequest):
     keyword = request.keyword.strip()
     rooms = request.rooms
     stream_ctx = request.stream_context or {}
+    data_source = (request.data_source or "").strip()
 
     if not keyword or len(keyword) < 2:
         raise HTTPException(status_code=400, detail="关键词无效")
@@ -3269,11 +3474,13 @@ async def compare_streams(request: CompareStreamsRequest):
     room_count = max(1, len(rooms))
     for idx, room in enumerate(rooms):
         base = _safe_float(room.recommendation_score, 0.5)
+        viewer_count = max(0, _safe_int(room.viewer_count, 0))
+        activity_bonus = min(0.08, (viewer_count / 10000.0) * 0.08) if viewer_count > 0 else -0.08
         room_position_bonus = max(0.0, (room_count - idx - 1) * 0.015)
         price_score = _clamp01(base + 0.02 + room_position_bonus - signals["risk_ratio"] * 0.06)
         quality_score = _clamp01(base + 0.04 + signals["fact_ratio"] * 0.12 - signals["complaint_ratio"] * 0.05)
-        trust = _clamp01(base + signals["fact_ratio"] * 0.18 - signals["risk_ratio"] * 0.24 - signals["complaint_ratio"] * 0.18 - signals["doubt_ratio"] * 0.10)
-        logistics = _clamp01(base - signals["complaint_ratio"] * 0.08 + signals["purchase_ratio"] * 0.04)
+        trust = _clamp01(base + activity_bonus + signals["fact_ratio"] * 0.18 - signals["risk_ratio"] * 0.24 - signals["complaint_ratio"] * 0.18 - signals["doubt_ratio"] * 0.10)
+        logistics = _clamp01(base + max(activity_bonus, -0.04) - signals["complaint_ratio"] * 0.08 + signals["purchase_ratio"] * 0.04)
         value_score = _clamp01((price_score + quality_score + trust) / 3.0)
         scores = {
             "价格": round(price_score, 2),
@@ -3286,6 +3493,8 @@ async def compare_streams(request: CompareStreamsRequest):
         products.append({
             "name": room.anchor_name or room.room_title or room.room_id,
             "room_id": room.room_id,
+            "room_title": room.room_title,
+            "viewer_count": viewer_count,
             "scores": scores,
             "overall": overall,
         })
@@ -3294,9 +3503,17 @@ async def compare_streams(request: CompareStreamsRequest):
     ranked = [p["name"] for p in products]
     best = products[0]
     p0 = _build_dynamic_consumer_p0(best["name"], best["overall"], signals, keyword)
+    report = await _generate_stream_compare_report(keyword, rooms, products, dimensions, signals, evidence_stats, data_source)
     return {
         "keyword": keyword,
         "engine": "dynamic-streamguard",
+        "analysis_engine": {
+            "used_llm": bool(report.get("used_llm")),
+            "provider": report.get("provider") or LLM_PROVIDER,
+            "model": report.get("model") or LLM_MODEL,
+            "reason": report.get("llm_reason", ""),
+        },
+        "data_source": data_source or "unknown",
         "evidence_stats": evidence_stats,
         "p0": p0,
         "p1": {
@@ -3330,6 +3547,7 @@ async def compare_streams(request: CompareStreamsRequest):
                 "复核弹幕质疑点",
             ],
         },
+        "report": report,
     }
 
 @app.get("/consumer/search-products")

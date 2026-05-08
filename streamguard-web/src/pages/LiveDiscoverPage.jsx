@@ -206,11 +206,38 @@ function SkeletonCard({ index }) {
   );
 }
 
+function getViewerCount(room) {
+  const viewers = Number(room?.viewer_count || 0);
+  return Number.isFinite(viewers) && viewers > 0 ? viewers : 0;
+}
+
+function getReliableRecommendationScore(room) {
+  const rawScore = Number(room?.recommendation_score);
+  if (!Number.isFinite(rawScore) || rawScore <= 0) return null;
+  const score = normalizeScore(rawScore);
+  const viewers = getViewerCount(room);
+  if (!viewers && score === 70) return null;
+  return score;
+}
+
+function getViewerHeatScore(viewers) {
+  if (!viewers) return null;
+  return Math.max(12, Math.min(100, Math.round(30 + Math.log10(viewers + 1) * 16)));
+}
+
+function getRoomRankScore(room) {
+  const score = getReliableRecommendationScore(room);
+  if (score !== null) return score;
+  return getViewerHeatScore(getViewerCount(room)) || 0;
+}
+
 function DiscoverRoomCard({ room, index, selected, onToggle, onConnect }) {
   const roomName = room.anchor_name || room.room_title || room.room_id || "未命名直播间";
   const roomTitle = room.room_title || "暂无直播标题";
-  const score = normalizeScore(room.recommendation_score);
-  const viewers = Number(room.viewer_count || 0);
+  const score = getReliableRecommendationScore(room);
+  const viewers = getViewerCount(room);
+  const heatScore = getViewerHeatScore(viewers);
+  const signalScore = score ?? heatScore;
   const cover = room.thumbnail_url || "";
 
   return (
@@ -254,11 +281,11 @@ function DiscoverRoomCard({ room, index, selected, onToggle, onConnect }) {
         <div className="sg-discover-room-stats">
           <div>
             <span>推荐匹配</span>
-            <strong>{score}%</strong>
+            <strong className={score === null ? "is-muted" : undefined}>{score === null ? "待评估" : `${score}%`}</strong>
           </div>
           <div>
             <span>直播热度</span>
-            <strong>{formatNumber(viewers)}</strong>
+            <strong className={!viewers ? "is-muted" : undefined}>{viewers ? formatNumber(viewers) : "待抓取"}</strong>
           </div>
           <div>
             <span>房间状态</span>
@@ -266,9 +293,14 @@ function DiscoverRoomCard({ room, index, selected, onToggle, onConnect }) {
           </div>
         </div>
 
-        <div className="sg-discover-room-scorebar" aria-hidden="true">
-          <span style={{ width: `${Math.max(score, 6)}%` }} />
-        </div>
+        {signalScore !== null && (
+          <div
+            className={`sg-discover-room-scorebar ${score === null ? "is-heat" : ""}`}
+            aria-label={score === null ? `直播热度 ${formatNumber(viewers)}` : `推荐匹配 ${score}%`}
+          >
+            <span style={{ width: `${Math.max(signalScore, 6)}%` }} />
+          </div>
+        )}
 
         <div className="sg-discover-room-meta">
           <span>{viewers ? `${formatNumber(viewers)} 人围观` : "实时围观数据待抓取"}</span>
@@ -286,6 +318,158 @@ function DiscoverRoomCard({ room, index, selected, onToggle, onConnect }) {
   );
 }
 
+function toPercent(value) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 0;
+  return Math.round(Math.max(0, Math.min(1, next)) * 100);
+}
+
+function normalizeList(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : [];
+}
+
+function formatViewerCount(value) {
+  const next = Number(value || 0);
+  if (!Number.isFinite(next) || next <= 0) return "未采集";
+  if (next >= 10000) return `${(next / 10000).toFixed(1)}万`;
+  return next.toLocaleString("zh-CN");
+}
+
+function CompareReportModal({ comparison, onClose }) {
+  const report = comparison?.report || {};
+  const products = comparison?.p1?.products || [];
+  const dimensions = comparison?.p1?.compare_dimensions || [];
+  const evidence = comparison?.evidence_stats || {};
+  const engine = comparison?.analysis_engine || {};
+  const ranked = comparison?.p1?.ranked || products.map((product) => product.name).filter(Boolean);
+  const confidence = toPercent(report.confidence ?? evidence.confidence ?? 0);
+  const sourceLimits = normalizeList(report.source_limits);
+
+  return (
+    <div className="sg-compare-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className="sg-compare-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sg-compare-modal-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="sg-compare-modal-head">
+          <div>
+            <div className="sg-ui-eyebrow">COMPARE REPORT</div>
+            <h2 id="sg-compare-modal-title">跨直播间对比分析</h2>
+            <p>
+              关键词：{comparison?.keyword || "未填写"} · 话术 {evidence.utterance_count || 0} 条 · 弹幕 {evidence.chat_count || 0} 条
+            </p>
+          </div>
+          <button className="sg-compare-modal-close" type="button" onClick={onClose} aria-label="关闭对比分析报告">
+            ×
+          </button>
+        </header>
+
+        <div className="sg-compare-modal-body">
+          <section className="sg-compare-summary-grid">
+            <article className="sg-compare-verdict">
+              <span>综合结论</span>
+              <strong>{report.verdict_label || "继续补证后观察"}</strong>
+              <em>置信度 {confidence}%</em>
+            </article>
+            <article className="sg-compare-panel is-positive">
+              <h3>推荐理由</h3>
+              <ul>
+                {normalizeList(report.recommendation_reasons).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </article>
+            <article className="sg-compare-panel is-risk">
+              <h3>谨慎因素</h3>
+              <ul>
+                {normalizeList(report.risk_factors).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </article>
+          </section>
+
+          <section className="sg-compare-table-wrap" aria-label="直播间维度对比">
+            <h3>直播间维度对比</h3>
+            <div className="sg-compare-table">
+              <div className="sg-compare-table-row is-head">
+                <span>直播间</span>
+                {dimensions.map((dimension) => <span key={dimension}>{dimension}</span>)}
+                <span>综合分</span>
+              </div>
+              {products.map((product) => (
+                <div className="sg-compare-table-row" key={product.room_id || product.name}>
+                  <span>
+                    <strong>{product.name || product.room_id || "候选直播间"}</strong>
+                    <em>{product.room_title || `观看人数：${formatViewerCount(product.viewer_count)}`}</em>
+                  </span>
+                  {dimensions.map((dimension) => (
+                    <span className="sg-compare-score" key={`${product.room_id || product.name}-${dimension}`}>
+                      <i style={{ "--score": `${toPercent(product.scores?.[dimension])}%` }} />
+                      <b>{toPercent(product.scores?.[dimension])}%</b>
+                    </span>
+                  ))}
+                  <span className="sg-compare-score is-overall">
+                    <i style={{ "--score": `${toPercent(product.overall)}%` }} />
+                    <b>{toPercent(product.overall)}%</b>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {ranked.length > 0 && (
+            <section className="sg-compare-ranking">
+              <h3>推荐顺序</h3>
+              <div>
+                {ranked.map((item, index) => (
+                  <span key={`${item}-${index}`}>{index + 1}. {item}</span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="sg-compare-detail-grid">
+            <article className="sg-compare-panel">
+              <h3>向主播的关键问题</h3>
+              <ul>
+                {normalizeList(report.ask_anchor_questions).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </article>
+            <article className="sg-compare-panel">
+              <h3>替代方案</h3>
+              <ul>
+                {normalizeList(report.alternatives).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </article>
+            <article className="sg-compare-panel is-timing">
+              <h3>最佳下单时机</h3>
+              <p>{report.buy_timing || "等关键凭证、价格口径和售后规则都明确后再决策。"}</p>
+            </article>
+            <article className="sg-compare-panel is-plan">
+              <h3>行动计划</h3>
+              <ul>
+                {normalizeList(report.action_plan).map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </article>
+          </section>
+
+          <footer className="sg-compare-evidence">
+            <div>
+              <strong>证据来源</strong>
+              <span>{normalizeList(report.evidence_notes).join(" · ") || "未采集到足够证据"}</span>
+            </div>
+            <div>
+              <strong>{engine.used_llm ? "大模型分析" : "本地保守分析"}</strong>
+              <span>{engine.used_llm ? `${engine.provider || "llm"} / ${engine.model || "model"}` : (engine.reason || "未配置可用大模型")}</span>
+            </div>
+            {sourceLimits.length > 0 && <p>{sourceLimits.join("；")}</p>}
+          </footer>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function LiveDiscoverPage({
   apiBase = "http://localhost:8011",
   onConnectRoom,
@@ -299,6 +483,7 @@ export default function LiveDiscoverPage({
   const [searchResult, setSearchResult] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [comparison, setComparison] = useState(null);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
   const [cookieStatus, setCookieStatus] = useState(null);
   const [cookiePreview, setCookiePreview] = useState([]);
   const [cookieLoading, setCookieLoading] = useState(false);
@@ -314,7 +499,7 @@ export default function LiveDiscoverPage({
   const featuredRoom = useMemo(() => {
     if (!rooms.length) return null;
     return rooms.reduce((best, room) => (
-      normalizeScore(room.recommendation_score) > normalizeScore(best?.recommendation_score) ? room : best
+      getRoomRankScore(room) > getRoomRankScore(best) ? room : best
     ), rooms[0]);
   }, [rooms]);
 
@@ -353,6 +538,7 @@ export default function LiveDiscoverPage({
     setError("");
     setStatusMessage("正在连接直播搜索服务，请稍候。");
     setComparison(null);
+    setComparisonOpen(false);
 
     try {
       const data = await requestJson(
@@ -393,6 +579,7 @@ export default function LiveDiscoverPage({
         body: {
           keyword: query.trim(),
           rooms: selectedRooms,
+          data_source: searchResult?.data_source || "unknown",
           stream_context: {
             utterances: utterances.slice(0, 60).map((u) => ({ text: u.text, type: u.type, score: u.score })),
             chats: chatMessages.slice(0, 100).map((c) => ({ text: c.text, intent: c.intent, sentiment: c.sentiment })),
@@ -400,6 +587,7 @@ export default function LiveDiscoverPage({
         },
       });
       setComparison(data);
+      setComparisonOpen(true);
       setStatusMessage("对比报告已更新，可以继续切换直播间进入实时监测。");
     } catch (err) {
       setError(err?.message || "对比失败，请稍后重试。");
@@ -581,7 +769,11 @@ export default function LiveDiscoverPage({
             </div>
             <div>
               <span>最高匹配</span>
-              <strong>{normalizeScore(featuredRoom.recommendation_score)}%</strong>
+              <strong>
+                {getReliableRecommendationScore(featuredRoom) === null
+                  ? "待评估"
+                  : `${getReliableRecommendationScore(featuredRoom)}%`}
+              </strong>
             </div>
           </div>
         </section>
@@ -613,18 +805,19 @@ export default function LiveDiscoverPage({
       {comparison && (
         <Panel className="sg-discover-comparison" title="对比结论" eyebrow="COMPARE">
           <div className="sg-discover-comparison-copy">
-            <p>{comparison?.p0?.summary || comparison?.p0?.conclusion || "已生成对比结论。"}</p>
+            <p>{comparison?.report?.summary || comparison?.p0?.consumer_summary || "已生成对比结论。"}</p>
           </div>
-          <div className="sg-discover-compare-grid">
-            {(comparison?.p1?.products || []).map((product, index) => (
-              <article key={product.room_id || product.name || index} className="sg-discover-compare-card">
-                <span className="mono">#{String(index + 1).padStart(2, "0")}</span>
-                <strong>{product.name || product.room_id || "候选直播间"}</strong>
-                <em>{product.overall || "综合评价待生成"}</em>
-              </article>
-            ))}
+          <div className="sg-discover-comparison-actions">
+            <StatusBadge tone={comparison?.analysis_engine?.used_llm ? "success" : "warning"}>
+              {comparison?.analysis_engine?.used_llm ? "LLM 已分析" : "本地保守分析"}
+            </StatusBadge>
+            <Button variant="primary" onClick={() => setComparisonOpen(true)}>查看完整报告</Button>
           </div>
         </Panel>
+      )}
+
+      {comparisonOpen && comparison && (
+        <CompareReportModal comparison={comparison} onClose={() => setComparisonOpen(false)} />
       )}
 
       {!searching && !rooms.length && !hasQuery && (

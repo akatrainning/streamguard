@@ -2,7 +2,7 @@ import json
 import os
 import re
 import time
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -331,6 +331,8 @@ class RAGPipeline:
         self.embedding_docs: List[Dict[str, Any]] = []
         self.embedding_pending_updates = 0
         self.embedding_status = self._embedding_status("not_built")
+        self._knowledge_docs_cache: Optional[List[Dict[str, Any]]] = None
+        self._tfidf_search_cache: Dict[Tuple[str, ...], Tuple[TfidfVectorizer, Any, List[Dict[str, Any]]]] = {}
         self.claim_cases = self.load_claim_cases()
         self.evidence_db = self.load_evidence_db()
         self.fetched_texts = self.load_fetched_texts()
@@ -380,6 +382,7 @@ class RAGPipeline:
         return cases
 
     def rebuild_vector_spaces(self, rebuild_embedding: bool = True) -> None:
+        self._invalidate_knowledge_cache()
         all_texts = [case.get("current_utterance", "") for case in self.claim_cases]
         all_texts += [ev.get("content", "") for ev in self.evidence_db]
         all_texts += [ft.get("content", "") for ft in self.fetched_texts]
@@ -399,6 +402,10 @@ class RAGPipeline:
         )
         if rebuild_embedding:
             self.rebuild_embedding_index()
+
+    def _invalidate_knowledge_cache(self) -> None:
+        self._knowledge_docs_cache = None
+        self._tfidf_search_cache = {}
 
     def get_public_status(self) -> Dict[str, Any]:
         docs = self._build_embedding_documents()
@@ -420,7 +427,7 @@ class RAGPipeline:
         docs = self._build_embedding_documents()
         sources = VIEW_SOURCES.get(view, VIEW_SOURCES["combined"])
         if query.strip():
-            hits = self._search_documents(query, docs, sources=sources, limit=limit)
+            hits = self._tfidf_search_documents(query, docs, sources=sources, limit=limit)
         else:
             weights = self.config.get("source_weights", {})
             hits = [
@@ -653,6 +660,9 @@ class RAGPipeline:
         return OpenAI(**kwargs)
 
     def _build_embedding_documents(self) -> List[Dict[str, Any]]:
+        if self._knowledge_docs_cache is not None:
+            return self._knowledge_docs_cache
+
         docs: List[Dict[str, Any]] = []
         for case in self.claim_cases:
             content = case.get("current_utterance", "").strip()
@@ -675,6 +685,7 @@ class RAGPipeline:
             content = "\n".join([case.get("risk_type", ""), case.get("summary", ""), case.get("lesson", ""), case.get("content", "")]).strip()
             if content:
                 docs.append(self._doc("historical_case", case.get("case_id", f"historical_case_{len(docs)}"), case.get("title", "历史案例"), content, case, case.get("related_claim_types", []), 0.75))
+        self._knowledge_docs_cache = docs
         return docs
 
     def _doc(self, source: str, doc_id: str, title: str, content: str, meta: Dict[str, Any], related: List[str], score: float) -> Dict[str, Any]:
@@ -708,13 +719,23 @@ class RAGPipeline:
         sources: Optional[Set[str]] = None,
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
-        scoped_docs = [doc for doc in docs if not sources or doc["source"] in sources]
+        cache_key = tuple(sorted(sources or ["__all__"]))
+        cached = self._tfidf_search_cache.get(cache_key)
+        if cached:
+            vectorizer, matrix, scoped_docs = cached
+        else:
+            scoped_docs = [doc for doc in docs if not sources or doc["source"] in sources]
+            if scoped_docs:
+                vectorizer = TfidfVectorizer(max_features=1200, stop_words="english")
+                matrix = vectorizer.fit_transform([doc.get("content", "") for doc in scoped_docs])
+                self._tfidf_search_cache[cache_key] = (vectorizer, matrix, scoped_docs)
+            else:
+                vectorizer = None
+                matrix = None
         if not query.strip() or not scoped_docs:
             return []
 
         weights = self.config.get("source_weights", {})
-        vectorizer = TfidfVectorizer(max_features=1200, stop_words="english")
-        matrix = vectorizer.fit_transform([doc.get("content", "") for doc in scoped_docs])
         similarities = cosine_similarity(vectorizer.transform([query]), matrix)[0]
         hits = []
         for doc, similarity in zip(scoped_docs, similarities):

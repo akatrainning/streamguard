@@ -33,6 +33,99 @@ def _normalize_room_title(title: str, anchor_name: str = "") -> str:
         return clean
     return f"{anchor_name}的直播间" if anchor_name else "直播间"
 
+
+_VIEWER_COUNT_KEYS = {
+    "viewer_count",
+    "view_count",
+    "watch_count",
+    "live_watch_count",
+    "online_user_count",
+    "room_user_count",
+    "user_count",
+    "total_user_count",
+    "audience_count",
+    "popularity",
+    "hot_score",
+    "heat",
+}
+
+_VIEWER_TEXT_MARKERS = (
+    "\u4e07",
+    "\u5728\u770b",
+    "\u4eba\u6c14",
+    "\u89c2\u770b",
+    "\u56f4\u89c2",
+    "viewer",
+    "watching",
+    "online",
+)
+
+
+def _parse_viewer_count(value, allow_plain_number: bool = False) -> int:
+    """Parse a live-room viewer/heat count without treating IDs as counts."""
+    if isinstance(value, bool) or value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    if isinstance(value, dict):
+        for key in ("count", "value", "user_count", "viewer_count", "text", "display_text"):
+            parsed = _parse_viewer_count(value.get(key), allow_plain_number=True)
+            if parsed:
+                return parsed
+        return 0
+    if isinstance(value, list):
+        return max((_parse_viewer_count(item, allow_plain_number=allow_plain_number) for item in value), default=0)
+    if not isinstance(value, str):
+        return 0
+
+    text = value.strip().replace(",", "")
+    if not text:
+        return 0
+
+    lower = text.lower()
+    if not allow_plain_number and not any(marker in lower for marker in _VIEWER_TEXT_MARKERS):
+        return 0
+
+    match = re.search(r"(\d+(?:\.\d+)?)", text)
+    if not match:
+        return 0
+    number = float(match.group(1))
+    if "\u4e07" in text or lower.endswith("w"):
+        number *= 10_000
+    elif lower.endswith("k"):
+        number *= 1_000
+    return max(0, int(number))
+
+
+def _extract_viewer_count_from_tree(node, depth: int = 0) -> int:
+    if depth > 5 or node is None:
+        return 0
+    if isinstance(node, dict):
+        for key, value in node.items():
+            key_text = str(key).lower()
+            if key_text in _VIEWER_COUNT_KEYS:
+                parsed = _parse_viewer_count(value, allow_plain_number=True)
+                if parsed:
+                    return parsed
+        for value in node.values():
+            parsed = _extract_viewer_count_from_tree(value, depth + 1)
+            if parsed:
+                return parsed
+    elif isinstance(node, list):
+        for item in node:
+            parsed = _extract_viewer_count_from_tree(item, depth + 1)
+            if parsed:
+                return parsed
+    elif isinstance(node, str):
+        return _parse_viewer_count(node)
+    return 0
+
+
+def _score_from_viewer_count(viewer_count: int) -> Optional[float]:
+    if viewer_count <= 0:
+        return None
+    return round(0.5 + min(viewer_count / 100_000, 0.45), 2)
+
 # ---------------------------------------------------------------------------
 # 常量
 # ---------------------------------------------------------------------------
@@ -176,7 +269,7 @@ def _parse_room_from_item(item: dict) -> Optional[dict]:
         "viewer_count": viewer_count,
         "thumbnail_url": thumbnail_url,
         "status": "living",
-        "recommendation_score": round(0.5 + min(viewer_count / 100_000, 0.45), 2),
+        "recommendation_score": _score_from_viewer_count(viewer_count),
     }
 
 
@@ -448,14 +541,15 @@ def _search_via_cdp(keyword: str, max_results: int) -> list:
                         or (f"{nickname}的直播间" if nickname else "直播间")
                     )
                     title = _normalize_room_title(title, nickname)
+                    viewer_count = _extract_viewer_count_from_tree((lives, author, item))
                     rooms.append({
                         "room_id": room_id,
                         "anchor_name": nickname,
                         "room_title": title[:80],
-                        "viewer_count": 0,
+                        "viewer_count": viewer_count,
                         "thumbnail_url": thumbnail,
                         "status": "living",
-                        "recommendation_score": 0.70,
+                        "recommendation_score": _score_from_viewer_count(viewer_count),
                     })
                 nil_info = data.get("search_nil_info", {})
                 if nil_info and nil_info.get("search_nil_type") == "verify_check":
@@ -1785,9 +1879,7 @@ def _search_via_selenium(keyword: str, max_results: int, timeout_sec: int = 30) 
                             "viewer_count": viewer_count,
                             "thumbnail_url": item.get("img", ""),
                             "status": "living",
-                            "recommendation_score": round(
-                                0.5 + min(viewer_count / 100_000, 0.45), 2
-                            ),
+                            "recommendation_score": _score_from_viewer_count(viewer_count),
                         })
                         print(f"[search-selenium]   DOM: [{rid}] {anchor_name} | {room_title[:20]}")
             except Exception as e:
