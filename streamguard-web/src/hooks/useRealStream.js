@@ -112,6 +112,21 @@ function normalizeUtteranceMessage(msg) {
   };
 }
 
+function buildDouyinAccessIssue(msg = {}) {
+  const title = msg.page_title || "";
+  const url = msg.page_url || "";
+  return {
+    type: "auth_required",
+    code: msg.code || "douyin_auth_required",
+    title: "\u9700\u8981\u4eba\u5de5\u9a8c\u8bc1",
+    message: "\u6296\u97f3\u8fd4\u56de\u4e86\u9a8c\u8bc1\u9875\uff0c\u5b8c\u6210\u9a8c\u8bc1\u6216\u767b\u5f55\u540e\u518d\u91cd\u8fde\u76f4\u64ad\u95f4\u3002",
+    detail: title ? `Page loaded: ${title}` : (msg.message || ""),
+    pageTitle: title,
+    pageUrl: url,
+    actionLabel: "\u6253\u5f00\u9a8c\u8bc1\u7a97\u53e3",
+  };
+}
+
 export function useRealStream({
   mode = "douyin",
   roomId = "",
@@ -138,6 +153,7 @@ export function useRealStream({
   const [statusLog,        setStatusLog]        = useState([]);
   const [reconnectToken,   setReconnectToken]   = useState(0);
   const [mediaUrl,         setMediaUrl]         = useState(undefined);
+  const [accessIssue,      setAccessIssue]      = useState(null);
   const [roomIdentity,     setRoomIdentity]     = useState({
     roomTitle: "",
     anchorName: "",
@@ -152,6 +168,7 @@ export function useRealStream({
   const reconnectTimerRef = useRef(null);
   const backoffRef  = useRef(1000);   // 鍒濆1s锛屾寚鏁板闀胯嚦30s
   const heartbeatRef = useRef(null);  // 蹇冭烦瀹氭椂鍣?
+  const shouldReconnectRef = useRef(true);
   isPausedRef.current = isPaused;
 
   const pushLog = useCallback((line) => {
@@ -170,6 +187,8 @@ export function useRealStream({
     setConnecting(true);
     setError(null);
     setMediaUrl(undefined);
+    setAccessIssue(null);
+    shouldReconnectRef.current = true;
     setRoomIdentity({
       roomTitle: "",
       anchorName: "",
@@ -220,6 +239,22 @@ export function useRealStream({
         // backend confirmed connection to live room
         if (msg.message) pushLog(msg.message);
         console.log("[StreamGuard] status:", msg.message);
+        return;
+      }
+
+      if (msg.event === "auth_required") {
+        const issue = buildDouyinAccessIssue(msg);
+        shouldReconnectRef.current = false;
+        setAccessIssue(issue);
+        setError(issue.message);
+        setConnected(false);
+        setConnecting(false);
+        setMediaUrl(null);
+        pushLog(`${issue.title}: ${issue.detail || issue.message}`);
+        if (wsRef.current === ws) {
+          ws.onclose = null;
+          ws.close();
+        }
         return;
       }
 
@@ -347,7 +382,7 @@ export function useRealStream({
       clearTimeout(heartbeatRef.current);
       setConnected(false);
       setConnecting(false);
-      if (enabled && wsRef.current === ws) {
+      if (enabled && wsRef.current === ws && shouldReconnectRef.current) {
         const delay = backoffRef.current;
         backoffRef.current = Math.min(delay * 2, 30000); // 鏈€闀?0s
         pushLog(`websocket closed, retry in ${(delay/1000).toFixed(1)}s`);
@@ -389,6 +424,7 @@ export function useRealStream({
     setSessionStats(EMPTY_STATS);
     setMessageTotals({ utterances: 0, chats: 0, total: 0 });
     setMediaUrl(undefined);
+    setAccessIssue(null);
     setRoomIdentity({
       roomTitle: "",
       anchorName: "",
@@ -399,6 +435,9 @@ export function useRealStream({
 
   const reconnectNow = useCallback(() => {
     backoffRef.current = 1000; // 鎵嬪姩閲嶈繛閲嶇疆backoff
+    shouldReconnectRef.current = true;
+    setAccessIssue(null);
+    setError(null);
     pushLog("manual reconnect requested");
     setReconnectToken(v => v + 1);
   }, [pushLog]);
@@ -414,6 +453,7 @@ export function useRealStream({
     }
     setConnected(false);
     setConnecting(false);
+    shouldReconnectRef.current = false;
     pushLog("session ended by user");
   }, [pushLog]);
 
@@ -443,6 +483,7 @@ export function useRealStream({
     recentLimits: { utterances: recentUtteranceLimit, chats: recentChatLimit },
     connected, connecting, error,
     lastMessageAt, connectionAttempts, statusLog, reconnectNow, disconnect,
+    accessIssue,
     mediaUrl,
     roomTitle: roomIdentity.roomTitle,
     anchorName: roomIdentity.anchorName,

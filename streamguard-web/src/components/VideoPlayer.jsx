@@ -83,7 +83,9 @@ export default function VideoPlayer({
   mediaUrl: discoveredMediaUrl,
   isConnecting = false,
   connectionError = null,
+  accessIssue = null,
   onReconnect,
+  onAuthorizeDouyin,
 }) {
   const roomId = extractRoomId(roomIdRaw || "");
   const apiBase = resolveApiBase(wsBase);
@@ -287,9 +289,9 @@ export default function VideoPlayer({
     wasVisibleRef.current = isVisible;
   }, [isVisible]);
 
-  const displayError = !roomId
+  const displayError = accessIssue?.message || (!roomId
     ? "请输入有效的直播间 ID"
-    : connectionError || playbackError || (discoveredMediaUrl === null ? "未能发现可播放的直播流" : null);
+    : connectionError || playbackError || (discoveredMediaUrl === null ? "未能发现可播放的直播流" : null));
 
   return (
     <section

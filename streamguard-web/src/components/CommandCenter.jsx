@@ -10,6 +10,7 @@ export default function CommandCenter({
   messageTotals,
   recentLimits,
   onReconnect,
+  onAuthorizeDouyin,
 }) {
   const logScrollRef = useRef(null);
   const didInitScrollRef = useRef(false);
@@ -79,8 +80,11 @@ export default function CommandCenter({
     URL.revokeObjectURL(url);
   };
 
-  const statusTone = connection.connected ? "success" : connection.connecting ? "warning" : "danger";
+  const accessIssue = connection.accessIssue;
+  const statusTone = accessIssue ? "warning" : connection.connected ? "success" : connection.connecting ? "warning" : "danger";
   const statusText = connection.connected ? "已连接" : connection.connecting ? "连接中" : "未连接";
+
+  const displayStatusText = accessIssue ? "需要验证" : statusText;
 
   return (
     <Panel
@@ -89,7 +93,12 @@ export default function CommandCenter({
       eyebrow="Operations"
       actions={(
         <>
-          <StatusBadge tone={statusTone}>{statusText}</StatusBadge>
+          <StatusBadge tone={statusTone}>{displayStatusText}</StatusBadge>
+          {accessIssue && (
+            <Button onClick={onAuthorizeDouyin} disabled={connection.authLaunching}>
+              {connection.authLaunching ? "打开中" : (accessIssue.actionLabel || "打开验证")}
+            </Button>
+          )}
           <Button onClick={onReconnect}>重连</Button>
           <Button onClick={exportSnapshot} variant="primary">导出快照</Button>
         </>
@@ -100,7 +109,7 @@ export default function CommandCenter({
         <div className="sg-command-connection">
           <div className="sg-command-connection-copy">
             <span>WebSocket pipeline</span>
-            <strong>{statusText}</strong>
+            <strong>{displayStatusText}</strong>
             <p>
               {connection.connected
                 ? `最近消息 ${lastSeen}，直播间数据正在进入审查管线。`
@@ -113,6 +122,19 @@ export default function CommandCenter({
             <KV k="最近消息" v={lastSeen} mono />
             <KV k="尝试次数" v={connection.connectionAttempts ?? 0} mono />
           </div>
+          {accessIssue && (
+            <div className="sg-command-access">
+              <strong>{accessIssue.title}</strong>
+              <span>{accessIssue.message}</span>
+              {accessIssue.detail && <em>{accessIssue.detail}</em>}
+              <div>
+                <Button onClick={onAuthorizeDouyin} variant="primary" disabled={connection.authLaunching}>
+                  {connection.authLaunching ? "正在打开验证窗口" : "打开浏览器验证"}
+                </Button>
+                <Button onClick={onReconnect}>验证后重连</Button>
+              </div>
+            </div>
+          )}
           {connection.error && <div className="sg-command-error">{connection.error}</div>}
         </div>
 

@@ -54,6 +54,7 @@ export default function DataSourceSelector({ onSelect, onConnect, variant = "mod
     if (!roomInput.trim()) return { tone: "idle", label: "WAITING", value: "输入直播间" };
     if (!roomId) return { tone: "warn", label: "NO ID", value: "未识别房间号" };
     if (probeLoading) return { tone: "scan", label: "SCANNING", value: roomId };
+    if (probeData?.auth_required) return { tone: "warn", label: "VERIFY", value: "需要人工验证" };
     if (probeData?.error) return { tone: "error", label: "OFFLINE", value: probeData.error };
     if (probeData) return { tone: "ready", label: "READY", value: probeData.room_id || roomId };
     return { tone: "idle", label: "READY", value: roomId };

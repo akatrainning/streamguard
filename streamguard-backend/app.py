@@ -1943,6 +1943,48 @@ _media_url_cache: dict[str, tuple[str, float]] = {}   # room_id -> (url, expire_
 _MEDIA_URL_TTL = 900  # seconds
 
 
+class DouyinAuthRequiredError(RuntimeError):
+    def __init__(self, room_id: str, title: str = "", url: str = ""):
+        self.room_id = room_id
+        self.title = title or ""
+        self.url = url or ""
+        super().__init__("Douyin manual verification is required")
+
+
+def _looks_like_douyin_auth_challenge(title: str = "", url: str = "") -> bool:
+    text = f"{title or ''} {url or ''}".lower()
+    markers = (
+        "captcha",
+        "verify",
+        "security",
+        "sec.douyin",
+        "login.douyin",
+        "\u9a8c\u8bc1\u7801",
+        "\u5b89\u5168\u9a8c\u8bc1",
+        "\u4e2d\u95f4\u9875",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _douyin_auth_required_payload(room_id: str, title: str = "", url: str = "") -> dict:
+    return {
+        "event": "auth_required",
+        "status": "blocked",
+        "code": "douyin_auth_required",
+        "room_id": room_id,
+        "page_title": title or "",
+        "page_url": url or "",
+        "message": (
+            "Douyin returned a verification page. Open the manual verification "
+            "browser, complete the captcha or login, then reconnect this room."
+        ),
+    }
+
+
+def _douyin_auth_required_payload_from_error(exc: DouyinAuthRequiredError) -> dict:
+    return _douyin_auth_required_payload(exc.room_id, exc.title, exc.url)
+
+
 
 def _clean_room_identity_text(value: str) -> str:
     text = html.unescape((value or "").strip())
@@ -2146,6 +2188,15 @@ def _discover_douyin_room_identity_via_browser(room_id: str, timeout_sec: int = 
             except TimeoutException:
                 pass
 
+            try:
+                page_title = driver.title
+                page_url = driver.current_url
+            except Exception:
+                page_title = ""
+                page_url = target
+            if _looks_like_douyin_auth_challenge(page_title, page_url):
+                raise DouyinAuthRequiredError(room_id, page_title, page_url)
+
             start = time.time()
             while time.time() - start < timeout_sec:
                 page_source = driver.page_source or ""
@@ -2239,13 +2290,20 @@ async def _resolve_douyin_room_identity(room_id: str) -> dict:
     return _merge_room_identity(identity, browser_identity)
 
 
-def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[str]:
+def _discover_douyin_media_url(
+    room_id: str,
+    timeout_sec: int = 20,
+    *,
+    force_refresh: bool = False,
+) -> Optional[str]:
     """Open Douyin room and detect candidate media URL (m3u8/flv) from CDP logs."""
     # Reuse a recent discovery result before starting Chrome again.
-    cached = _media_url_cache.get(room_id)
+    cached = None if force_refresh else _media_url_cache.get(room_id)
     if cached and time.time() < cached[1]:
         print(f"[media-url] cache hit, skipping Chrome startup: {cached[0][:60]}...")
         return cached[0]
+    if force_refresh:
+        _media_url_cache.pop(room_id, None)
 
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
@@ -2308,6 +2366,15 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
             except TimeoutException:
                 pass
 
+            try:
+                page_title = driver.title
+                page_url = driver.current_url
+            except Exception:
+                page_title = ""
+                page_url = target
+            if _looks_like_douyin_auth_challenge(page_title, page_url):
+                raise DouyinAuthRequiredError(room_id, page_title, page_url)
+
             start = time.time()
             while time.time() - start < timeout_sec:
                 try:
@@ -2343,7 +2410,9 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
                                 break
                     if not result_url:
                         result_url = candidates[-1]
-                    _media_url_cache[room_id] = (result_url, time.time() + _MEDIA_URL_TTL)
+                    # Douyin CDN playback URLs are signed and can expire quickly.
+                    # Keep the cache short so ffmpeg does not keep retrying a stale URL.
+                    _media_url_cache[room_id] = (result_url, time.time() + min(_MEDIA_URL_TTL, 180))
                     return result_url
 
                 time.sleep(0.4)
@@ -2375,6 +2444,14 @@ def _discover_douyin_media_url(room_id: str, timeout_sec: int = 20) -> Optional[
     return None
 
 
+def _invalidate_media_url_cache(room_id: str, url: Optional[str] = None) -> None:
+    cached = _media_url_cache.get(room_id)
+    if not cached:
+        return
+    if url is None or cached[0] == url:
+        _media_url_cache.pop(room_id, None)
+
+
 def _get_ffmpeg_bin() -> str:
     """
     Resolve an ffmpeg binary path.
@@ -2399,7 +2476,49 @@ def _get_ffmpeg_bin() -> str:
     )
 
 
-def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
+def _douyin_ffmpeg_input_args(stream_url: str, room_id: Optional[str] = None) -> list[str]:
+    referer = f"https://live.douyin.com/{room_id}" if room_id else "https://live.douyin.com/"
+    user_agent = (
+        os.getenv("DOUYIN_FFMPEG_USER_AGENT")
+        or _MEDIA_PROXY_HEADERS.get("User-Agent")
+        or "Mozilla/5.0"
+    )
+    headers = {
+        "Accept": "*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Origin": "https://live.douyin.com",
+        "Referer": referer,
+    }
+    cookie = os.getenv("DOUYIN_FFMPEG_COOKIE", "").strip()
+    if cookie:
+        headers["Cookie"] = cookie
+
+    header_blob = "".join(f"{key}: {value}\r\n" for key, value in headers.items())
+    args = [
+        "-hide_banner",
+        "-loglevel", "warning",
+        "-rw_timeout", str(int(float(os.getenv("DOUYIN_FFMPEG_RW_TIMEOUT", "15")) * 1_000_000)),
+        "-reconnect", "1",
+        "-reconnect_streamed", "1",
+        "-reconnect_at_eof", "1",
+        "-reconnect_delay_max", "2",
+        "-user_agent", user_agent,
+        "-headers", header_blob,
+    ]
+    if ".m3u8" in stream_url.lower():
+        args.extend(["-allowed_extensions", "ALL"])
+    return args
+
+
+def _redact_media_urls(text: str) -> str:
+    return re.sub(
+        r"https?://[^\s'\"]+",
+        lambda match: (urlparse(match.group(0))._replace(query="...", fragment="").geturl()),
+        text,
+    )
+
+
+def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20, room_id: Optional[str] = None) -> bytes:
     """Capture a short audio clip from a live stream URL.
     Uses imageio-ffmpeg (bundled binary, no system install needed)
     or falls back to system ffmpeg.
@@ -2416,6 +2535,7 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
             "-y",
             "-fflags", "nobuffer",          # Reduce input buffering delay.
             "-flags", "low_delay",
+            *_douyin_ffmpeg_input_args(stream_url, room_id),
             "-i", stream_url,
             "-t", str(max(8, min(seconds, 90))),
             "-vn",                           # Audio only; skip video decoding.
@@ -2427,7 +2547,7 @@ def _capture_audio_clip_bytes(stream_url: str, seconds: int = 20) -> bytes:
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0 or not os.path.exists(out_wav):
-            stderr_tail = (proc.stderr or "")[-600:]
+            stderr_tail = _redact_media_urls(proc.stderr or "")[-600:]
             raise RuntimeError(f"ffmpeg capture failed: {stderr_tail}")
 
         with open(out_wav, "rb") as f:
@@ -2694,6 +2814,10 @@ class DouyinLiveSource:
         })
         try:
             media_url = await asyncio.to_thread(_discover_douyin_media_url, self.room_id, 20)
+        except DouyinAuthRequiredError as exc:
+            print(f"[media-discovery] manual verification required for room {self.room_id}: {exc}")
+            await callback(_douyin_auth_required_payload_from_error(exc))
+            return
         except Exception as exc:
             print(f"[media-discovery] failed for room {self.room_id}: {exc}")
             await callback({
@@ -2720,6 +2844,10 @@ class DouyinLiveSource:
         print(f"[audio-loop] discovering media URL for room {self.room_id}")
         try:
             media_url = await asyncio.to_thread(_discover_douyin_media_url, self.room_id, 20)
+        except DouyinAuthRequiredError as e:
+            print(f"[audio-loop] manual verification required: {e}")
+            await callback(_douyin_auth_required_payload_from_error(e))
+            return
         except Exception as e:
             print(f"[audio-loop] media discovery failed: {e}")
             return
@@ -2732,11 +2860,12 @@ class DouyinLiveSource:
         audio_queue: asyncio.Queue = asyncio.Queue(maxsize=2)
 
         async def capture_worker():
+            nonlocal media_url
             error_count = 0
             while True:
                 try:
                     audio_bytes = await asyncio.to_thread(
-                        _capture_audio_clip_bytes, media_url, window_secs
+                        _capture_audio_clip_bytes, media_url, window_secs, self.room_id
                     )
                     if audio_queue.full():
                         try:
@@ -2753,6 +2882,27 @@ class DouyinLiveSource:
                     error_count += 1
                     wait = min(3 * error_count, 15)
                     print(f"[audio-loop] capture failed ({error_count}): {e}; retry in {wait}s")
+                    if error_count == 1 or error_count % 3 == 0:
+                        _invalidate_media_url_cache(self.room_id, media_url)
+                        try:
+                            fresh_url = await asyncio.to_thread(
+                                _discover_douyin_media_url,
+                                self.room_id,
+                                20,
+                                force_refresh=True,
+                            )
+                        except DouyinAuthRequiredError as auth_exc:
+                            print(f"[audio-loop] manual verification required while refreshing media URL: {auth_exc}")
+                            await callback(_douyin_auth_required_payload_from_error(auth_exc))
+                            break
+                        except Exception as refresh_exc:
+                            print(f"[audio-loop] media URL refresh failed: {refresh_exc}")
+                        else:
+                            if fresh_url:
+                                media_url = fresh_url
+                                error_count = 0
+                                wait = max(1.0, capture_idle_secs)
+                                print(f"[audio-loop] media URL refreshed: {media_url[:80]}...")
                     await asyncio.sleep(wait)
 
         async def transcribe_worker():
@@ -3066,6 +3216,18 @@ async def douyin_room_info(room_id: str):
             "error": None,
             **identity,
         }
+    except DouyinAuthRequiredError as e:
+        return {
+            "reachable": False,
+            "room_id": room_id,
+            "media_url": None,
+            "live_hint": "\u9700\u8981\u4eba\u5de5\u9a8c\u8bc1",
+            "error": "douyin_auth_required",
+            "auth_required": True,
+            "page_title": e.title,
+            "page_url": e.url,
+            **identity,
+        }
     except Exception as e:
         return {
             "reachable": False,
@@ -3085,6 +3247,11 @@ async def get_media_url(roomId: str):
         url = await asyncio.to_thread(_discover_douyin_media_url, roomId)
     except HTTPException:
         raise
+    except DouyinAuthRequiredError as exc:
+        raise HTTPException(
+            status_code=423,
+            detail=_douyin_auth_required_payload_from_error(exc),
+        ) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"media url discovery failed: {exc}") from exc
     if not url:

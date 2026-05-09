@@ -89,6 +89,7 @@ export default function App() {
   const [sessionSnapshot, setSessionSnapshot] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [pendingRoomId, setPendingRoomId] = useState(null);
+  const [douyinAuthLaunching, setDouyinAuthLaunching] = useState(false);
   const sessionStartRef = useRef(null);
   const endingRef = useRef(false);
   const feedRef = useRef(null);
@@ -130,6 +131,22 @@ export default function App() {
 
   const apiBase = (sourceConfig.wsBase || "ws://localhost:8011").replace(/^ws/i, "http");
   const protectedPages = useMemo(() => new Set(["discover", "consumer", "history", "analytics", "rag", "profile"]), []);
+
+  const handleAuthorizeDouyin = useCallback(async () => {
+    if (dataSource !== "douyin") return;
+    setDouyinAuthLaunching(true);
+    try {
+      await requestJson(apiBase, "/consumer/auth-douyin", {
+        method: "POST",
+        body: { keyword: sourceConfig.roomId || "" },
+      });
+      setTimeout(() => realStream.reconnectNow?.(), 300);
+    } catch (error) {
+      console.error("[StreamGuard] Douyin auth launch failed:", error);
+    } finally {
+      setDouyinAuthLaunching(false);
+    }
+  }, [apiBase, dataSource, sourceConfig.roomId, realStream]);
 
   useEffect(() => {
     if (dataSource !== "douyin" || !sourceConfig.roomId) return;
@@ -548,6 +565,8 @@ export default function App() {
             dataSource={dataSource}
             sourceConfig={sourceConfig}
             realStream={realStream}
+            douyinAuthLaunching={douyinAuthLaunching}
+            onAuthorizeDouyin={handleAuthorizeDouyin}
             utterances={utterances}
             chatMessages={chatMessages}
             rationalityIndex={rationalityIndex}
@@ -654,6 +673,8 @@ function Dashboard(props) {
     dataSource,
     sourceConfig,
     realStream,
+    douyinAuthLaunching,
+    onAuthorizeDouyin,
     utterances,
     chatMessages,
     rationalityIndex,
@@ -741,6 +762,8 @@ function Dashboard(props) {
                   connected: realStream.connected,
                   connecting: realStream.connecting,
                   error: realStream.error,
+                  accessIssue: realStream.accessIssue,
+                  authLaunching: douyinAuthLaunching,
                   lastMessageAt: realStream.lastMessageAt,
                   connectionAttempts: realStream.connectionAttempts,
                   statusLog: realStream.statusLog,
@@ -750,6 +773,7 @@ function Dashboard(props) {
                 messageTotals={messageTotals}
                 recentLimits={recentLimits}
                 onReconnect={() => realStream.reconnectNow?.()}
+                onAuthorizeDouyin={onAuthorizeDouyin}
               />
               <OpsSide
                 alerts={alerts}
@@ -778,7 +802,9 @@ function Dashboard(props) {
                     mediaUrl={realStream.mediaUrl}
                     isConnecting={realStream.connecting}
                     connectionError={realStream.error}
+                    accessIssue={realStream.accessIssue}
                     onReconnect={() => realStream.reconnectNow?.()}
+                    onAuthorizeDouyin={onAuthorizeDouyin}
                   />
                 ) : (
                   <div className="sg-video-empty">

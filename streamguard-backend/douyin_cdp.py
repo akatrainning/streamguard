@@ -79,6 +79,36 @@ def _is_retryable_cdp_error_message(message: str) -> bool:
     return any(marker in text for marker in markers)
 
 
+def _looks_like_douyin_auth_challenge(title: str = "", url: str = "") -> bool:
+    text = f"{title or ''} {url or ''}".lower()
+    markers = (
+        "captcha",
+        "verify",
+        "security",
+        "sec.douyin",
+        "login.douyin",
+        "\u9a8c\u8bc1\u7801",
+        "\u5b89\u5168\u9a8c\u8bc1",
+        "\u4e2d\u95f4\u9875",
+    )
+    return any(marker in text for marker in markers)
+
+
+def _douyin_auth_required_event(web_rid: str, title: str = "", url: str = "") -> dict:
+    return {
+        "event": "auth_required",
+        "status": "blocked",
+        "code": "douyin_auth_required",
+        "room_id": web_rid,
+        "page_title": title or "",
+        "page_url": url or "",
+        "message": (
+            "Douyin returned a verification page. Open the manual verification "
+            "browser, complete the captcha or login, then reconnect this room."
+        ),
+    }
+
+
 atexit.register(_kill_all_tracked_chromes)
 
 from selenium import webdriver
@@ -528,10 +558,17 @@ class DouyinCDPScraper:
 
             # Check page loaded
             title = self.driver.title
+            try:
+                current_url = self.driver.current_url
+            except Exception:
+                current_url = self.url
             self.q.put({
                 "event": "status", "status": "connected",
                 "message": f"Page loaded: {title}",
             })
+            if _looks_like_douyin_auth_challenge(title, current_url):
+                self.q.put(_douyin_auth_required_event(self.web_rid, title, current_url))
+                return
 
             # Main loop: read performance logs for WS frames
             last_frame_ts = time.time()
@@ -660,6 +697,7 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
         thread.start()
 
         got_data = False
+        auth_required = False
         try:
             await callback({
                 "event": "status",
@@ -678,6 +716,9 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
                         got_data = True
                     if evt.get("event") == "error":
                         last_error = evt.get("message")
+                    if evt.get("event") == "auth_required":
+                        auth_required = True
+                        last_error = evt.get("message")
                     await callback(evt)
 
                 await asyncio.sleep(0.1)  # 10Hz(鍘?20Hz)
@@ -692,10 +733,16 @@ async def stream_douyin_cdp(web_rid: str, callback: Callable, headless: bool = T
                     got_data = True
                 if evt.get("event") == "error":
                     last_error = evt.get("message")
+                if evt.get("event") == "auth_required":
+                    auth_required = True
+                    last_error = evt.get("message")
                 await callback(evt)
 
         finally:
             scraper.stop()
+
+        if auth_required:
+            return
 
         if got_data:
             return

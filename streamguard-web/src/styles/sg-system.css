@@ -542,6 +542,42 @@
   font-size: 12px;
 }
 
+.sg-command-access {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--hype-border);
+  border-radius: var(--sg-radius-panel);
+  background: var(--hype-bg);
+  color: var(--hype);
+}
+
+.sg-command-access strong {
+  color: var(--text-primary);
+  font-size: var(--sg-type-body-sm);
+  font-weight: 900;
+}
+
+.sg-command-access span,
+.sg-command-access em {
+  color: var(--text-secondary);
+  font-size: var(--sg-type-small);
+  line-height: 1.5;
+}
+
+.sg-command-access em {
+  color: var(--text-muted);
+  font-style: normal;
+  overflow-wrap: anywhere;
+}
+
+.sg-command-access div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .sg-command-log {
   min-height: 0;
   border: 1px solid var(--sg-border-muted);
